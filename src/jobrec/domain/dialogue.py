@@ -52,6 +52,21 @@ class PreferenceConflict(BaseModel):
     created_at: datetime
 
 
+class ClarificationAction(BaseModel):
+    """A deterministic request to ask the candidate one high-value question."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    clarification_id: str
+    target_fields: list[str] = Field(default_factory=list)
+    reason_code: str
+    priority_score: float = 0.0
+    question_text: str
+    options: list[str] = Field(default_factory=list)
+    related_conflict_ids: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+
 class DialogueState(BaseModel):
     """Session-scoped dialogue history and unresolved items."""
 
