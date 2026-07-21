@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Artifacts (generated run bundles, logs, indexes)
+artifacts/runs/
+artifacts/logs/
+artifacts/indexes/
+artifacts/reports/
+
+# OS
+.DS_Store

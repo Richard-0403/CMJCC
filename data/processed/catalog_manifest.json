@@ -1,0 +1,20 @@
+{
+  "catalog_snapshot_id": "catalog-2026-01-v1",
+  "record_count": 200,
+  "created_at": "2026-07-21T17:43:38.738974+00:00",
+  "source_files": [
+    "jobs.csv"
+  ],
+  "sha256": "462a56e24a8f3678fd06073529fa7fc7bda9c854b7cef3eea97a9176fa6f9a98",
+  "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+  "schema_version": "1.0.0",
+  "normalization_version": "1.0.0",
+  "reference_date": "2026-01-01",
+  "field_missingness": {
+    "salary_min": 0.185,
+    "work_mode": 0.0,
+    "experience_level": 0.0,
+    "application_deadline": 0.165,
+    "city": 0.0
+  }
+}

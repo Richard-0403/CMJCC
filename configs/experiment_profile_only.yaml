@@ -1,0 +1,10 @@
+experiment:
+  variant: profile_only
+
+memory:
+  enabled: true
+  use_prior_dialogue: false
+  persist_confirmed_updates: false
+
+context:
+  explicit_constraint_orchestration: true

@@ -1,0 +1,10 @@
+experiment:
+  variant: one_shot
+
+memory:
+  enabled: false
+  use_prior_dialogue: false
+  persist_confirmed_updates: false
+
+context:
+  explicit_constraint_orchestration: true

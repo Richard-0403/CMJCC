@@ -1,0 +1,6 @@
+llm:
+  mode: deterministic
+  provider: mock
+  extraction_temperature: 0.0
+  response_temperature: 0.0
+  save_raw_responses: true
