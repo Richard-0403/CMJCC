@@ -1,0 +1,33 @@
+{
+  "title": "ExtractedPreferenceSet",
+  "type": "object",
+  "required": ["utterance_id", "preferences"],
+  "properties": {
+    "utterance_id": { "type": "string" },
+    "detected_language": { "type": "string" },
+    "ambiguous_fields": { "type": "array", "items": { "type": "string" } },
+    "extraction_warnings": { "type": "array", "items": { "type": "string" } },
+    "preferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field_name", "normalized_value", "raw_text", "confidence",
+                     "confirmation_status", "persistence_scope", "proposed_strength",
+                     "polarity", "temporal_scope"],
+        "properties": {
+          "field_name": { "type": "string" },
+          "normalized_value": {},
+          "raw_text": { "type": "string" },
+          "span_start": { "type": ["integer", "null"] },
+          "span_end": { "type": ["integer", "null"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "confirmation_status": { "enum": ["confirmed", "unconfirmed", "inferred", "rejected"] },
+          "persistence_scope": { "enum": ["long_term", "session", "active_search", "turn_only"] },
+          "proposed_strength": { "enum": ["hard", "soft", "unknown", "not_applicable"] },
+          "polarity": { "enum": ["positive", "negative"] },
+          "temporal_scope": { "enum": ["current_search", "session", "long_term", "unknown"] }
+        }
+      }
+    }
+  }
+}

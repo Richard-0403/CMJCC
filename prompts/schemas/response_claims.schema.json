@@ -1,0 +1,18 @@
+{
+  "title": "ResponseClaims",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["claim_id", "claim_type", "text", "evidence_ids", "support_status"],
+    "properties": {
+      "claim_id": { "type": "string" },
+      "claim_type": {
+        "enum": ["candidate_preference", "job_attribute", "constraint_result",
+                 "ranking_reason", "skill_gap", "no_match_reason"]
+      },
+      "text": { "type": "string" },
+      "evidence_ids": { "type": "array", "items": { "type": "string" } },
+      "support_status": { "enum": ["supported", "unsupported", "unknown"] }
+    }
+  }
+}
