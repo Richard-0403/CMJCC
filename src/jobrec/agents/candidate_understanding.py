@@ -147,7 +147,7 @@ class CandidateUnderstandingAgent:
             for alias in aliases:
                 span = _find(lower, alias)
                 if span:
-                    window = lower[max(0, span[0] - 20): span[1]]
+                    window = _clause(lower, span[0], span[1])
                     polarity = "negative" if _is_negated(lower, span[0]) else "positive"
                     field = "excluded_roles" if polarity == "negative" else "target_roles"
                     add(field, canonical_role(canonical), alias, span,
@@ -170,23 +170,27 @@ class CandidateUnderstandingAgent:
                     break
 
         # --- salary -----------------------------------------------------------
-        sal = re.search(
-            r"(rm|myr|sgd|usd|s\$|us\$|\$|€)?\s*(\d[\d,]*)\s*(k)?\b(?:\s*(?:per|/)\s*(month|year|hour))?",
-            lower,
-        )
-        salary_found = False
         for m in re.finditer(
             r"(rm|myr|sgd|usd|s\$|us\$|\$|€)?\s*(\d[\d,]*)\s*(k)?\b(?:\s*(?:per|/)\s*(month|year|hour))?",
             lower,
         ):
-            cur_raw, num_raw, kilo, period = m.group(1), m.group(2), m.group(3), m.group(4)
+            cur_raw, num_raw, kilo = m.group(1), m.group(2), m.group(3)
             window = lower[max(0, m.start() - 30): m.end() + 10]
-            if not any(x in window for x in ["salary", "rm", "myr", "sgd", "usd", "$", "€", "pay", "wage", "per month", "per year", "k "]) and not cur_raw and not kilo:
-                # A bare number without money context (e.g., "3 years") — skip.
-                continue
             amount = float(num_raw.replace(",", ""))
             if kilo:
                 amount *= 1000
+            has_money_ctx = any(
+                x in window for x in ["salary", "rm", "myr", "sgd", "usd", "$", "€",
+                                      "pay", "wage", "per month", "per year", "k "]
+            )
+            # A bare number in the typical monthly-salary range (and not a duration
+            # like "3 years") is treated as a salary figure.
+            looks_like_salary = (
+                1000 <= amount <= 200000
+                and "year" not in window and "experience" not in window and "month" not in window.replace("per month", "")
+            )
+            if not has_money_ctx and not cur_raw and not kilo and not looks_like_salary:
+                continue
             if amount < 100:  # too small to be a salary; likely years/count
                 continue
             currency = _CURRENCY_MAP.get(cur_raw.strip()) if cur_raw else None
@@ -205,16 +209,14 @@ class CandidateUnderstandingAgent:
             else:
                 ambiguous.append("salary_currency")
                 warnings.append("salary amount detected without an explicit currency")
-            salary_found = True
             break
-        _ = sal, salary_found
 
         # --- work mode --------------------------------------------------------
         for wm in _WORK_MODES:
             span = _find(lower, wm)
             if span:
                 canon = "onsite" if wm in {"on-site", "on site", "onsite"} else wm
-                window = lower[max(0, span[0] - 20): span[1] + 10]
+                window = _clause(lower, span[0], span[1])
                 polarity = "negative" if _is_negated(lower, span[0]) else "positive"
                 add("work_modes", canon, wm, span, _strength_for(window), polarity=polarity)
                 break
@@ -224,7 +226,7 @@ class CandidateUnderstandingAgent:
             span = _find(lower, loc)
             if span:
                 canon = _LOCATION_CANON[loc]
-                window = lower[max(0, span[0] - 20): span[1] + 10]
+                window = _clause(lower, span[0], span[1])
                 polarity = "negative" if _is_negated(lower, span[0]) else "positive"
                 field = "excluded_locations" if polarity == "negative" else "preferred_locations"
                 add(field, canon, loc, span, _strength_for(window), polarity=polarity)
@@ -243,3 +245,20 @@ def _is_negated(text: str, start: int) -> bool:
     """Heuristic: is there a negation cue shortly before ``start``?"""
     window = text[max(0, start - 25): start]
     return any(cue in window for cue in _NEG_CUES)
+
+
+_SENT_DELIMS = ".!?;"
+
+
+def _clause(text: str, start: int, end: int) -> str:
+    """Return the clause (from the last sentence delimiter) up to ``end``.
+
+    This lets sentence-level modifiers such as "only" / "must" influence the
+    strength of a constraint even when they are not immediately adjacent to it.
+    """
+    cut = 0
+    for i in range(start - 1, -1, -1):
+        if text[i] in _SENT_DELIMS:
+            cut = i + 1
+            break
+    return text[cut:end]

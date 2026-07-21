@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..catalog import catalog_hash, load_catalog
-from ..catalog import write_json
+from ..catalog import catalog_hash, load_catalog, write_json
 from ..utils.time import to_iso, utcnow
 
 

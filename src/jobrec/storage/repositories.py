@@ -8,7 +8,6 @@ Two implementations share one Protocol:
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Protocol
 
 from ..domain.candidate import CandidateState
@@ -95,7 +94,6 @@ class SqlRepository:
             s.commit()
 
     def get_candidate_state(self, candidate_id: str, version: int | None = None) -> CandidateState | None:
-        from sqlalchemy import select
 
         from .models import Candidate, CandidateStateVersion
 
@@ -143,8 +141,6 @@ class SqlRepository:
     def save_turn(self, turn: TurnResult, evidence_items: list, model_calls: list) -> None:
         from .models import (
             AgentHandoffRow,
-            CandidateStateVersion,
-            Candidate,
             DialogueStateVersion,
             EvidenceItemRow,
             EvidenceLogRow,

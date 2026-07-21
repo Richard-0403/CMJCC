@@ -108,7 +108,7 @@ class RankingAgent:
         return ranked
 
     # ------------------------------------------------------------- evidence
-    def _feature_evidence(self, name, res: "F.FeatureResult", active, job) -> list[str]:
+    def _feature_evidence(self, name, res: F.FeatureResult, active, job) -> list[str]:
         ids: list[str] = []
         for field in _FEATURE_CANDIDATE_FIELDS.get(name, []):
             ids.extend(active.field_evidence_map.get(field, []))

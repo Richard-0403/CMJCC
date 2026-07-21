@@ -1,0 +1,9 @@
+scenario_id,role_family,relevance_grade,notes
+sc01_complete_request,data analyst,3,strong fit KL data analyst
+sc03_profile_location_conflict,data analyst,3,strong fit KL data analyst
+sc04_salary_change,data analyst,3,strong fit after salary relaxed
+sc05_multiple_hard,data analyst,3,KL data analyst meeting salary
+sc06_soft_only,data analyst,2,partial fit soft preferences
+sc08_expired_excluded,data analyst,3,active KL data analyst
+sc09_salary_unknown,data analyst,3,KL data analyst with known salary
+sc10_multiturn_memory,data analyst,3,role remembered across turns

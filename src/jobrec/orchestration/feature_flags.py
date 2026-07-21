@@ -36,7 +36,7 @@ class FeatureFlags:
     explicit_constraint_orchestration: bool
 
     @classmethod
-    def from_config(cls, config: AppConfig) -> "FeatureFlags":
+    def from_config(cls, config: AppConfig) -> FeatureFlags:
         variant = config.experiment.variant
         table = {
             ExperimentVariant.FULL: dict(

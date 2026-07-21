@@ -21,7 +21,7 @@ from ..config import AppConfig
 from ..domain.candidate import CandidateState
 from ..domain.constraints import JobContextState
 from ..domain.dialogue import ClarificationAction, DialogueState, PreferenceConflict
-from ..domain.enums import ConstraintStrength, EvidenceSource
+from ..domain.enums import ConstraintStrength
 from ..domain.extraction import ExtractedPreferenceSet
 from ..domain.handoff import EvidenceLogEntry
 from ..domain.job import ActiveSearchState

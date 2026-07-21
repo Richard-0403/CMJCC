@@ -1,0 +1,7 @@
+{
+  "scenario_set_id": "golden-2026-01-v1",
+  "scenario_count": 10,
+  "reference_date": "2026-01-01",
+  "catalog_snapshot_id": "catalog-2026-01-v1",
+  "notes": "Golden scenarios covering complete requests, clarification, profile/dialogue conflicts, salary change across turns, multiple hard constraints, soft-only trade-offs, no-match, expired exclusion, unknown salary, and multi-turn memory. Ablation-comparison scenarios (no_memory losing prior turns; no_context producing hard-constraint violations) and the claim-validator block are asserted in tests/golden."
+}

@@ -24,7 +24,7 @@ class QuerySpec:
     excluded_terms: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_active_search(cls, active: ActiveSearchState) -> "QuerySpec":
+    def from_active_search(cls, active: ActiveSearchState) -> QuerySpec:
         excluded = []
         for vals in active.exclusions.values():
             excluded.extend(vals)

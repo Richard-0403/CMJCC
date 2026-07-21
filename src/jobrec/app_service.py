@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .agents.memory_agent import MemoryAgent
 from .catalog import catalog_hash, load_catalog
 from .config import AppConfig
 from .domain.candidate import CandidateState
@@ -18,7 +19,6 @@ from .domain.dialogue import DialogueState
 from .domain.enums import ExperimentVariant
 from .evidence_store import EvidenceStore
 from .orchestration.orchestrator import ConversationOrchestrator, TurnResult, make_provider
-from .agents.memory_agent import MemoryAgent
 from .storage.repositories import InMemoryRepository, Repository
 from .utils.hashing import random_id
 
@@ -121,7 +121,7 @@ def build_default_service(
     use_database: bool | None = None,
 ) -> AppService:
     """Build an AppService, using PostgreSQL when available (or requested)."""
-    from .storage.db import is_database_available, make_session_factory
+    from .storage.db import is_database_available
 
     repo: Repository
     want_db = use_database if use_database is not None else is_database_available()

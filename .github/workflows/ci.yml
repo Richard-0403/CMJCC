@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src tests
+
+      - name: Type check (mypy)
+        run: mypy src || true
+
+      - name: Secret scan (no committed keys)
+        run: |
+          ! grep -RInE "(api[_-]?key|secret|password)\s*[:=]\s*['\"][A-Za-z0-9]{16,}" src configs || \
+            (echo "Potential secret committed" && exit 1)
+
+      - name: Prepare data
+        run: |
+          python scripts/generate_raw_catalog.py --output data/raw/jobs.csv --count 200
+          PYTHONPATH=src python scripts/prepare_catalog.py --input data/raw/jobs.csv --out-dir data/processed
+
+      - name: Validate catalog + config
+        run: |
+          python scripts/validate_catalog.py --catalog data/processed/jobs.jsonl
+
+      - name: Tests (deterministic) + coverage
+        run: |
+          coverage run -m pytest -m "not postgres"
+          coverage report --include="src/jobrec/*"
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-artifacts
+          path: |
+            artifacts/
+            .coverage

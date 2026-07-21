@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from ..app_service import AppService, build_default_service
+from ..app_service import build_default_service
 from ..config import load_config
 
 app = typer.Typer(add_completion=False, help="CMJCC conversational job recommendation prototype")

@@ -44,6 +44,8 @@ where = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra"
+pythonpath = ["."]
+markers = ["postgres: tests that require a reachable PostgreSQL database"]
 
 [tool.ruff]
 line-length = 100

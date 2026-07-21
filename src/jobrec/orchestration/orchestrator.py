@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 
+from .. import CODE_VERSION
 from ..agents.candidate_understanding import CandidateUnderstandingAgent
 from ..agents.explanation_agent import ExplanationAgent
 from ..agents.job_context_agent import JobContextAgent, diagnose_no_match
@@ -19,7 +19,7 @@ from ..agents.memory_agent import MemoryAgent
 from ..config import AppConfig
 from ..domain.candidate import CandidateState
 from ..domain.dialogue import DialogueState
-from ..domain.enums import ErrorCode, ExperimentVariant, ResponseType, RunMode
+from ..domain.enums import ErrorCode, ResponseType, RunMode
 from ..domain.enums import WorkflowState as S
 from ..domain.extraction import ExtractedPreferenceSet
 from ..domain.handoff import AgentHandoff, EvidenceLogEntry
@@ -33,7 +33,6 @@ from ..retrieval.base import QuerySpec
 from ..retrieval.hybrid import make_retriever
 from ..utils.hashing import content_id
 from ..utils.time import utcnow
-from .. import CODE_VERSION
 from .cmjcc import CMJCC, CMJCCInput
 from .feature_flags import FeatureFlags
 from .state_machine import StateMachine
@@ -128,6 +127,9 @@ class ConversationOrchestrator:
             dialogue_state = self.memory.append_turn(dialogue_state, "candidate", text)
             extraction, calls = timed("intent_extraction", lambda: self._extract(text))
             model_calls.extend(calls)
+            # Fold in prior-turn dialogue evidence when the variant permits memory.
+            if self.flags.use_prior_dialogue:
+                extraction = self._merge_prior_dialogue(dialogue_state, extraction)
             handoff(self.rule_extractor.name, self.memory.name, "ExtractedPreferenceSet", True)
 
             # 2) VALIDATING: CMJCC merge + conflicts + constraints.
@@ -187,7 +189,6 @@ class ConversationOrchestrator:
                 # no_context: treat all recalled jobs as "eligible" (no hard filter).
                 eligibility = timed("filtering", lambda: [
                     self._passthrough_eligibility(j) for j in pool])
-            eligible = [e for e in eligibility if e.eligible]
             handoff(self.job_context.name, self.ranking.name, "EligibilityResults", True)
 
             # 6) RANKED or NO_MATCH
@@ -261,9 +262,9 @@ class ConversationOrchestrator:
         if mode == RunMode.DETERMINISTIC or self.provider is None:
             return self.rule_extractor.extract(text), []
 
+        from ..llm.provider import LLMError
         from ..llm.retry import retry_call
         from ..llm.structured_output import parse_extraction
-        from ..llm.provider import LLMError
 
         prompt = render_intent_extraction(text)
         calls: list = []
@@ -278,6 +279,23 @@ class ConversationOrchestrator:
         except LLMError:
             # Explicit fallback to the deterministic rule extractor (no fabrication).
             return self.rule_extractor.extract(text), calls
+
+    def _merge_prior_dialogue(
+        self, dialogue_state: DialogueState, current: ExtractedPreferenceSet
+    ) -> ExtractedPreferenceSet:
+        """Merge earlier candidate-turn preferences (memory) with the current turn.
+
+        Prior preferences come first so that current-turn statements take
+        precedence for scalar overrides (salary, location, level). This is what
+        distinguishes ``full`` from ``no_memory`` / ``one_shot`` across turns.
+        """
+        prior_texts = [t.text for t in dialogue_state.turns[:-1] if t.speaker == "candidate"]
+        if not prior_texts:
+            return current
+        prior_prefs = []
+        for text in prior_texts:
+            prior_prefs.extend(self.rule_extractor.extract(text).preferences)
+        return current.model_copy(update={"preferences": prior_prefs + list(current.preferences)})
 
     def _passthrough_eligibility(self, job: JobPosting):
         from ..domain.constraints import EligibilityResult
