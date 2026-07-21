@@ -102,13 +102,13 @@ class ExplanationAgent:
                 text = self._feature_text(feat.name, feat, job)
                 if text:
                     lines.append(f"  - {text}")
-                    claims.append(self._claim("ranking_reason", text, feat.evidence_ids))
+                    claims.append(self._claim("ranking_reason", text, feat.evidence_ids, job.job_id))
             # skill gaps
             for gap in rj.skill_gaps[:2]:
                 gap_ev = self._job_field_evidence(job, "required_skills")
                 text = f"Gap: the role requires {gap}, which is not in your listed skills."
                 lines.append(f"  - {text}")
-                claims.append(self._claim("skill_gap", text, [gap_ev] if gap_ev else []))
+                claims.append(self._claim("skill_gap", text, [gap_ev] if gap_ev else [], job.job_id))
             # unknown-field transparency
             if job.salary_min_monthly_myr is None and active.salary_min is not None:
                 text = "Note: this posting does not state a salary."
@@ -158,9 +158,9 @@ class ExplanationAgent:
         return response, dropped
 
     # --------------------------------------------------------------- claims
-    def _claim(self, claim_type: str, text: str, evidence_ids: list[str]) -> ResponseClaim:
+    def _claim(self, claim_type: str, text: str, evidence_ids: list[str], key_extra: str = "") -> ResponseClaim:
         return ResponseClaim(
-            claim_id=content_id("claim", claim_type, text),
+            claim_id=content_id("claim", claim_type, text, key_extra),
             claim_type=claim_type,  # type: ignore[arg-type]
             text=text,
             evidence_ids=list(evidence_ids),

@@ -280,6 +280,15 @@ class CMJCC:
         if any(exclusions.values()):
             field_evidence.setdefault("exclusions", [])
 
+        # Canonicalise + dedupe roles and skills so profile ("Python") and
+        # dialogue ("python") do not produce duplicates.
+        from ..taxonomy import canonical_role, canonical_skill
+
+        list_values["target_roles"] = list(dict.fromkeys(
+            canonical_role(r) for r in list_values["target_roles"]))
+        list_values["skills_have"] = list(dict.fromkeys(
+            canonical_skill(s) for s in list_values["skills_have"]))
+
         active_id = content_id(
             "as", inp.dialogue_state.session_id, cand.version,
             inp.dialogue_state.version, self.flags.variant,

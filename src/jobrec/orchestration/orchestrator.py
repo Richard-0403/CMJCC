@@ -52,6 +52,11 @@ class TurnResult:
     dropped_claims: list = field(default_factory=list)
     clarification: object | None = None
     model_calls: list = field(default_factory=list)
+    # extra artifacts for run-bundle export (optional)
+    extracted_preferences: object | None = None
+    candidate_state_before: object | None = None
+    job_context_state: object | None = None
+    retrieval_outcome: object | None = None
 
 
 class ConversationOrchestrator:
@@ -98,6 +103,8 @@ class ConversationOrchestrator:
         model_calls: list = []
         latencies: dict[str, float] = {}
         started = utcnow()
+        candidate_before = candidate_state
+        extraction = None
 
         def handoff(frm: str, to: str, contract: str, ok: bool, err: str | None = None) -> None:
             handoffs.append(AgentHandoff(
@@ -142,11 +149,15 @@ class ConversationOrchestrator:
                 response = self._clarification_response(dialogue_state, cmjcc_out.clarification_action)
                 sm.to(S.EXPLAINED)
                 sm.to(S.COMPLETED)
-                return self._finish(
+                result = self._finish(
                     run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                     model_calls, candidate_state, dialogue_state, active, None, response,
                     [], cmjcc_out.clarification_action, success=True,
                 )
+                result.extracted_preferences = extraction
+                result.candidate_state_before = candidate_before
+                result.job_context_state = cmjcc_out.job_context_state
+                return result
 
             sm.to(S.MEMORY_UPDATED)
 
@@ -216,11 +227,16 @@ class ConversationOrchestrator:
             handoff(self.ranking.name, self.explainer.name, "RecommendationDecision", True)
 
             sm.to(S.COMPLETED)
-            return self._finish(
+            result = self._finish(
                 run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                 model_calls, candidate_state, dialogue_state, active, decision, response,
                 dropped, None, success=True,
             )
+            result.extracted_preferences = extraction
+            result.candidate_state_before = candidate_before
+            result.job_context_state = context
+            result.retrieval_outcome = outcome
+            return result
 
         except Exception as exc:  # noqa: BLE001 - convert to explicit failed run
             sm.fail()

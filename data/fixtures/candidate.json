@@ -1,0 +1,11 @@
+{
+  "candidate_id": "cand-001",
+  "skills": ["Python", "SQL"],
+  "years_experience": 1,
+  "experience_level": "junior",
+  "target_roles": ["Data Analyst"],
+  "preferred_locations": ["Kuala Lumpur"],
+  "salary_min": 4000,
+  "salary_currency": "MYR",
+  "work_modes": ["hybrid"]
+}

@@ -129,6 +129,46 @@ class MemoryAgent:
     def latest_turn_id(self, dialogue: DialogueState) -> str | None:
         return dialogue.turns[-1].turn_id if dialogue.turns else None
 
+    def register_profile_evidence(self, candidate: CandidateState) -> None:
+        """Re-register a candidate's profile evidence into the current store.
+
+        Evidence ids are content-addressed, so re-registering the same profile
+        field/value reproduces the identical id (idempotent). This ensures
+        profile-derived claims resolve even when the CandidateState was created
+        with a different (throwaway) store.
+        """
+        cid = candidate.candidate_id
+
+        def reg(field: str, pv) -> None:
+            self.store.register_field(
+                EvidenceSource.PROFILE, cid, field, pv.value,
+                confidence=pv.confidence, confirmation=pv.confirmation_status,
+                scope=pv.persistence_scope,
+            )
+
+        list_attrs = {
+            "skills": candidate.skills, "target_roles": candidate.target_roles,
+            "preferred_locations": candidate.preferred_locations,
+            "work_modes": candidate.work_modes, "industries": candidate.industries,
+            "employment_types": candidate.employment_types,
+            "work_authorizations": candidate.work_authorizations,
+            "excluded_roles": candidate.excluded_roles,
+            "excluded_industries": candidate.excluded_industries,
+            "excluded_locations": candidate.excluded_locations,
+        }
+        for field, values in list_attrs.items():
+            for pv in values:
+                reg(field, pv)
+        for field, pv in {
+            "education_level": candidate.education_level,
+            "years_experience": candidate.years_experience,
+            "experience_level": candidate.experience_level,
+            "salary_min": candidate.salary_min,
+            "salary_currency": candidate.salary_currency,
+        }.items():
+            if pv is not None:
+                reg(field, pv)
+
     # ------------------------------------------------------------ evidence
     def build_dialogue_evidence(
         self, extraction: ExtractedPreferenceSet, session_id: str, turn_id: str
