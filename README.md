@@ -134,6 +134,23 @@ Every `RunRecord` carries `config_hash`, `catalog_hash`, `prompt_hash`, a model
 manifest and the code version. Ids are content-addressed where determinism
 matters. A fixed `reference_date` (2026-01-01) drives deadline/expiry logic.
 
+## Evaluation (`jobrec_eval`)
+
+A standalone evaluation pipeline reads the exported run bundles and produces
+RQ4 metrics, ablation analysis (memory / job-context), paired statistics, plots
+and an analysis report:
+
+```bash
+pip install -e ".[eval]"
+python scripts/build_eval_scenarios.py --output evaluation/data/scenarios.jsonl
+python -m jobrec_eval.cli pipeline --repeats 3 --bootstrap-iters 5000
+```
+
+Relevance is scored by a transparent **automatic oracle** (not human raters) and
+grounding by the claim validator; both limitations are documented in the
+generated report. See `evaluation/README.md` and
+`evaluation/outputs/{experiment_id}/report/analysis_report.md`.
+
 ## Safety boundary
 
 This is a **job-seeker-facing discovery aid**, not a hiring-decision tool. It

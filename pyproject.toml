@@ -33,6 +33,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.9",
 ]
+eval = [
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "matplotlib>=3.7",
+]
 
 [project.scripts]
 jobrec = "jobrec.cli.main:app"
