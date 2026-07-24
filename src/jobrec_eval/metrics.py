@@ -195,6 +195,8 @@ class MetricsComputer:
             "no_match_expected": scen.no_match_expected if scen else False,
             "no_match_returned": bool(d.get("no_match", False)),
             "clarification_expected": scen.clarification_expected if scen else False,
+            "clarification_target": ";".join((b.clarification or {}).get("target_fields", []) if b.clarification else []),
+            "acceptable_slots": ";".join(scen.acceptable_slots) if scen else "",
         }
 
     def _task_success(self, scen, response_type, returned, hcsr, grounded, no_match_codes, clar) -> int:

@@ -1,0 +1,24 @@
+# Hybrid run mode against a real OpenAI-compatible endpoint (Vector Engine).
+# Requires environment variables (never commit the key):
+#   JOBREC_LLM_API_KEY=<your key>
+#   JOBREC_LLM_BASE_URL=https://api.vectorengine.ai/v1
+#   JOBREC_LLM_MODEL=gpt-5.5
+experiment:
+  variant: full
+
+memory:
+  enabled: true
+  use_prior_dialogue: true
+  persist_confirmed_updates: true
+
+context:
+  explicit_constraint_orchestration: true
+
+llm:
+  mode: hybrid
+  provider: remote
+  extraction_temperature: 0.0
+  response_temperature: 0.2
+  timeout_seconds: 60
+  max_retries: 2
+  save_raw_responses: true

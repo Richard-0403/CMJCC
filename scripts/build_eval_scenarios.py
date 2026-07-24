@@ -165,7 +165,8 @@ add("SC-E-01", "multiple_hard", "hard",
 add("SC-E-02", "multiple_hard", "hard",
     {"skills": ["Python", "SQL", "Excel"], "years_experience": 3, "target_roles": ["Business Analyst"]},
     ["Business analyst, only Kuala Lumpur, must pay at least RM4500, onsite only."],
-    context_dependency="high")
+    context_dependency="high", no_match_expected=True, expected_response="no_match",
+    notes="Many hard constraints jointly infeasible in the catalog -> correct no-match.")
 add("SC-E-03", "multiple_hard", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Data Analyst"]},
     ["Only Penang, must be remote, data analyst, at least RM4000."],
@@ -173,7 +174,8 @@ add("SC-E-03", "multiple_hard", "hard",
 add("SC-E-04", "multiple_hard", "hard",
     {"skills": ["Python", "SQL", "AWS"], "years_experience": 5, "target_roles": ["Software Engineer"]},
     ["Software engineer, only Kuala Lumpur, must be hybrid, at least RM6000."],
-    context_dependency="high")
+    context_dependency="high", no_match_expected=True, expected_response="no_match",
+    notes="Many hard constraints jointly infeasible in the catalog -> correct no-match.")
 add("SC-E-05", "multiple_hard", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Product Analyst"]},
     ["Product analyst, only Kuala Lumpur, at least RM4000, hybrid only."],

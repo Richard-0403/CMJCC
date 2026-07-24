@@ -64,8 +64,12 @@ class ClarificationPolicy:
                  "missing_role_target", [], [])
             )
 
-        # 3) Ambiguous unit/currency for a stated salary.
-        if "salary_currency" in ambiguous_fields and active.salary_min is not None:
+        # 3) Ambiguous unit/currency for a stated salary, but only when the
+        # currency is genuinely unknown. If a prior turn or the profile already
+        # established the currency, do not re-ask (avoids spurious clarification
+        # on a bare follow-up figure like "4000 is also fine").
+        if ("salary_currency" in ambiguous_fields and active.salary_min is not None
+                and not active.salary_currency):
             candidates.append(
                 (_FIELD_IMPACT["salary_currency"] * 0.9 * 0.8, "salary_currency",
                  "ambiguous_salary_currency", [], ["MYR", "SGD", "USD"])

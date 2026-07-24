@@ -22,6 +22,13 @@ from jobrec.config import load_config
 from jobrec.evaluation.experiment_runner import ExperimentRunner
 
 from . import EVAL_VERSION
+from .annotation import (
+    claim_agreement,
+    export_claim_template,
+    export_relevance_template,
+    relevance_agreement,
+)
+from .casestudies import error_taxonomy, extract_cases, render_cases_md
 from .loaders import load_bundles, normalize
 from .metrics import (
     MetricsComputer,
@@ -29,8 +36,9 @@ from .metrics import (
     latency_percentiles,
     variant_summary,
 )
+from .metrics_extra import clarification_metrics, no_match_metrics, per_constraint_compliance
 from .plots import plot_all
-from .relevance import ORACLE_VERSION, build_references, grade_catalog
+from .relevance import ORACLE_VERSION, build_references, grade_catalog, grade_lookup
 from .report import write_report
 from .scenarios import load_scenarios
 from .statistics import compare, contribution_table
@@ -122,6 +130,30 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
                                    bootstrap_iters, bootstrap_seed))
     pd.DataFrame(overall).to_csv(out / "statistics" / "paired_comparisons.csv", index=False)
 
+    # ---- diagnostic metrics (per-constraint compliance, no-match, clarify) ---
+    compliance = per_constraint_compliance(mc, bundles)
+    nomatch = no_match_metrics(run_metrics)
+    clarify = clarification_metrics(run_metrics)
+    _write_csv(compliance, out / "metrics" / "constraint_compliance.csv")
+    _write_csv(nomatch, out / "metrics" / "no_match_metrics.csv")
+    _write_csv(clarify, out / "metrics" / "clarification_metrics.csv")
+
+    # ---- case studies + error taxonomy ---------------------------------
+    grade = grade_lookup(labels)
+    cases = extract_cases(bundles, run_metrics, grade)
+    cases_md = render_cases_md(cases)
+    err_tax = error_taxonomy(run_metrics)
+    _write_csv(err_tax, out / "metrics" / "error_taxonomy.csv")
+
+    # ---- annotation templates + human agreement (if provided) ----------
+    ann_dir = out / "annotation"
+    ann_dir.mkdir(parents=True, exist_ok=True)
+    export_relevance_template(tables["recommendations"], labels, ann_dir / "relevance_template.csv")
+    export_claim_template(tables["claims"], ann_dir / "claim_template.csv")
+    scen_dir = Path(scenarios_path).parent
+    rel_agree = relevance_agreement(scen_dir / "relevance_labels_human.csv", labels)
+    clm_agree = claim_agreement(scen_dir / "claim_annotations_human.csv")
+
     # ---- Stage 6: plots -------------------------------------------------
     plot_all(sv, latpct, out / "plots")
 
@@ -161,6 +193,15 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
         "context_contribution": ctx_tbl.to_dict(orient="records"),
         "overall_comparisons": overall,
         "error_summary": error_summary,
+        "constraint_compliance": compliance.to_dict(orient="records"),
+        "no_match_metrics": nomatch.to_dict(orient="records"),
+        "clarification_metrics": clarify.to_dict(orient="records"),
+        "error_taxonomy": err_tax.to_dict(orient="records"),
+        "case_studies_md": cases_md,
+        "relevance_agreement": rel_agree,
+        "claim_agreement": clm_agree,
+        "llm_mode": cfg.llm.mode.value,
+        "llm_model": (cfg.llm.provider if cfg.llm.mode.value != "deterministic" else "mock-deterministic"),
     }
 
     # ---- manifests ------------------------------------------------------

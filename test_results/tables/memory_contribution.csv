@@ -1,13 +1,13 @@
 metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,subset,p_value_holm,mcnemar
 ndcg_at_5,full,no_memory,21,0.953489463017713,0.9488750384561672,0.0046144245615458,0.0,0.0138432736846374,0.31731050786291415,0.21821789023599247,cohens_dz,all,1.0,
 hcsr,full,no_memory,21,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,all,1.0,
-task_success,full,no_memory,42,0.9047619047619048,0.7380952380952381,0.16666666666666666,0.07142857142857142,0.2857142857142857,9.5367431640625e-07,1.0,rank_biserial,all,5.7220458984375e-06,"{'full_only': 21, 'other_only': 0, 'n_discordant': 21, 'p_value': 9.5367431640625e-07}"
+task_success,full,no_memory,42,1.0,0.7857142857142857,0.21428571428571427,0.09523809523809523,0.3333333333333333,1.4901161193847656e-08,1.0,rank_biserial,all,8.940696716308594e-08,"{'full_only': 27, 'other_only': 0, 'n_discordant': 27, 'p_value': 1.4901161193847656e-08}"
 grounding,full,no_memory,26,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,all,1.0,
 mean_violation_count,full,no_memory,21,0.0,0.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,all,1.0,
 turn_count,full,no_memory,42,1.3333333333333333,1.3333333333333333,0.0,0.0,0.0,1.0,0.0,rank_biserial,all,1.0,
 ndcg_at_5,full,no_memory,7,0.9390819044178885,0.9252386307332511,0.0138432736846374,0.0,0.041529821053912196,1.0,0.37796447300922725,cohens_dz,memory_dependent,1.0,
 hcsr,full,no_memory,7,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,memory_dependent,1.0,
-task_success,full,no_memory,16,0.875,0.4375,0.4375,0.1875,0.6875,9.5367431640625e-07,1.0,rank_biserial,memory_dependent,5.7220458984375e-06,"{'full_only': 21, 'other_only': 0, 'n_discordant': 21, 'p_value': 9.5367431640625e-07}"
+task_success,full,no_memory,16,1.0,0.4375,0.5625,0.3125,0.8125,1.4901161193847656e-08,1.0,rank_biserial,memory_dependent,8.940696716308594e-08,"{'full_only': 27, 'other_only': 0, 'n_discordant': 27, 'p_value': 1.4901161193847656e-08}"
 grounding,full,no_memory,7,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,memory_dependent,1.0,
 mean_violation_count,full,no_memory,7,0.0,0.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,memory_dependent,1.0,
 turn_count,full,no_memory,16,1.875,1.875,0.0,0.0,0.0,1.0,0.0,rank_biserial,memory_dependent,1.0,

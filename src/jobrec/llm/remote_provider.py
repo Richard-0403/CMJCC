@@ -15,7 +15,25 @@ from typing import Any
 import httpx
 
 from ..utils.hashing import content_id
-from .provider import LLMCallRecord, LLMInvalidJSON, LLMTimeout
+from .provider import LLMCallRecord, LLMError, LLMInvalidJSON, LLMTimeout
+
+
+def _extract_json(text: str) -> dict | None:
+    """Parse a JSON object from a model response, tolerating code fences/prose."""
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    if not isinstance(text, str):
+        return None
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            return None
+    return None
 
 
 class RemoteLLMProvider:
@@ -38,34 +56,49 @@ class RemoteLLMProvider:
         self.extraction_temperature = extraction_temperature
         self.response_temperature = response_temperature
 
+    def _post(self, body: dict) -> dict:
+        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
+        with httpx.Client(timeout=self.timeout) as client:
+            resp = client.post(f"{self.base_url}/chat/completions", headers=headers, json=body)
+            resp.raise_for_status()
+            return resp.json()
+
     def _chat(self, prompt: str, temperature: float, json_mode: bool) -> tuple[str, float]:
         if not self._api_key:
             raise LLMTimeout("no API key configured for remote provider")
-        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         body: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,
         }
+        # GPT-5 family typically only accepts the default temperature; omit it.
+        if not str(self.model).lower().startswith("gpt-5"):
+            body["temperature"] = temperature
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         start = time.perf_counter()
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(f"{self.base_url}/chat/completions", headers=headers, json=body)
-                resp.raise_for_status()
-                data = resp.json()
+            data = self._post(body)
         except httpx.TimeoutException as exc:
             raise LLMTimeout(str(exc)) from exc
+        except httpx.HTTPStatusError as exc:
+            # Fallback: retry once without response_format / temperature, which
+            # some proxies or newer models reject.
+            body.pop("response_format", None)
+            body.pop("temperature", None)
+            try:
+                data = self._post(body)
+            except httpx.HTTPError as exc2:
+                raise LLMError(f"remote model error: {exc2}") from exc
+        except httpx.HTTPError as exc:
+            raise LLMError(f"remote model error: {exc}") from exc
         latency_ms = (time.perf_counter() - start) * 1000
         return data["choices"][0]["message"]["content"], latency_ms
 
     def complete_json(self, prompt: str, *, purpose: str) -> tuple[dict, LLMCallRecord]:
         raw, latency = self._chat(prompt, self.extraction_temperature, json_mode=True)
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise LLMInvalidJSON(str(exc)) from exc
+        payload = _extract_json(raw)
+        if payload is None:
+            raise LLMInvalidJSON("could not parse JSON object from model response")
         record = LLMCallRecord(
             call_id=content_id("call", purpose, prompt), purpose=purpose, prompt=prompt,
             raw_response=raw, parsed_ok=True, latency_ms=latency,

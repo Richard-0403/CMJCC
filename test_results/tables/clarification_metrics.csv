@@ -1,0 +1,6 @@
+variant,clarifications,expected_clarification,useful,precision,recall
+full,21,21,21,1.0,1.0
+no_context,21,21,21,1.0,1.0
+no_memory,48,21,21,0.4375,1.0
+one_shot,48,21,21,0.4375,1.0
+profile_only,42,21,21,0.5,1.0

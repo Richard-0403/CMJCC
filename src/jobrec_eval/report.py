@@ -71,6 +71,74 @@ def _contrib_table(df: pd.DataFrame, subset: str) -> str:
     return "\n".join(lines)
 
 
+def _compliance_table(rows: list[dict]) -> str:
+    if not rows:
+        return "_No per-constraint compliance data._"
+    df = pd.DataFrame(rows)
+    fields = sorted(df["constraint_field"].unique())
+    variants = [v for v in ["full", "no_context", "profile_only"] if v in set(df["variant"])]
+    lines = ["| constraint field | " + " | ".join(variants) + " |",
+             "|" + "---|" * (len(variants) + 1)]
+    for f in fields:
+        cells = []
+        for v in variants:
+            r = df[(df.constraint_field == f) & (df.variant == v)]
+            cells.append(_fmt(r["compliance"].iloc[0]) if len(r) else "N/A")
+        lines.append(f"| {f} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def _pr_table(rows: list[dict], cols: list[tuple[str, str]]) -> str:
+    if not rows:
+        return "_No data._"
+    head = "| variant | " + " | ".join(c[1] for c in cols) + " |"
+    lines = [head, "|" + "---|" * (len(cols) + 1)]
+    order = ["full", "no_memory", "one_shot", "no_context", "profile_only"]
+    by = {r["variant"]: r for r in rows}
+    for v in order:
+        if v not in by:
+            continue
+        r = by[v]
+        lines.append(f"| {v} | " + " | ".join(_fmt(r.get(c[0])) for c in cols) + " |")
+    return "\n".join(lines)
+
+
+def _reliability_section(data: dict) -> str:
+    rel = data.get("relevance_agreement")
+    clm = data.get("claim_agreement")
+    if not rel and not clm:
+        return (
+            "No human raters were used in this run. Relevance uses an automatic "
+            f"oracle (version {data['oracle_version']}); grounding uses the claim "
+            "validator. Inter-rater agreement is therefore **not reported** and is "
+            "flagged as a construct-validity threat. Annotation templates are emitted "
+            "under `annotation/` (relevance_template.csv, claim_template.csv); drop in "
+            "`relevance_labels_human.csv` / `claim_annotations_human.csv` to compute "
+            "weighted Cohen's kappa and oracle-vs-human agreement automatically.")
+    out = []
+    if rel:
+        out.append(f"- Relevance ({rel['n_items']} items): raw rater agreement "
+                   f"{_fmt(rel['raw_agreement_raters'])}, weighted Cohen's kappa "
+                   f"{_fmt(rel['weighted_kappa_raters'])}; oracle-vs-human weighted kappa "
+                   f"{_fmt(rel['oracle_vs_human_weighted_kappa'])}.")
+    if clm:
+        out.append(f"- Claims ({clm['n_items']} items): raw agreement "
+                   f"{_fmt(clm['raw_agreement'])}, Cohen's kappa {_fmt(clm['cohens_kappa'])}"
+                   + (f"; validator-vs-human kappa {_fmt(clm.get('validator_vs_human_kappa'))}."
+                      if clm.get('validator_vs_human_kappa') is not None else "."))
+    return "\n".join(out)
+
+
+def _error_taxonomy_table(rows: list[dict]) -> str:
+    if not rows:
+        return "_No task failures to categorize._"
+    lines = ["| error category | count | % | most-affected variant |",
+             "|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['error_category']} | {r['count']} | {r['percentage']} | {r['most_affected_variant']} |")
+    return "\n".join(lines)
+
+
 def _scenario_type_table(sv: pd.DataFrame) -> str:
     lines = ["| scenario_type | variant | NDCG@5 | HCSR | TaskSucc | Grounding | n |",
              "|---|---|---|---|---|---|---|"]
@@ -115,7 +183,7 @@ def generate_markdown(data: dict, plots_rel: str = "../plots") -> str:
 - Experiment `{exp['experiment_id']}` — {exp['scenario_count']} scenarios ×
   {len(exp['variants'])} variants × {exp['repeat_count']} repeat(s) =
   {exp['run_count']} runs. Reference date {exp['reference_date']}.
-- Deterministic run mode (mock provider); config/catalog/prompt hashes frozen.
+- Run mode: **{data.get('llm_mode', 'deterministic')}** (model: {data.get('llm_model', 'mock-deterministic')}); config/catalog/prompt hashes frozen.
 - Headline (full variant, scenario-mean): NDCG@5 {_fmt(full.get('ndcg_at_5_mean') if len(full) else None)},
   HCSR {_fmt(full.get('hcsr_mean') if len(full) else None)},
   Task Success {_fmt(full.get('task_success_mean') if len(full) else None)},
@@ -143,13 +211,7 @@ over repeats before pairing.
 
 ## 4. Annotation Reliability
 
-No human raters were used in this run. Relevance uses an automatic oracle
-(version {data['oracle_version']}); explanation grounding uses the claim
-validator (supported/total factual claims). Inter-rater agreement (weighted
-Cohen's kappa for relevance, Cohen's kappa for claims) is therefore **not
-reported** and is flagged as a construct-validity threat (§11). Annotation-export
-files are emitted so human raters can replace the proxy without changing the
-pipeline.
+{_reliability_section(data)}
 
 ## 5. Overall Results
 
@@ -167,6 +229,20 @@ Variant summary (scenario-mean of each metric):
 ![HCSR]({plots_rel}/hcsr_by_variant.png)
 ![Task success]({plots_rel}/task_success_by_variant.png)
 ![Grounding]({plots_rel}/grounding_by_variant.png)
+
+### 5.2 Per-constraint compliance (recommended jobs vs authoritative hard constraints)
+
+{_compliance_table(data.get('constraint_compliance', []))}
+
+### 5.3 No-match and clarification correctness
+
+No-match precision / recall / F1 by variant:
+
+{_pr_table(data.get('no_match_metrics', []), [('precision','Precision'), ('recall','Recall'), ('f1','F1'), ('true_no_match','TP'), ('no_match_expected','Expected')])}
+
+Clarification precision / recall by variant:
+
+{_pr_table(data.get('clarification_metrics', []), [('precision','Precision'), ('recall','Recall'), ('useful','Useful'), ('expected_clarification','Expected')])}
 
 ## 6. Ablation Analysis
 
@@ -215,6 +291,14 @@ is reported as "direction observed, uncertain", never as "no effect".
 ## 9. Error Analysis
 
 {data['error_summary']}
+
+Root-cause taxonomy of task-unsuccessful runs:
+
+{_error_taxonomy_table(data.get('error_taxonomy', []))}
+
+### 9.1 Representative case studies
+
+{data.get('case_studies_md', '_No case studies extracted._')}
 
 ## 10. Discussion
 
