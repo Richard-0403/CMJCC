@@ -264,7 +264,7 @@ class ConversationOrchestrator:
 
         from ..llm.provider import LLMError
         from ..llm.retry import retry_call
-        from ..llm.structured_output import parse_extraction
+        from ..llm.structured_output import parse_extraction_lenient
 
         prompt = render_intent_extraction(text)
         calls: list = []
@@ -272,7 +272,9 @@ class ConversationOrchestrator:
         def once() -> ExtractedPreferenceSet:
             payload, record = self.provider.complete_json(prompt, purpose="intent_extraction")
             calls.append(record)
-            return parse_extraction(payload)
+            # Lenient parse: model reliably emits field/value/strength/polarity;
+            # provenance fields are defaulted so a valid response is actually used.
+            return parse_extraction_lenient(payload, utterance=text)
 
         try:
             return retry_call(once, self.config.llm.max_retries), calls

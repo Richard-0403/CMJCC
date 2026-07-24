@@ -328,9 +328,21 @@ def _stronger(a: ConstraintStrength | None, b: ConstraintStrength) -> Constraint
 
 
 def _as_float(value) -> float | None:
+    """Coerce a value to float, tolerating LLM variation.
+
+    LLMs sometimes return a salary as an object like {"amount": 50000,
+    "period": "month"} or a string like "RM50000". We extract the numeric amount
+    so a hard salary constraint is never silently dropped due to output shape.
+    """
     if value is None:
         return None
+    if isinstance(value, dict):
+        value = value.get("amount") or value.get("value") or value.get("min")
+    if isinstance(value, str):
+        import re
+        m = re.search(r"\d[\d,]*(?:\.\d+)?", value)
+        value = m.group(0).replace(",", "") if m else None
     try:
-        return float(value)
+        return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None

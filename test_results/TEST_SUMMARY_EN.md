@@ -129,22 +129,54 @@ hardest full case, claim-validator) are in `analysis_report.md` §9.1.
 
 ---
 
+## 3b. Real-LLM (gpt-5.5) validation — hybrid mode
+
+Executed against Vector Engine (`gpt-5.5`, OpenAI-compatible) in `hybrid` mode:
+the LLM does slot extraction; rules do merge/filter/rank/evidence. Run on a
+12-scenario labelled subset (full vs no_context, 1 repeat = 24 runs). Artifacts
+in `test_results/hybrid/`.
+
+| variant | NDCG@5 | HCSR | Task success | Grounding | Handoff |
+|---|---|---|---|---|---|
+| **full** | 0.959 | **1.000** | **1.000** | 1.000 | 1.000 |
+| no_context | 0.754 | 0.582 | 0.333 | 1.000 | 1.000 |
+
+- **The real LLM reproduces the ablation story**: context-dependent subset
+  Δcontext HCSR **+0.48** [0.32, 0.60], task success **+1.00**, NDCG +0.19,
+  −0.52 violations/job. `no_context` per-constraint compliance: location 0.70,
+  work-mode 0.60, salary 0.88.
+- **Real latency** (dominated by LLM extraction): intent-extraction median
+  ≈ 18 s, p95 ≈ 113 s; end-to-end median ≈ 18 s. (This replaces the deterministic
+  sub-millisecond figures — the architecture's cost is the model call.)
+- **Extraction quality**: gpt-5.5 extracted the correct slots and constraint
+  strengths on all 12 scenarios (e.g. "only … remote" → hard work-mode).
+- **Robustness finding (worth a paragraph in the thesis):** on the RM50000
+  no-match scenario the model first returned salary as a structured object
+  `{"amount":50000,"period":"month"}` rather than a number, which initially
+  caused the hard salary constraint to be dropped (→ wrong recommendation). We
+  hardened salary normalization to coerce such shapes; after the fix `full`
+  correctly returns no-match (task success 1.00). This is a concrete example of
+  LLM output-shape brittleness that the deterministic run cannot reveal.
+- **Grounding remains 1.00 by construction** even under the real LLM, because the
+  response is assembled from validator-checked claims (the LLM is used for
+  extraction + clarification phrasing, not free-form fact generation). Testing
+  hallucination in free-form generation would require the human claim annotation
+  in (C).
+
 ## 4. Status of the three requested extensions
 
 - **(A) Data-derivable additions — DONE.** Scenario QA/relabel, per-constraint
   compliance, no-match/clarification precision–recall, case studies and error
   taxonomy are implemented and in the report.
+- **(B) Real LLM (hybrid) run — DONE.** Executed against gpt-5.5 (see §3b);
+  `configs/hybrid_vectorengine.yaml`. Full deterministic experiment
+  (42×5×3 = 630 runs) remains the reproducible main result; the hybrid subset is
+  the real-model validation.
 - **(C) Human-annotation support — READY, pending labels.** The pipeline emits
   annotation templates (`evaluation/outputs/<exp>/annotation/`). Dropping in
   `relevance_labels_human.csv` / `claim_annotations_human.csv` makes the pipeline
   compute weighted Cohen's κ (relevance), Cohen's κ (claims) and oracle-vs-human
   agreement automatically. No human labels are fabricated.
-- **(B) Real LLM (hybrid) run — WIRED, pending API key.** A `hybrid` config for
-  Vector Engine (gpt-5.5, OpenAI-compatible) is provided
-  (`configs/hybrid_vectorengine.yaml`). Set `JOBREC_LLM_API_KEY`,
-  `JOBREC_LLM_BASE_URL=https://api.vectorengine.ai/v1`, `JOBREC_LLM_MODEL=gpt-5.5`
-  and run the pipeline with `--config configs/hybrid_vectorengine.yaml` to make
-  grounding / extraction / latency real numbers.
 
 ---
 

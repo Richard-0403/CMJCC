@@ -58,7 +58,9 @@ def _sha256(path: Path) -> str:
 
 def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
                  out_root: str, repeats: int, experiment_dir: str | None,
-                 bootstrap_iters: int, bootstrap_seed: int) -> dict:
+                 bootstrap_iters: int, bootstrap_seed: int,
+                 variants: list[str] | None = None) -> dict:
+    variants = variants or VARIANTS
     cfg = load_config(config_path, base_dir=str(Path(config_path).parent))
     cfg.experiment.repeat_count = repeats
     catalog = load_catalog(catalog_path)
@@ -71,7 +73,7 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
         runner_manifest = json.loads((exp_dir / "experiment_manifest.json").read_text())
     else:
         runner = ExperimentRunner(cfg, catalog_path, scenarios_path, out_dir=str(runs_root))
-        runner_manifest = runner.run(VARIANTS)
+        runner_manifest = runner.run(variants)
         exp_dir = Path(runner_manifest["experiment_dir"])
 
     experiment_id = runner_manifest["experiment_id"]
@@ -124,7 +126,7 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     _write_csv(ctx_tbl, out / "metrics" / "context_contribution.csv")
 
     overall = []
-    for other in ["profile_only", "one_shot", "no_memory", "no_context"]:
+    for other in [v for v in ["profile_only", "one_shot", "no_memory", "no_context"] if v in variants]:
         for metric in ["ndcg_at_5", "task_success", "hcsr"]:
             overall.append(compare(sv, run_metrics, metric, "full", other,
                                    bootstrap_iters, bootstrap_seed))
@@ -175,7 +177,7 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
             "catalog_snapshot_id": runner_manifest.get("config_hash", "") and
                                    json.loads((Path(catalog_path).parent / "catalog_manifest.json").read_text()).get("catalog_snapshot_id", "catalog"),
             "catalog_hash": catalog_hash(catalog),
-            "variants": VARIANTS,
+            "variants": variants,
             "scenario_count": len(scenarios),
             "repeat_count": repeats,
             "run_count": len(run_metrics),
@@ -262,6 +264,8 @@ def main() -> None:
     p.add_argument("--experiment-dir", default=None, help="reuse an existing run dir")
     p.add_argument("--bootstrap-iters", type=int, default=5000)
     p.add_argument("--bootstrap-seed", type=int, default=2026)
+    p.add_argument("--variants", default=None,
+                   help="comma-separated subset of variants (default: all five)")
 
     v = sub.add_parser("validate", help="validate scenarios + catalog")
     v.add_argument("--scenarios", default="evaluation/data/scenarios.jsonl")
@@ -269,9 +273,10 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "pipeline":
+        variants = args.variants.split(",") if args.variants else None
         result = run_pipeline(args.config, args.scenarios, args.catalog, args.out_root,
                               args.repeats, args.experiment_dir, args.bootstrap_iters,
-                              args.bootstrap_seed)
+                              args.bootstrap_seed, variants=variants)
         print(json.dumps(result, indent=2))
     elif args.command == "validate":
         scenarios = load_scenarios(args.scenarios)

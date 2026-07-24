@@ -19,6 +19,6 @@ llm:
   provider: remote
   extraction_temperature: 0.0
   response_temperature: 0.2
-  timeout_seconds: 60
-  max_retries: 2
+  timeout_seconds: 90
+  max_retries: 1
   save_raw_responses: true

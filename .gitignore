@@ -35,3 +35,7 @@ artifacts/reports/
 # keep report/metrics/plots/statistics/manifests/audit deliverables
 evaluation/outputs/_runs/
 evaluation/outputs/*/normalized/
+
+
+# Hybrid (real-LLM) run outputs; curated copies live under test_results/hybrid/
+evaluation/outputs_hybrid/

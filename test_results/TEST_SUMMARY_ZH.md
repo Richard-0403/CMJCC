@@ -114,19 +114,44 @@ no-match/澄清 的 precision-recall、根因错误分类、以及代表性案�
 
 ---
 
+## 3b. 真实 LLM（gpt-5.5）验证 —— hybrid 模式
+
+在 Vector Engine（`gpt-5.5`，OpenAI 兼容）上以 `hybrid` 模式运行：LLM 负责槽位抽取，
+规则负责合并/过滤/排序/证据。在 12 个带标签的子集上运行（full vs no_context，重复 1 次 =
+24 次运行）。工件见 `test_results/hybrid/`。
+
+| 版本 | NDCG@5 | HCSR | 任务成功率 | grounding | Handoff |
+|---|---|---|---|---|---|
+| **full** | 0.959 | **1.000** | **1.000** | 1.000 | 1.000 |
+| no_context | 0.754 | 0.582 | 0.333 | 1.000 | 1.000 |
+
+- **真实 LLM 复现了消融结论**：上下文依赖子集 Δcontext HCSR **+0.48** [0.32, 0.60]、
+  任务成功率 **+1.00**、NDCG +0.19、每职位违规 −0.52。no_context 逐约束合规：
+  地点 0.70、工作模式 0.60、薪资 0.88。
+- **真实延迟**（由 LLM 抽取主导）：抽取中位数 ≈ 18 秒，p95 ≈ 113 秒；端到端中位数
+  ≈ 18 秒。（这取代了确定性下的亚毫秒数字——架构的真实成本在模型调用。）
+- **抽取质量**：gpt-5.5 在全部 12 个场景上抽取出正确的槽位与约束强度
+  （如"only … remote" → 硬工作模式）。
+- **稳健性发现（论文中值得写一段）**：在 RM50000 的无匹配场景中，模型最初把薪资返回为
+  结构化对象 `{"amount":50000,"period":"month"}` 而非数字，导致硬薪资约束一度被丢弃
+  （→ 错误地给出推荐）。我们强化了薪资归一化以兼容此类形状；修复后 `full` 正确返回
+  no-match（任务成功率 1.00）。这是确定性运行无法暴露、而真实 LLM 才会出现的输出形状
+  脆弱性的具体例子。
+- **grounding 在真实 LLM 下仍为 1.00（构造性）**，因为响应是由经校验器核对的 claim
+  组装而成（LLM 只用于抽取 + 澄清措辞，不用于自由文本的事实生成）。要测试自由生成中的
+  幻觉，需要 (C) 中的人工 claim 标注。
+
 ## 4. 三项扩展的完成状态
 
 - **(A) 可由数据直接推导的补充 —— 已完成。** 场景质检/重标、逐约束合规、
   no-match/澄清 precision-recall、案例分析、错误分类均已实现并写入报告。
+- **(B) 真实 LLM（hybrid）运行 —— 已完成。** 已在 gpt-5.5 上运行（见 §3b）；配置
+  `configs/hybrid_vectorengine.yaml`。完整确定性实验（42×5×3 = 630 次运行）仍是可复现的
+  主结果，hybrid 子集为真实模型验证。
 - **(C) 人工标注支持 —— 已就绪，等待标签。** 流水线会导出标注模板
   （`evaluation/outputs/<exp>/annotation/`）。放入
   `relevance_labels_human.csv` / `claim_annotations_human.csv` 后，流水线会自动计算
   加权 Cohen's κ（相关性）、Cohen's κ（claim）与 oracle-vs-人工一致性。不伪造任何人工标签。
-- **(B) 真实 LLM（hybrid）运行 —— 已接好，等待 API key。** 已提供接 Vector Engine
-  （gpt-5.5，OpenAI 兼容）的 hybrid 配置（`configs/hybrid_vectorengine.yaml`）。设置
-  `JOBREC_LLM_API_KEY`、`JOBREC_LLM_BASE_URL=https://api.vectorengine.ai/v1`、
-  `JOBREC_LLM_MODEL=gpt-5.5`，用 `--config configs/hybrid_vectorengine.yaml` 运行即可让
-  grounding / 抽取 / 延迟变成真实数字。
 
 ---
 
