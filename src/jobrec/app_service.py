@@ -9,6 +9,7 @@ bundles through a repository (PostgreSQL or in-memory).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .agents.memory_agent import MemoryAgent
@@ -16,7 +17,7 @@ from .catalog import catalog_hash, load_catalog
 from .config import AppConfig
 from .domain.candidate import CandidateState
 from .domain.dialogue import DialogueState
-from .domain.enums import ExperimentVariant
+from .domain.enums import ErrorCode, ExperimentVariant
 from .evidence_store import EvidenceStore
 from .orchestration.orchestrator import ConversationOrchestrator, TurnResult, make_provider
 from .storage.repositories import InMemoryRepository, Repository
@@ -97,7 +98,12 @@ class AppService:
         orch, store = self._orchestrator_for(session_id, session["experiment_variant"])
         # Ensure profile evidence resolves in this session's store (idempotent).
         MemoryAgent(store, self.config).register_profile_evidence(candidate_state)
-        result = orch.process_turn(candidate_state, dialogue_state, text, scenario_id=scenario_id)
+        # Record db/migration versions on the run when backed by a SQL repository.
+        # In-memory runs (no ``versions`` capability) leave these as None.
+        versions = self.repo.versions() if hasattr(self.repo, "versions") else None
+        result = orch.process_turn(
+            candidate_state, dialogue_state, text, scenario_id=scenario_id, versions=versions,
+        )
         self.repo.save_turn(result, store.all(), result.model_calls)
         return result
 
@@ -115,16 +121,57 @@ class AppService:
             return False
 
 
+def _resolve_require_db(config: AppConfig) -> bool:
+    """Resolve whether a live database is REQUIRED for this run.
+
+    The DB is required when ``JOBREC_REQUIRE_DB=1`` is set in the environment, or
+    when the resolved project environment is an experiment/production run. In
+    those modes there is NO silent in-memory fallback: an unreachable database is
+    a fatal, explicit error. Deterministic unit tests keep using in-memory/SQLite
+    by passing ``require_db=False`` explicitly.
+    """
+    if os.environ.get("JOBREC_REQUIRE_DB") == "1":
+        return True
+    return config.project.environment in {"experiment", "production"}
+
+
 def build_default_service(
     config: AppConfig,
     catalog_path: str = "data/processed/jobs.jsonl",
     use_database: bool | None = None,
+    require_db: bool | None = None,
 ) -> AppService:
-    """Build an AppService, using PostgreSQL when available (or requested)."""
+    """Build an AppService, using PostgreSQL when available (or requested).
+
+    When the database is REQUIRED (``require_db`` resolves to True via
+    ``JOBREC_REQUIRE_DB=1`` or ``config.project.environment`` in
+    ``{experiment, production}``) but no database is reachable, this fails fast
+    with ``RuntimeError(ErrorCode.DB_UNAVAILABLE, ...)`` instead of silently
+    degrading to an in-memory repository. Deterministic unit tests should pass
+    ``require_db=False`` to keep using the in-memory/SQLite path.
+    """
     from .storage.db import is_database_available
 
+    if require_db is None:
+        require_db = _resolve_require_db(config)
+
+    available = is_database_available()
+
+    if require_db and not available:
+        raise RuntimeError(
+            ErrorCode.DB_UNAVAILABLE,
+            "experiment mode requires a reachable PostgreSQL database via "
+            "DATABASE_URL; no in-memory fallback is permitted when the database "
+            "is required",
+        )
+
     repo: Repository
-    want_db = use_database if use_database is not None else is_database_available()
+    if require_db:
+        want_db = True
+    elif use_database is not None:
+        want_db = use_database
+    else:
+        want_db = available
     if want_db:
         repo = _sql_repo()
     else:

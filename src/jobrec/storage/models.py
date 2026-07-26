@@ -28,6 +28,22 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
 
+class SchemaVersion(Base):
+    """Records the current schema/migration version.
+
+    A minimal single-row table (pinned via ``id == 1``) capturing the applied
+    migration version, when it was applied, and a short description. Managed by
+    ``storage/migrations.ensure_schema_version`` rather than a full migration
+    framework (see design R9.7).
+    """
+
+    __tablename__ = "schema_version"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+
 class Candidate(Base):
     __tablename__ = "candidates"
     candidate_id: Mapped[str] = mapped_column(String(64), primary_key=True)

@@ -15,7 +15,11 @@ explanations, or chain-of-thought. For each preference provide:
   "must / only / at least / above / minimum / cannot"; `soft` for
   "prefer / ideally / flexible / also fine"; `unknown` for "maybe / not sure".
 - `polarity`: positive | negative (negative for "don't want / exclude").
-- `temporal_scope`: current_search | session | long_term | unknown.
+- `temporal_scope`: current_search | session | long_term | unknown. Use
+  `long_term` for durable intent ("from now on / always / going forward / in
+  general / permanently") and `current_search` for one-off intent ("this time /
+  just this search / for now / only this"); default to `current_search` when no
+  temporal cue is present.
 
 Never invent facts that are not present in the utterance.
 

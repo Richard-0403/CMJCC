@@ -77,6 +77,32 @@ class SqlRepository:
     def __init__(self, session_factory) -> None:
         self._sf = session_factory
 
+    def versions(self) -> dict:
+        """Return the server DB version and the current schema/migration version.
+
+        ``db_version`` is the server's ``SELECT version()`` string (PostgreSQL-
+        specific), captured best-effort: on a non-PostgreSQL or unavailable DB the
+        call is wrapped in try/except and yields ``None``. ``migration_version`` is
+        the recorded ``SchemaVersion`` row's version, falling back to the current
+        target ``migrations.CURRENT_SCHEMA_VERSION`` when no row is present.
+        """
+        from sqlalchemy import text
+
+        from . import migrations
+        from .models import SchemaVersion
+
+        db_version: str | None = None
+        migration_version: int | None = migrations.CURRENT_SCHEMA_VERSION
+        with self._sf() as s:
+            try:
+                db_version = s.execute(text("SELECT version()")).scalar_one_or_none()
+            except Exception:  # noqa: BLE001 - non-PG / unavailable DB yields None
+                db_version = None
+            row = s.get(SchemaVersion, 1)
+            if row is not None:
+                migration_version = row.version
+        return {"db_version": db_version, "migration_version": migration_version}
+
     def upsert_candidate_state(self, state: CandidateState) -> None:
         from .models import Candidate, CandidateStateVersion
 

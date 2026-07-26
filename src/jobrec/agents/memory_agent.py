@@ -10,6 +10,7 @@ overwrite long-term values.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from ..config import AppConfig
 from ..domain.candidate import CandidateState
@@ -46,6 +47,28 @@ _SCALAR_FIELDS = {
     "salary_currency": "salary_currency",
     "education_level": "education_level",
 }
+
+
+def resolve_scope(p: ExtractedPreference) -> PersistenceScope:
+    """Resolve the effective persistence scope of a preference (pure).
+
+    Combines the preference's explicit ``persistence_scope`` with its
+    ``temporal_scope`` cue so that "from now on" statements become durable
+    long-term memory while "this time only" statements never do:
+
+    - ``temporal_scope == "long_term"`` -> ``LONG_TERM`` ("from now on").
+    - ``temporal_scope == "current_search"`` -> ``ACTIVE_SEARCH`` ("this time
+      only"); never long-term, even if ``persistence_scope`` says otherwise.
+    - ``temporal_scope in {"session", "unknown"}`` -> fall back to
+      ``p.persistence_scope``.
+
+    This helper is side-effect free and never mutates its input.
+    """
+    if p.temporal_scope == "long_term":
+        return PersistenceScope.LONG_TERM
+    if p.temporal_scope == "current_search":
+        return PersistenceScope.ACTIVE_SEARCH
+    return p.persistence_scope
 
 
 class MemoryAgent:
@@ -290,3 +313,125 @@ class MemoryAgent:
             return None
 
         return None
+
+    # ----------------------------------------------------------- write-back
+    def apply_confirmed_updates(
+        self,
+        candidate: CandidateState,
+        extraction: ExtractedPreferenceSet,
+        conflicts: list[PreferenceConflict],
+        now: datetime | None = None,
+    ) -> CandidateState:
+        """Return a NEW CandidateState version with confirmed long-term updates applied.
+
+        A preference is written to long-term memory iff ALL hold:
+
+        1. ``confirmation_status == CONFIRMED`` (``inferred`` only when
+           ``config.memory.inference_to_long_term`` is true).
+        2. ``resolve_scope(p) == PersistenceScope.LONG_TERM``.
+        3. ``confidence >= config.memory.clarification_confidence_threshold``.
+        4. The field is not blocked by a non-``override`` conflict (R4.11 guard).
+
+        Scalar fields supersede the prior active value (``is_active=False``,
+        ``effective_to=now``) and retain it under
+        ``metadata["superseded"][field]`` (append-only history); list fields
+        deactivate a matching prior entry and append the new active value.
+        Every written value is bound to a freshly registered long-term
+        ``EvidenceItem``.
+
+        Returns the SAME instance (no version bump) when nothing resolves to a
+        durable long-term write. Never mutates the input ``CandidateState``.
+        """
+        now = now or utcnow()
+        threshold = self.config.memory.clarification_confidence_threshold
+        allow_inferred = self.config.memory.inference_to_long_term
+
+        # R4.11 non-override conflict guard: before writing a field to long-term
+        # memory, if any conflict targets that field with a resolution that is not
+        # "override", the long-term write is skipped and the existing long-term
+        # value is kept unchanged. The conflict itself is never dropped here --
+        # CMJCC threads detected conflicts onto DialogueState.conflicts in its
+        # run(); this guard only suppresses the write.
+        #
+        # NOTE: PreferenceConflict.resolution currently has no "override" member
+        # (its Literal is use_current_for_search | keep_profile | ask_clarification
+        # | merge_values | reject_incoming | unresolved), so in practice ANY field
+        # with a detected conflict is preserved and never silently overwritten.
+        # The `!= "override"` predicate is kept explicit so that adding an
+        # "override" resolution later automatically re-enables the write.
+        blocked = {c.field_name for c in conflicts if c.resolution != "override"}
+
+        writable = [p for p in extraction.preferences if self._is_long_term_write(
+            p, blocked, threshold, allow_inferred)]
+        if not writable:
+            return candidate
+
+        updates: dict[str, Any] = {}
+        superseded: dict[str, list[Any]] = {
+            k: list(v) for k, v in candidate.metadata.get("superseded", {}).items()
+        }
+
+        for pref in writable:
+            field = pref.field_name
+            value = pref.normalized_value
+            ev = self.store.register_field(
+                EvidenceSource.DIALOGUE, candidate.candidate_id, field, value,
+                confidence=pref.confidence, confirmation=ConfirmationStatus.CONFIRMED,
+                scope=PersistenceScope.LONG_TERM,
+            )
+            new_pv = PreferenceValue(
+                value=value,
+                evidence_ids=[ev.evidence_id],
+                confirmation_status=ConfirmationStatus.CONFIRMED,
+                persistence_scope=PersistenceScope.LONG_TERM,
+                effective_from=now,
+                confidence=pref.confidence,
+                is_active=True,
+            )
+
+            if field in _SCALAR_FIELDS:
+                attr = _SCALAR_FIELDS[field]
+                current = updates[attr] if attr in updates else getattr(candidate, attr)
+                if current is not None:
+                    superseded.setdefault(field, []).append(
+                        current.model_copy(update={"is_active": False, "effective_to": now})
+                    )
+                updates[attr] = new_pv
+            else:  # list field
+                attr = _LIST_FIELDS[field]
+                current_list = updates[attr] if attr in updates else list(getattr(candidate, attr))
+                next_list = [
+                    existing.model_copy(update={"is_active": False, "effective_to": now})
+                    if existing.is_active and existing.value == value
+                    else existing
+                    for existing in current_list
+                ]
+                next_list.append(new_pv)
+                updates[attr] = next_list
+
+        if superseded:
+            updates["metadata"] = {**candidate.metadata, "superseded": superseded}
+        updates["version"] = candidate.version + 1
+        updates["updated_at"] = now
+        return candidate.model_copy(update=updates)
+
+    def _is_long_term_write(
+        self,
+        pref: ExtractedPreference,
+        blocked: set[str],
+        threshold: float,
+        allow_inferred: bool,
+    ) -> bool:
+        """Decide whether a single preference resolves to a durable long-term write."""
+        if pref.field_name in blocked:
+            return False
+        if pref.field_name not in _LIST_FIELDS and pref.field_name not in _SCALAR_FIELDS:
+            return False
+        status_ok = pref.confirmation_status == ConfirmationStatus.CONFIRMED or (
+            allow_inferred and pref.confirmation_status == ConfirmationStatus.INFERRED
+        )
+        if not status_ok:
+            return False
+        if resolve_scope(pref) != PersistenceScope.LONG_TERM:
+            return False
+        return pref.confidence >= threshold

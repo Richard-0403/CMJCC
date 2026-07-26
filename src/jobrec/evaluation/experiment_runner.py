@@ -13,11 +13,21 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ..app_service import AppService
+from ..catalog import catalog_hash, load_catalog
 from ..config import AppConfig
+from ..domain.enums import ResponseType
+from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
 from ..utils.time import to_iso, utcnow
-from .exporters import write_run_bundle
+from .exporters import (
+    _extracted_value_view,
+    _system_clarification_slot,
+    trace_record,
+    write_run_bundle,
+)
 
 
 def load_scenarios(path: str | Path) -> list[dict]:
@@ -68,6 +78,18 @@ class ExperimentRunner:
 
         self._write_index(exp_dir, index_rows)
         self._write_failures(exp_dir, failures)
+        # Experiment-level reproducibility snapshot: a single copy of the
+        # resolved config, the catalog used, and the scenario set shared by every
+        # variant. This makes the full/no_memory/no_context comparison (and the
+        # five-variant path) reconstructable from the experiment directory alone,
+        # without depending on the original input files (R1.2, R1.3, R32.3).
+        snapshot = self._write_experiment_snapshot(exp_dir)
+        # Reference each per-run manifest (written by write_run_bundle) so the
+        # experiment-level manifest ties the batch to its reproducibility data.
+        run_manifests = [
+            str((Path(row["run_dir"]) / "run_manifest.json").relative_to(exp_dir))
+            for row in index_rows
+        ]
         manifest = {
             "experiment_id": experiment_id,
             "experiment_dir": str(exp_dir),
@@ -76,11 +98,56 @@ class ExperimentRunner:
             "repeat_count": repeat,
             "run_count": len(index_rows),
             "config_hash": self.config.config_hash(),
+            "catalog_hash": snapshot["catalog_hash"],
+            "scenarios_hash": snapshot["scenarios_hash"],
+            "prompt_hash": prompt_hash(),
             "created_at": to_iso(utcnow()),
+            "artifacts": snapshot["artifacts"],
+            "run_manifests": run_manifests,
         }
         (exp_dir / "experiment_manifest.json").write_text(json.dumps(manifest, indent=2))
         self._write_checksums(exp_dir)
         return manifest
+
+    def _write_experiment_snapshot(self, exp_dir: Path) -> dict[str, Any]:
+        """Write the shared, experiment-level reproducibility artifacts.
+
+        Emits exactly one copy each of the resolved config, the catalog, and the
+        scenario set at the experiment root so every variant's comparison is
+        reproducible from the experiment directory alone. Returns the content
+        hashes and the relative artifact paths for inclusion in the manifest.
+        """
+        # (a) resolved config -- the single config shared by all variants; the
+        # per-variant override is only the variant field.
+        config_path = exp_dir / "resolved_config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(self.config.model_dump(mode="json"), sort_keys=False)
+        )
+
+        # (b) catalog snapshot -- copy the exact catalog file used for the batch
+        # and compute its content hash via the canonical catalog hasher.
+        jobs = load_catalog(self.catalog_path)
+        chash = catalog_hash(jobs)
+        catalog_snapshot = exp_dir / "catalog.jsonl"
+        catalog_snapshot.write_text(Path(self.catalog_path).read_text())
+
+        # (c) scenarios snapshot -- the exact scenario set run across variants.
+        scenarios_snapshot = exp_dir / "scenarios.jsonl"
+        with scenarios_snapshot.open("w") as fh:
+            for scenario in self.scenarios:
+                fh.write(json.dumps(scenario, default=str))
+                fh.write("\n")
+        shash = stable_hash(self.scenarios)
+
+        return {
+            "catalog_hash": chash,
+            "scenarios_hash": shash,
+            "artifacts": {
+                "resolved_config": config_path.name,
+                "catalog": catalog_snapshot.name,
+                "scenarios": scenarios_snapshot.name,
+            },
+        }
 
     def _run_one(self, variant, scenario, run_index, exp_dir):
         cfg = self.config.model_copy(deep=True)
@@ -94,12 +161,44 @@ class ExperimentRunner:
         cand = svc.create_candidate(profile)
         session_id = svc.create_session(cand.candidate_id, variant)
 
+        # Process the scripted scenario turns on a SINGLE session so that memory
+        # and dialogue-state thread correctly across turns (single code path).
+        # Collect one dialogue-trace record per turn (R7.3): scripted turns record
+        # what the candidate said and what the system extracted/asked; the loop
+        # below appends the simulated answer turns.
         last_result = None
+        response_turns = 0
+        trace: list[dict] = []
         for text in scenario.get("turns", []):
             last_result = svc.process_turn(session_id, text, scenario_id=scenario["scenario_id"])
+            response_turns += 1
+            trace.append(trace_record(
+                last_result,
+                user_utterance=text,
+                clarification_slot=_system_clarification_slot(last_result),
+                extracted_value=_extracted_value_view(last_result),
+            ))
+
+        # For clarification-dependent scenarios, keep driving the dialogue: answer
+        # each system clarification with the SimulatedUser and feed the answer back
+        # as the next turn on the same session until a terminal outcome, the
+        # max-turn guard, the repeated-slot guard, or an unanswerable clarification.
+        # Non-clarification scenarios keep the existing single-pass behaviour.
+        termination_reason = self._terminal_reason(last_result)
+        if last_result is not None and self._is_clarification_dependent(scenario):
+            last_result, extra_turns, termination_reason, loop_trace = (
+                self._run_clarification_loop(svc, session_id, scenario, last_result)
+            )
+            response_turns += extra_turns
+            trace.extend(loop_trace)
+
+        # Stamp the loop's termination reason onto the final record so run-level
+        # metrics can read the terminal outcome from the last trace row (R7.8).
+        if trace:
+            trace[-1]["termination_reason"] = termination_reason
 
         run_dir = exp_dir / variant / scenario["scenario_id"] / str(run_index)
-        write_run_bundle(last_result, run_dir, cfg)
+        write_run_bundle(last_result, run_dir, cfg, dialogue_trace=trace)
 
         rr = last_result.run_record
         decision = last_result.decision
@@ -115,6 +214,8 @@ class ExperimentRunner:
             "eligible": sum(1 for e in decision.eligibility_results if e.eligible) if decision else 0,
             "claims": len(last_result.response.claims),
             "dropped_claims": len(last_result.dropped_claims),
+            "response_turns": response_turns,
+            "termination_reason": termination_reason,
             "total_latency_ms": rr.total_latency_ms,
             "run_dir": str(run_dir),
         }
@@ -122,6 +223,100 @@ class ExperimentRunner:
                                            "scenario_id": scenario["scenario_id"],
                                            "failure_code": rr.failure_code}
         return row, failure
+
+    # ------------------------------------------------------- clarification loop
+    @staticmethod
+    def _is_clarification_dependent(scenario: dict) -> bool:
+        """A scenario drives the dialogue loop when it expects clarification.
+
+        Determined from the scenario's ``clarification_expected`` flag (the
+        ``Scenario`` reference carries the same field); every other scenario keeps
+        the existing single-pass behaviour.
+        """
+        return bool(scenario.get("clarification_expected", False))
+
+    @staticmethod
+    def _has_results(result) -> bool:
+        """True when a recommendation actually returned at least one selected job."""
+        decision = result.decision
+        return bool(decision and decision.selected_job_ids)
+
+    def _terminal_reason(self, result) -> str | None:
+        """Classify a turn result's terminal state for the dialogue loop.
+
+        Returns a termination reason string for terminal outcomes, or ``None`` when
+        the system is asking a clarification and the dialogue can continue.
+        """
+        if result is None:
+            return "no_result"
+        rtype = str(result.response.response_type)
+        if rtype == ResponseType.RECOMMENDATION:
+            return "recommendation" if self._has_results(result) else "recommendation_empty"
+        if rtype == ResponseType.NO_MATCH:
+            return "no_match"
+        if rtype == ResponseType.CLARIFICATION:
+            return None
+        return "error"
+
+    def _run_clarification_loop(self, svc, session_id, scenario, last_result):
+        """Answer system clarifications until the dialogue reaches a terminal state.
+
+        Repeatedly feeds a :class:`SimulatedUser` answer back as the next turn on the
+        SAME session (so memory/dialogue-state thread correctly). Terminates on:
+
+        * recommendation success (recommendation response with results), OR
+        * a correct no-match (no_match response), OR
+        * the ``config.experiment.max_dialogue_turns`` hard cap, OR
+        * failure / the SimulatedUser cannot answer (returns ``None``), OR
+        * the repeated-slot guard (a slot would be re-asked with no progress).
+
+        Returns ``(last_result, extra_turns, termination_reason, trace)`` where
+        ``extra_turns`` counts the simulated answer turns fed into the session and
+        ``trace`` is one dialogue-trace record per simulated answer turn (R7.3).
+        For an answer turn, ``clarification_slot`` is the slot being answered and
+        ``extracted_value`` is that answered value; intermediate records carry a
+        ``None`` termination reason (the caller stamps the final reason).
+        """
+        from jobrec_eval.simulated_user import SimulatedUser
+
+        max_turns = self.config.experiment.max_dialogue_turns
+        sim_user = SimulatedUser(scenario)
+        scenario_id = scenario["scenario_id"]
+        asked: set[str] = set()
+        extra_turns = 0
+        trace: list[dict] = []
+
+        while True:
+            reason = self._terminal_reason(last_result)
+            if reason is not None:
+                # Terminal outcome (recommendation success, no-match, or error).
+                return last_result, extra_turns, reason, trace
+
+            # Hard max-turn guard: never exceed the configured dialogue cap.
+            if extra_turns >= max_turns:
+                return last_result, extra_turns, "max_turns", trace
+
+            answer = sim_user.answer(last_result.clarification, asked)
+            if answer is None:
+                # The user cannot/won't answer -> terminate the dialogue.
+                return last_result, extra_turns, "cannot_answer", trace
+
+            utterance, slot = answer
+            # Repeated-slot guard: do not re-ask/re-answer the same slot endlessly.
+            if slot in asked:
+                return last_result, extra_turns, "repeated_slot", trace
+            asked.add(slot)
+
+            last_result = svc.process_turn(session_id, utterance, scenario_id=scenario_id)
+            extra_turns += 1
+            # extracted_value reflects what the system extracted from the simulated
+            # answer (keyed by field); the answered slot is recorded separately.
+            trace.append(trace_record(
+                last_result,
+                user_utterance=utterance,
+                clarification_slot=slot,
+                extracted_value=_extracted_value_view(last_result),
+            ))
 
     def _write_index(self, exp_dir: Path, rows: list[dict]) -> None:
         if not rows:

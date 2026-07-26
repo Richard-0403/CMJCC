@@ -31,12 +31,14 @@ class ExperimentConfig(BaseModel):
     top_k: int = 5
     retrieval_pool_size: int = 50
     repeat_count: int = 3
+    max_dialogue_turns: int = 6
 
 
 class MemoryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = True
     use_prior_dialogue: bool = True
+    use_multi_turn_continuation: bool = True
     persist_confirmed_updates: bool = True
     inference_to_long_term: bool = False
     clarification_confidence_threshold: float = 0.72

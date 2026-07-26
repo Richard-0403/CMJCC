@@ -1,0 +1,711 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `use_multi_turn_continuation` to `FeatureFlags` and the variant matrix": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808439
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066830199
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066912054
+      }
+    ],
+    "1.2 Extend `FeatureFlags.from_config` and config models": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808446
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066921822
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066980243
+      }
+    ],
+    "1.3 Add the `flag_diff` helper and flag-group sets for ablation attribution": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808453
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066984546
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067070536
+      }
+    ],
+    "1.4 Gate the multi-turn continuation branch in the orchestrator (single path)": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808466
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067074697
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067159988
+      }
+    ],
+    "2.1 Add `feature_flags` to `RunRecord` and populate on finish": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808478
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067193925
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067360668
+      }
+    ],
+    "3.1 Add the pure scope-resolution helper": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808490
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067370938
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067502786
+      }
+    ],
+    "3.2 Add temporal-scope phrase cues to the rule extractor": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808502
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067371968
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067503794
+      }
+    ],
+    "3.3 Implement `MemoryAgent.apply_confirmed_updates`": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808518
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067504823
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067681359
+      }
+    ],
+    "3.4 Implement the R4.11 non-override conflict guard": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808525
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067682361
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067806986
+      }
+    ],
+    "3.5 Wire write-back into the CMJCC path (single code path)": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808531
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067808941
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067986706
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808537
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067987703
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068076289
+      }
+    ],
+    "5.1 Create the field-validation module and normalizers": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808543
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068085364
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068356753
+      }
+    ],
+    "5.2 Simplify `cmjcc._as_float` to reuse the salary parser (single parser)": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808549
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068357068
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068425468
+      }
+    ],
+    "5.3 Hook validation into extraction with repair -> retry -> rule fallback": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808555
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068425789
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068731857
+      }
+    ],
+    "6.1 Add scenario-level aggregation helper": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808561
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068734868
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068821265
+      }
+    ],
+    "6.2 Move task-success McNemar pairing to the scenario level in `compare`": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808567
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068821866
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068970422
+      }
+    ],
+    "7.1 Add fail-fast experiment-mode behaviour to service construction": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808573
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068973733
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069058601
+      }
+    ],
+    "7.2 Add the schema_version table and migrations module": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808579
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069059359
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069174444
+      }
+    ],
+    "7.3 Record db/migration versions on the run record": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808586
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069175155
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069287302
+      }
+    ],
+    "7.4 Verify restart-recovery loaders reconstruct state": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808592
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069287215
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069478046
+      }
+    ],
+    "7.5 Add the single-command PG test target": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808598
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069477535
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069566730
+      }
+    ],
+    "8.1 Build the run manifest": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808605
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069571444
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069703506
+      }
+    ],
+    "8.2 Emit run_manifest.json and enriched model_calls into each run bundle": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808611
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069703419
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069832343
+      }
+    ],
+    "8.3 Confirm full/no_memory/no_context comparison path saves complete artifacts": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808618
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069832141
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069990034
+      }
+    ],
+    "9. Checkpoint - MDV complete": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808625
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069993030
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070390349
+      }
+    ],
+    "10.1 Implement the SimulatedUser": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808631
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070396754
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070603767
+      }
+    ],
+    "10.2 Add the clarification loop to the experiment runner": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808637
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070603329
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070845118
+      }
+    ],
+    "10.3 Persist the per-turn dialogue trace": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808643
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785070844698
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071135001
+      }
+    ],
+    "10.4 Add necessary/unnecessary clarification scoring": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808654
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071134936
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071275906
+      }
+    ],
+    "11.1 Add fault-injection support helpers": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808661
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071279024
+      }
+    ],
+    "11.2 Add failure/recovery/grounding/handoff-rate metrics": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808667
+      },
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071288224
+      }
+    ],
+    "12.1 Compute and frame the ablation deltas in the report": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808673
+      }
+    ],
+    "13. Checkpoint - P0 complete": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808679
+      }
+    ],
+    "14.1 Persist extraction method and aggregate source metrics": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808685
+      }
+    ],
+    "15.1 Persist retrieval outcome and compute retrieval metrics": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808694
+      }
+    ],
+    "16.1 Implement include_states and include_raw_model_outputs with redaction": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808702
+      }
+    ],
+    "17.1 Implement the consistency checker": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808707
+      }
+    ],
+    "17.2 Stop report generation on mismatch": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808713
+      }
+    ],
+    "18.1 Write unified checksums.json and add a verify command": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808719
+      }
+    ],
+    "19.1 Implement the dataset validator and report": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808725
+      }
+    ],
+    "20.1 Implement replay recomputation and diff": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808731
+      }
+    ],
+    "22. Checkpoint - P1 complete": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808737
+      }
+    ],
+    "23.1 Persist score breakdowns and build the top-k contribution table": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808743
+      }
+    ],
+    "24.1 Enforce env-only keys, templates, and startup validation": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808750
+      }
+    ],
+    "25.1 Add the structured JSON logger and per-run trace export": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808756
+      }
+    ],
+    "27.1 Extend CI to gate release tagging": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808762
+      }
+    ],
+    "28.1 Add the freeze script": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808768
+      }
+    ],
+    "29.1 Reconcile the two behavioural changes with the existing suite": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808774
+      }
+    ],
+    "29.2 Run the full default suite and ruff": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808780
+      }
+    ],
+    "30. Final checkpoint - all phases complete": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785066808791
+      }
+    ],
+    "1. Phase 1 groundwork: config + FeatureFlags field for variant differentiation (R5/R32)": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067159994
+      }
+    ],
+    "2. Record resolved FeatureFlags in the run record (R5.4)": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067360676
+      }
+    ],
+    "3. R4 — CandidateState long-term memory write-back": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785067986713
+      }
+    ],
+    "5. R8 — LLM field-level validation and normalization": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068731863
+      }
+    ],
+    "6. R6 — Scenario-level statistical unit for task success": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785068970432
+      }
+    ],
+    "7. R9 — PostgreSQL persistence, fail-fast, and migration versioning": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069566736
+      }
+    ],
+    "8. R11 (manifest) + run-bundle/artifact saving for the final comparison": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785069990041
+      }
+    ],
+    "10. R7 — Evaluable clarification dialogue loop": [
+      {
+        "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
+        "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
+        "timestamp": 1785071275913
+      }
+    ]
+  }
+}

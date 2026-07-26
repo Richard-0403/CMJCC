@@ -1,4 +1,4 @@
-.PHONY: install lint typecheck test test-unit test-e2e test-postgres prepare-data \
+.PHONY: install lint typecheck test test-unit test-e2e test-postgres test-pg prepare-data \
         build-index serve demo run-experiments export-artifacts clean
 
 VENV ?= .venv
@@ -28,6 +28,20 @@ test-e2e:
 
 test-postgres:
 	$(VENV)/bin/pytest -m postgres -q
+
+# Single-command PostgreSQL integration run: brings up a local PG instance,
+# runs the postgres-marked tests against the DATABASE_URL that pg_up exports,
+# then always tears the instance down (even if the tests fail).
+# scripts/pg_local.sh is sourced (it exposes pg_up/pg_down shell functions and
+# exports DATABASE_URL from pg_up), so the whole flow runs in one shell.
+test-pg:
+	@bash -c 'set -u; \
+		source scripts/pg_local.sh; \
+		pg_up; \
+		$(VENV)/bin/pytest -m postgres -q; \
+		status=$$?; \
+		pg_down; \
+		exit $$status'
 
 prepare-data:
 	$(PY) scripts/generate_raw_catalog.py --output data/raw/jobs.csv --count 200

@@ -26,6 +26,7 @@ from ..domain.extraction import ExtractedPreferenceSet
 from ..domain.handoff import EvidenceLogEntry
 from ..domain.job import ActiveSearchState
 from ..evidence_store import EvidenceStore
+from ..llm.field_validation import normalize_salary
 from ..utils.hashing import content_id
 from ..utils.time import utcnow
 from .clarification_policy import ClarificationPolicy
@@ -122,6 +123,26 @@ class CMJCC:
             log("validating", "conflicts_detected",
                 outputs=[c.conflict_id for c in conflicts], rule="cmjcc.detect_conflicts")
 
+        # 2b) Long-term write-back into CandidateState (single shared code path).
+        # Only the current turn's confirmed, durable ("from now on ...") preferences
+        # are eligible. We respect use_current_turn so nothing is written back when the
+        # current utterance is out of scope for the variant; persist_confirmed_updates
+        # and use_persistent_memory gate the mechanism per the resolved flag matrix.
+        candidate_state = inp.candidate_state
+        if (
+            self.flags.persist_confirmed_updates
+            and self.flags.use_persistent_memory
+            and self.flags.use_current_turn
+        ):
+            updated = self.memory.apply_confirmed_updates(
+                inp.candidate_state, inp.extracted_preferences, conflicts, now
+            )
+            if updated is not inp.candidate_state:
+                candidate_state = updated
+                log("memory_updated", "candidate_state_written",
+                    outputs=[f"{updated.candidate_id}:v{updated.version}"],
+                    rule="cmjcc.writeback")
+
         # 3) Build the active-search view by merging profile + current turn.
         active = self._build_active_search(inp, evidence_by_field, conflicts, now)
         log("context_built", "active_search_built", outputs=[active.active_search_id],
@@ -155,7 +176,7 @@ class CMJCC:
         })
 
         return CMJCCOutput(
-            candidate_state=inp.candidate_state,
+            candidate_state=candidate_state,
             dialogue_state=dialogue,
             active_search_state=active,
             job_context_state=job_context,
@@ -331,18 +352,10 @@ def _as_float(value) -> float | None:
     """Coerce a value to float, tolerating LLM variation.
 
     LLMs sometimes return a salary as an object like {"amount": 50000,
-    "period": "month"} or a string like "RM50000". We extract the numeric amount
-    so a hard salary constraint is never silently dropped due to output shape.
+    "period": "month"} or a string like "RM50000". Rather than re-implementing
+    salary parsing here, we delegate to :func:`normalize_salary` — the single
+    salary parser in the codebase — and return its extracted numeric amount so a
+    hard salary constraint is never silently dropped due to output shape.
     """
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        value = value.get("amount") or value.get("value") or value.get("min")
-    if isinstance(value, str):
-        import re
-        m = re.search(r"\d[\d,]*(?:\.\d+)?", value)
-        value = m.group(0).replace(",", "") if m else None
-    try:
-        return float(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
+    normalized, _warnings = normalize_salary(value)
+    return normalized["min_salary"]

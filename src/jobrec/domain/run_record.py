@@ -18,6 +18,7 @@ class RunRecord(BaseModel):
     session_id: str
     candidate_id: str
     experiment_variant: str
+    feature_flags: dict[str, Any] = Field(default_factory=dict)
     workflow_states: list[str] = Field(default_factory=list)
     state_object_ids: dict[str, str] = Field(default_factory=dict)
     handoff_ids: list[str] = Field(default_factory=list)
@@ -35,3 +36,5 @@ class RunRecord(BaseModel):
     prompt_hash: str
     model_manifest: dict[str, Any] = Field(default_factory=dict)
     code_version: str
+    db_version: str | None = None
+    migration_version: int | None = None

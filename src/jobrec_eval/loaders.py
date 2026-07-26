@@ -46,10 +46,23 @@ class RunBundle:
     job_context: dict | None
     clarification: dict | None = None
     dialogue_state: dict | None = None
+    dialogue_trace: list[dict] | None = None
 
     @property
     def run_id(self) -> str:
         return self.run_record.get("run_id", "")
+
+    @property
+    def response_turns(self) -> int:
+        """Number of dialogue turns for this run (one trace record per turn, R7.8)."""
+        return len(self.dialogue_trace or [])
+
+    @property
+    def termination_reason(self) -> str | None:
+        """Terminal outcome of the dialogue loop, read from the final trace record."""
+        if not self.dialogue_trace:
+            return None
+        return self.dialogue_trace[-1].get("termination_reason")
 
 
 def discover_experiment_dir(runs_root: str | Path, experiment_id: str | None = None) -> Path:
@@ -95,6 +108,7 @@ def load_bundles(experiment_dir: str | Path) -> list[RunBundle]:
                     clarification=_read_json(run_dir / "clarification.json"),
                 ))
                 bundles[-1].dialogue_state = _read_json(run_dir / "dialogue_state.json")
+                bundles[-1].dialogue_trace = _read_jsonl(run_dir / "dialogue_trace.jsonl")
     return bundles
 
 

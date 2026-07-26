@@ -8,8 +8,9 @@ CMJCC.
 
 from __future__ import annotations
 
+import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from .. import CODE_VERSION
 from ..agents.candidate_understanding import CandidateUnderstandingAgent
@@ -36,6 +37,12 @@ from ..utils.time import utcnow
 from .cmjcc import CMJCC, CMJCCInput
 from .feature_flags import FeatureFlags
 from .state_machine import StateMachine
+
+logger = logging.getLogger(__name__)
+
+# How a preference's value was produced, recorded on ExtractedPreference.metadata.
+_METHOD_RULE = "rule"
+_METHOD_LLM = "llm"
 
 
 @dataclass
@@ -94,6 +101,7 @@ class ConversationOrchestrator:
         dialogue_state: DialogueState,
         text: str,
         scenario_id: str | None = None,
+        versions: dict | None = None,
     ) -> TurnResult:
         run_id = content_id("run", dialogue_state.session_id, dialogue_state.version, text)
         sm = StateMachine()
@@ -128,7 +136,10 @@ class ConversationOrchestrator:
             extraction, calls = timed("intent_extraction", lambda: self._extract(text))
             model_calls.extend(calls)
             # Fold in prior-turn dialogue evidence when the variant permits memory.
-            if self.flags.use_prior_dialogue:
+            # The continuation gate keeps this on the SAME shared code path: under
+            # one_shot (use_multi_turn_continuation=False) the multi-turn continuation
+            # is explicitly disabled rather than forking a separate pipeline.
+            if self.flags.use_prior_dialogue and self.flags.use_multi_turn_continuation:
                 extraction = self._merge_prior_dialogue(dialogue_state, extraction)
             handoff(self.rule_extractor.name, self.memory.name, "ExtractedPreferenceSet", True)
 
@@ -154,7 +165,7 @@ class ConversationOrchestrator:
                 result = self._finish(
                     run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                     model_calls, candidate_state, dialogue_state, active, None, response,
-                    [], cmjcc_out.clarification_action, success=True,
+                    [], cmjcc_out.clarification_action, success=True, versions=versions,
                 )
                 result.extracted_preferences = extraction
                 result.candidate_state_before = candidate_before
@@ -231,7 +242,7 @@ class ConversationOrchestrator:
             result = self._finish(
                 run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                 model_calls, candidate_state, dialogue_state, active, decision, response,
-                dropped, None, success=True,
+                dropped, None, success=True, versions=versions,
             )
             result.extracted_preferences = extraction
             result.candidate_state_before = candidate_before
@@ -253,15 +264,27 @@ class ConversationOrchestrator:
                 run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                 model_calls, candidate_state, dialogue_state, None, None, response,
                 [], None, success=False, failure_code=ErrorCode.INTERNAL_ERROR.value,
+                versions=versions,
             )
 
     # ------------------------------------------------------------ helpers
     def _extract(self, text: str) -> tuple[ExtractedPreferenceSet, list]:
-        """Extract intent according to the run mode, with rule fallback."""
+        """Extract intent according to the run mode, with field validation and
+        a bounded repair -> retry -> rule-fallback recovery ladder (R8.8/8.9).
+
+        Deterministic mode uses the rule extractor directly (its output is already
+        normalized and must stay byte-stable), tagging every field
+        ``extraction_method="rule"``. Hybrid mode calls the model, validates every
+        field via :func:`validate_extraction`, and — only if some field fails —
+        attempts schema repair, then a single bounded model retry, then a rule-based
+        fallback, logging at each step. A stated constraint is never dropped: an
+        unrecoverable value is preserved as ``UNCONFIRMED`` with a warning.
+        """
         mode = self.config.llm.mode
         if mode == RunMode.DETERMINISTIC or self.provider is None:
-            return self.rule_extractor.extract(text), []
+            return self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE), []
 
+        from ..llm.field_validation import validate_extraction
         from ..llm.provider import LLMError
         from ..llm.retry import retry_call
         from ..llm.structured_output import parse_extraction_lenient
@@ -276,11 +299,137 @@ class ConversationOrchestrator:
             # provenance fields are defaulted so a valid response is actually used.
             return parse_extraction_lenient(payload, utterance=text)
 
+        # ---- model call (bounded retry on transient LLM errors) --------------
         try:
-            return retry_call(once, self.config.llm.max_retries), calls
+            pref_set = retry_call(once, self.config.llm.max_retries)
         except LLMError:
             # Explicit fallback to the deterministic rule extractor (no fabrication).
-            return self.rule_extractor.extract(text), calls
+            logger.warning("extraction: model call failed; falling back to rule extractor")
+            return self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE), calls
+
+        # ---- 1) field validation right after lenient parse (R8.8) ------------
+        pref_set, results = validate_extraction(pref_set)
+        pref_set = self._tag_all(pref_set, _METHOD_LLM)
+        if all(r.ok for r in results):
+            return pref_set, calls
+
+        # ---- 2a) schema repair (coerce obvious shapes) -----------------------
+        failed = sum(1 for r in results if not r.ok)
+        logger.warning(
+            "extraction: %d field(s) failed validation; attempting schema repair", failed
+        )
+        pref_set, results = self._repair_fields(pref_set, results)
+        if all(r.ok for r in results):
+            return pref_set, calls
+
+        # ---- 2b) single bounded model retry (HYBRID only) --------------------
+        logger.warning("extraction: repair incomplete; attempting one bounded model retry")
+        try:
+            retried = once()
+            retried, retried_results = validate_extraction(retried)
+            retried = self._tag_all(retried, _METHOD_LLM)
+            retried, retried_results = self._repair_fields(retried, retried_results)
+            # Prefer the retry only if it recovers at least as many fields.
+            if sum(1 for r in retried_results if r.ok) >= sum(1 for r in results if r.ok):
+                pref_set, results = retried, retried_results
+        except LLMError:
+            logger.warning("extraction: bounded model retry failed")
+        if all(r.ok for r in results):
+            return pref_set, calls
+
+        # ---- 2c) rule fallback for still-failing fields (never drop) ---------
+        unresolved = sum(1 for r in results if not r.ok)
+        logger.error(
+            "extraction: %d field(s) unresolved after repair/retry; applying rule fallback",
+            unresolved,
+        )
+        pref_set = self._rule_fallback(pref_set, results, text)
+        return pref_set, calls
+
+    # -- extraction-method tagging & recovery helpers ----------------------
+    @staticmethod
+    def _tag_all(pref_set: ExtractedPreferenceSet, method: str) -> ExtractedPreferenceSet:
+        """Return a copy whose every preference records ``extraction_method``."""
+        tagged = [
+            p.model_copy(update={"metadata": {**p.metadata, "extraction_method": method}})
+            for p in pref_set.preferences
+        ]
+        return pref_set.model_copy(update={"preferences": tagged})
+
+    def _repair_fields(
+        self, pref_set: ExtractedPreferenceSet, results: list
+    ) -> tuple[ExtractedPreferenceSet, list]:
+        """Attempt to coerce obviously-wrong shapes for each failing field and
+        re-validate. Repaired values keep ``extraction_method="llm"`` (still
+        model-derived) and record ``source="repaired"`` on their FieldResult.
+        """
+        from ..llm.field_validation import validate_field
+
+        new_prefs = list(pref_set.preferences)
+        new_results = list(results)
+        extra_warnings: list[str] = []
+        for i, (pref, res) in enumerate(zip(pref_set.preferences, results, strict=False)):
+            if res.ok:
+                continue
+            repaired_raw = _repair_raw(pref.field_name, pref.normalized_value)
+            if repaired_raw is None:
+                continue
+            new_res = validate_field(pref.field_name, repaired_raw)
+            if new_res.ok:
+                new_res.source = "repaired"
+                new_prefs[i] = pref.model_copy(update={"normalized_value": new_res.value})
+                new_results[i] = new_res
+                msg = f"{pref.field_name}: repaired via schema coercion"
+                extra_warnings.append(msg)
+                logger.warning("extraction: %s", msg)
+        new_set = pref_set.model_copy(update={
+            "preferences": new_prefs,
+            "extraction_warnings": [*pref_set.extraction_warnings, *extra_warnings],
+        })
+        return new_set, new_results
+
+    def _rule_fallback(
+        self, pref_set: ExtractedPreferenceSet, results: list, text: str
+    ) -> ExtractedPreferenceSet:
+        """For each still-failing field, substitute the rule-extracted value when
+        available (tagged ``extraction_method="rule"``); otherwise preserve the
+        stated constraint as ``UNCONFIRMED`` with a warning. A stated constraint is
+        never silently dropped (R8.9).
+        """
+        from ..domain.enums import ConfirmationStatus
+
+        rule_by_field: dict[str, object] = {}
+        for rp in self.rule_extractor.extract(text).preferences:
+            rule_by_field.setdefault(rp.field_name, rp)
+
+        new_prefs = list(pref_set.preferences)
+        extra_warnings: list[str] = []
+        for i, (pref, res) in enumerate(zip(pref_set.preferences, results, strict=False)):
+            if res.ok:
+                continue
+            rule_pref = rule_by_field.get(pref.field_name)
+            if rule_pref is not None:
+                new_prefs[i] = pref.model_copy(update={
+                    "normalized_value": rule_pref.normalized_value,
+                    "confirmation_status": ConfirmationStatus.UNCONFIRMED,
+                    "metadata": {**pref.metadata, "extraction_method": _METHOD_RULE},
+                })
+                msg = (f"{pref.field_name}: LLM value unrecoverable; used rule-based "
+                       "fallback (unconfirmed)")
+                logger.error("extraction: %s", msg)
+            else:
+                # Never drop the stated constraint: keep the raw value, mark unconfirmed.
+                new_prefs[i] = pref.model_copy(update={
+                    "confirmation_status": ConfirmationStatus.UNCONFIRMED,
+                })
+                msg = (f"{pref.field_name}: value could not be normalized; preserved as "
+                       "unconfirmed constraint")
+                logger.warning("extraction: %s", msg)
+            extra_warnings.append(msg)
+        return pref_set.model_copy(update={
+            "preferences": new_prefs,
+            "extraction_warnings": [*pref_set.extraction_warnings, *extra_warnings],
+        })
 
     def _merge_prior_dialogue(
         self, dialogue_state: DialogueState, current: ExtractedPreferenceSet
@@ -327,7 +476,7 @@ class ConversationOrchestrator:
     def _finish(
         self, run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
         model_calls, candidate_state, dialogue_state, active, decision, response,
-        dropped, clarification, success, failure_code=None,
+        dropped, clarification, success, failure_code=None, versions=None,
     ) -> TurnResult:
         completed = utcnow()
         total = round((completed - started).total_seconds() * 1000, 3)
@@ -338,10 +487,15 @@ class ConversationOrchestrator:
         }
         if active is not None:
             state_ids["active_search_state"] = active.active_search_id
+        # JSON-safe snapshot of the resolved flags (R5.4): convert the ``variant`` enum to
+        # its string value so the record serializes cleanly under model_dump(mode="json").
+        feature_flags = asdict(self.flags)
+        feature_flags["variant"] = self.flags.variant.value
         run_record = RunRecord(
             run_id=run_id, scenario_id=scenario_id, session_id=dialogue_state.session_id,
             candidate_id=candidate_state.candidate_id,
             experiment_variant=self.config.experiment.variant.value,
+            feature_flags=feature_flags,
             workflow_states=sm.as_str_list(), state_object_ids=state_ids,
             handoff_ids=[h.handoff_id for h in handoffs],
             evidence_log_ids=[e.log_id for e in evidence_log],
@@ -354,6 +508,8 @@ class ConversationOrchestrator:
             prompt_hash=prompt_hash(),
             model_manifest=(self.provider.manifest() if self.provider else {"provider": "none"}),
             code_version=CODE_VERSION,
+            db_version=(versions or {}).get("db_version"),
+            migration_version=(versions or {}).get("migration_version"),
         )
         return TurnResult(
             run_record=run_record, response=response, decision=decision,
@@ -361,6 +517,32 @@ class ConversationOrchestrator:
             active_search_state=active, handoffs=handoffs, evidence_log=evidence_log,
             dropped_claims=dropped, clarification=clarification, model_calls=model_calls,
         )
+
+
+def _repair_raw(field_name: str, raw: object) -> object | None:
+    """Coerce an obviously-wrong shape into a plausible scalar for re-validation.
+
+    Handles the common ways a model mis-shapes a field: a single-element list
+    (``["remote"]`` -> ``"remote"``), a wrapper object (``{"value": "remote"}`` ->
+    ``"remote"``), or a padded string. Returns ``None`` when no unambiguous
+    coercion is possible, leaving the field for the rule fallback.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (list, tuple)):
+        non_empty = [x for x in raw if x not in (None, "")]
+        return non_empty[0] if len(non_empty) == 1 else None
+    if isinstance(raw, dict):
+        for key in ("value", field_name, "name", "label", "text"):
+            candidate = raw.get(key)
+            if candidate not in (None, ""):
+                return candidate
+        return None
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        # Only worth re-validating if trimming actually changed the string.
+        return stripped if stripped != raw and stripped else None
+    return None
 
 
 def make_provider(config: AppConfig, replay_path: str | None = None):

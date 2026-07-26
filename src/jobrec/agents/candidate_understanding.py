@@ -34,6 +34,13 @@ _NEG_CUES = ["don't want", "do not want", "not interested", "exclude", "avoid", 
 # Threshold cues that make a salary/experience minimum a hard constraint.
 _THRESHOLD_CUES = ["at least", "minimum", "above", "over", "more than", "no less than", "must"]
 
+# Temporal-scope phrase cues. Durable phrases ("from now on") mark a preference as
+# ``long_term`` so it can be written back to long-term memory; one-off phrases
+# ("this time only") pin it to the ``current_search`` and never persist. When no
+# cue is present the scope defaults to ``current_search`` (unchanged behaviour).
+_DURABLE_TEMPORAL_CUES = ["from now on", "always", "going forward", "in general", "permanently"]
+_ONE_OFF_TEMPORAL_CUES = ["this time", "just this search", "for now", "only this"]
+
 _CURRENCY_MAP = {
     "rm": "MYR", "myr": "MYR", "ringgit": "MYR",
     "sgd": "SGD", "s$": "SGD",
@@ -80,6 +87,22 @@ def _confirmation_for(strength: ConstraintStrength, window: str) -> Confirmation
     return ConfirmationStatus.CONFIRMED
 
 
+def _temporal_for(window: str) -> str:
+    """Resolve a temporal scope from phrase cues in ``window``.
+
+    Durable cues ("from now on", "always", ...) take precedence and map to
+    ``long_term``; one-off cues ("this time", "for now", ...) map to
+    ``current_search``. With no cue the scope defaults to ``current_search`` so
+    existing behaviour is preserved.
+    """
+    w = window.lower()
+    if any(cue in w for cue in _DURABLE_TEMPORAL_CUES):
+        return "long_term"
+    if any(cue in w for cue in _ONE_OFF_TEMPORAL_CUES):
+        return "current_search"
+    return "current_search"
+
+
 def _find(text: str, needle: str) -> tuple[int, int] | None:
     idx = text.find(needle)
     if idx < 0:
@@ -99,6 +122,9 @@ class CandidateUnderstandingAgent:
         prefs: list[ExtractedPreference] = []
         ambiguous: list[str] = []
         warnings: list[str] = []
+        # Utterance-level temporal scope from phrase cues; used as the default for
+        # every extracted preference unless a call site overrides it.
+        default_temporal = _temporal_for(lower)
 
         def add(
             field: str,
@@ -109,7 +135,7 @@ class CandidateUnderstandingAgent:
             polarity: str = "positive",
             confidence: float = 0.85,
             confirmation: ConfirmationStatus | None = None,
-            temporal: str = "current_search",
+            temporal: str | None = None,
         ) -> None:
             prefs.append(
                 ExtractedPreference(
@@ -123,7 +149,7 @@ class CandidateUnderstandingAgent:
                     persistence_scope=PersistenceScope.ACTIVE_SEARCH,
                     proposed_strength=strength,
                     polarity=polarity,
-                    temporal_scope=temporal,
+                    temporal_scope=temporal if temporal is not None else default_temporal,
                 )
             )
 

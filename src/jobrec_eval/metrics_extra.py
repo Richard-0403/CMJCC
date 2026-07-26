@@ -99,3 +99,91 @@ def clarification_metrics(run_metrics: pd.DataFrame) -> pd.DataFrame:
             "precision": precision, "recall": recall,
         })
     return pd.DataFrame(rows)
+
+
+
+# A penalty large enough to dominate any turn/unnecessary-ask contribution for
+# realistic runs (turns are bounded by ExperimentConfig.max_dialogue_turns, and
+# the number of asked slots is small). This guarantees the R7.5 monotonicity
+# invariant: a run that SKIPS a necessary clarification can never receive a
+# higher efficiency score than one that asked it, regardless of turn counts.
+_SKIP_PENALTY = 1_000_000.0
+_UNNECESSARY_PENALTY = 1.0
+
+
+def _slot_set(value) -> set[str]:
+    """Parse a ``;``-joined slot string into a set (dropping empties)."""
+    return set(str(value or "").split(";")) - {""}
+
+
+def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
+    """Necessary / unnecessary clarification classification and efficiency per variant.
+
+    Each asked clarification slot (``clarification_target``) is classified against
+    the scenario's ``acceptable_slots``:
+
+    - **Necessary** — the slot IS an acceptable slot (the reference says the
+      answer is required to reach the correct outcome).
+    - **Unnecessary** — the slot was asked but is NOT an acceptable slot (a wasted
+      turn).
+
+    A run "misses" a necessary clarification when the scenario expected a
+    clarification (``clarification_expected``) over a non-empty ``acceptable_slots``
+    set, yet none of the asked slots was acceptable (including the case where the
+    run asked nothing and guessed instead).
+
+    Efficiency (higher = more efficient) is computed per run as
+    ``-turns - _UNNECESSARY_PENALTY * unnecessary_asked``, so fewer turns and fewer
+    wasted asks score better. A run that missed a necessary clarification has
+    ``_SKIP_PENALTY`` subtracted, which — because turn counts and ask counts are
+    bounded well below ``_SKIP_PENALTY`` — guarantees the R7.5 monotonicity rule:
+    skipping a necessary clarification is NEVER scored as more efficient than
+    asking it. The per-variant ``efficiency_score`` is the mean of the per-run
+    scores.
+
+    ``turns`` is taken from ``response_turns`` when present (added by tasks
+    10.2/10.3); otherwise it falls back to ``turn_count`` and finally to ``1`` when
+    neither is available, so existing callers/columns are never broken.
+    """
+    has_response_turns = "response_turns" in run_metrics.columns
+    has_turn_count = "turn_count" in run_metrics.columns
+
+    def _turns(row) -> float:
+        if has_response_turns and pd.notna(row.get("response_turns")):
+            return float(row["response_turns"])
+        if has_turn_count and pd.notna(row.get("turn_count")):
+            return float(row["turn_count"])
+        return 1.0
+
+    rows = []
+    for variant, sub in run_metrics.groupby("variant"):
+        necessary_asked = necessary_missed = unnecessary_asked = 0
+        efficiencies: list[float] = []
+        for _, row in sub.iterrows():
+            acceptable = _slot_set(row.get("acceptable_slots"))
+            asked = _slot_set(row.get("clarification_target"))
+            n_necessary = len(asked & acceptable)
+            n_unnecessary = len(asked - acceptable)
+            missed = bool(row.get("clarification_expected")) and bool(acceptable) \
+                and n_necessary == 0
+
+            necessary_asked += n_necessary
+            unnecessary_asked += n_unnecessary
+            if missed:
+                necessary_missed += 1
+
+            eff = -_turns(row) - _UNNECESSARY_PENALTY * n_unnecessary
+            if missed:
+                eff -= _SKIP_PENALTY
+            efficiencies.append(eff)
+
+        rows.append({
+            "variant": variant,
+            "runs": len(sub),
+            "necessary_asked": necessary_asked,
+            "necessary_missed": necessary_missed,
+            "unnecessary_asked": unnecessary_asked,
+            "efficiency_score": (sum(efficiencies) / len(efficiencies))
+            if efficiencies else None,
+        })
+    return pd.DataFrame(rows)

@@ -25,6 +25,10 @@ class ExtractedPreference(BaseModel):
     proposed_strength: ConstraintStrength
     polarity: Literal["positive", "negative"] = "positive"
     temporal_scope: Literal["current_search", "session", "long_term", "unknown"] = "current_search"
+    # Free-form provenance bag. Notably carries ``extraction_method`` ("rule"|"llm")
+    # recorded by the orchestrator so downstream metrics can attribute each field to
+    # the deterministic rule extractor or the model (R8.8/8.12).
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExtractedPreferenceSet(BaseModel):

@@ -43,6 +43,11 @@ def create_all(engine=None) -> None:
     engine = engine or make_engine()
     Base.metadata.create_all(engine)
 
+    # Record/upgrade the schema version (idempotent, DB-agnostic).
+    from .migrations import ensure_schema_version
+
+    ensure_schema_version(engine)
+
 
 def is_database_available(url: str | None = None) -> bool:
     """Return True if a database connection can be established."""

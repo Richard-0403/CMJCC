@@ -1,9 +1,11 @@
 """Paired statistics: bootstrap CIs, McNemar, Wilcoxon, effect sizes, Holm.
 
 Analysis unit is the scenario. Comparisons are paired by scenario (metrics are
-first averaged over repeats). Binary task-success uses run-level pairing by
-(scenario, repeat_index) for McNemar. Small samples are handled by emphasising
-raw differences and bootstrap CIs, not normal-theory tests.
+first averaged over repeats). Binary task-success is also paired at the scenario
+level for McNemar: repeats are collapsed to one binary per scenario (majority
+vote; even-repeat ties -> 0) before pairing, so ``n_pairs`` equals the number of
+scenarios rather than the number of runs. Small samples are handled by
+emphasising raw differences and bootstrap CIs, not normal-theory tests.
 """
 
 from __future__ import annotations
@@ -89,6 +91,43 @@ def holm(pvalues: list[float | None]) -> list[float | None]:
     return adjusted
 
 
+def aggregate_scenario_success(run_metrics: pd.DataFrame, variant: str,
+                               subset: set[str] | None = None) -> pd.Series:
+    """Collapse repeats to ONE binary task-success outcome per scenario.
+
+    For the given ``variant``, group the run-level ``task_success`` values by
+    ``scenario_id`` and reduce each scenario's repeats to a single binary via
+    MAJORITY VOTE: strictly more successes than failures -> 1, otherwise 0.
+    Ties (only possible with an even number of repeats) resolve conservatively
+    to 0 (not-success). Deterministic runs (one repeat per scenario) are
+    unaffected, and duplicating deterministic repeats does not change the
+    outcome (R6.2, R6.7, R6.8).
+
+    Args:
+        run_metrics: run-level DataFrame with at least ``scenario_id``,
+            ``variant``, and ``task_success`` columns.
+        variant: the variant to aggregate.
+        subset: optional set of ``scenario_id`` values to restrict to.
+
+    Returns:
+        A ``pd.Series`` of int (0/1) indexed by ``scenario_id`` (sorted), named
+        ``variant``. Empty if no matching rows are present.
+    """
+    df = run_metrics[run_metrics["variant"] == variant]
+    if subset is not None:
+        df = df[df["scenario_id"].isin(subset)]
+    if len(df) == 0:
+        return pd.Series(dtype=int, name=variant)
+    successes = df.groupby("scenario_id")["task_success"].sum()
+    counts = df.groupby("scenario_id")["task_success"].size()
+    # Majority vote: successes strictly greater than failures -> 1, else 0.
+    # Equivalent to successes * 2 > total; ties (== total) resolve to 0.
+    binary = (successes * 2 > counts).astype(int)
+    binary = binary.sort_index()
+    binary.name = variant
+    return binary
+
+
 def _paired(scenario_variant: pd.DataFrame, metric: str, base: str, other: str):
     piv = scenario_variant.pivot_table(index="scenario_id", columns="variant", values=metric)
     if base not in piv.columns or other not in piv.columns:
@@ -120,19 +159,47 @@ def compare(scenario_variant: pd.DataFrame, run_metrics: pd.DataFrame, metric: s
     result.update({"delta": mean_diff, "ci_low": lo, "ci_high": hi})
 
     if metric == "task_success":
-        # McNemar on run-level binary pairing by (scenario, repeat_index)
-        piv = run_metrics
+        # Scenario-level McNemar: collapse repeats to ONE binary per scenario
+        # (majority vote; even-repeat ties -> 0) BEFORE pairing, so that
+        # ``n_pairs`` equals the number of scenarios present in both variants,
+        # never scenario x repeat. Duplicating deterministic repeats therefore
+        # cannot inflate the sample or shrink the p-value (R6.3/6.4/6.7/6.8).
+        rm = run_metrics
         if subset_scenarios is not None:
-            piv = piv[piv["scenario_id"].isin(subset_scenarios)]
-        wide = piv.pivot_table(index=["scenario_id", "repeat_index"], columns="variant",
-                               values="task_success")
-        if base in wide.columns and other in wide.columns:
-            w = wide[[base, other]].dropna()
-            mc = mcnemar(w[base].to_numpy(), w[other].to_numpy())
+            rm = rm[rm["scenario_id"].isin(subset_scenarios)]
+        rm = rm[rm["variant"].isin([base, other])]
+        base_bin = aggregate_scenario_success(rm, base, subset_scenarios)
+        other_bin = aggregate_scenario_success(rm, other, subset_scenarios)
+        # Align/pair on the intersection of scenario ids (inner join + dropna).
+        paired = pd.concat([base_bin, other_bin], axis=1, join="inner").dropna()
+
+        total_run_count = int(len(rm))
+        scenario_count = int(rm["scenario_id"].nunique())
+        repeats_per_scenario = (
+            int(rm["repeat_index"].nunique())
+            if "repeat_index" in rm.columns and total_run_count
+            else 0
+        )
+        valid_pairs = int(len(paired))
+
+        result["scenario_count"] = scenario_count
+        result["total_run_count"] = total_run_count
+        result["repeats_per_scenario"] = repeats_per_scenario
+        result["valid_pairs"] = valid_pairs
+        # Task-success pairs at the SCENARIO level (R6.3).
+        result["n_pairs"] = valid_pairs
+
+        if valid_pairs:
+            base_arr = paired.iloc[:, 0].to_numpy()
+            other_arr = paired.iloc[:, 1].to_numpy()
+            mc = mcnemar(base_arr, other_arr)
             result["p_value"] = mc["p_value"]
-            result["effect_size"] = rank_biserial(diffs)
+            result["effect_size"] = rank_biserial((base_arr - other_arr).astype(float))
             result["effect_type"] = "rank_biserial"
             result["mcnemar"] = mc
+            result["discordant_pairs"] = mc["n_discordant"]
+        else:
+            result["discordant_pairs"] = 0
     else:
         result["p_value"] = wilcoxon_p(base_vals, other_vals)
         dz = cohens_dz(diffs)
