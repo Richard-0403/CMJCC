@@ -246,10 +246,22 @@ Clarification precision / recall by variant:
 
 ## 6. Ablation Analysis
 
+Each ablation isolates a single framework mechanism (candidate memory or
+job-context orchestration) while holding catalog, scenarios, prompts, model
+settings, top-k, pool size, ranking weights and seeds fixed across the compared
+variants. Every Δ reported below is therefore read as the **contribution of that
+framework mechanism under the controlled prototype instantiation** — an
+attribution to a specific mechanism as instantiated in this prototype, not a
+general property of the mechanism and not a claim of superiority over any
+external framework.
+
 ### 6.1 Memory Contribution: Full vs No-Memory
 
 Δmemory(M) = M_full − M_no_memory, paired by scenario. Primary subset is
-memory-dependent (multi-turn) scenarios.
+memory-dependent (multi-turn) scenarios. Each Δmemory is framed as the
+candidate-memory mechanism's contribution under the controlled prototype
+instantiation, not as evidence of comprehensive superiority over external
+frameworks.
 
 {_contrib_table(mem, 'memory_dependent')}
 
@@ -264,7 +276,10 @@ All scenarios:
 
 Δcontext(M) = M_full − M_no_context, paired by scenario. Primary subset is
 context-dependent (high) scenarios. HCSR/violations are computed against the
-authoritative hard constraints.
+authoritative hard constraints. Each Δcontext is framed as the job-context
+orchestration mechanism's contribution under the controlled prototype
+instantiation, not as a claim of comprehensive superiority over external
+frameworks.
 
 {_contrib_table(ctx, 'context_dependent')}
 
@@ -335,9 +350,12 @@ Root-cause taxonomy of task-unsuccessful runs:
 
 Within this controlled, deterministic setup, the full architecture meets the
 engineering-quality indicators and the ablations show the expected directional
-contributions of candidate memory and job-context orchestration. Claims are
-limited to this configuration; human-annotated relevance and a real LLM backend
-are the natural next steps.
+contributions of candidate memory and job-context orchestration. These results
+attribute observed differences to specific framework mechanisms under the
+controlled prototype instantiation; they do not state or imply comprehensive
+superiority over any existing external framework. Claims are limited to this
+configuration; human-annotated relevance and a real LLM backend are the natural
+next steps.
 
 ## Appendix
 

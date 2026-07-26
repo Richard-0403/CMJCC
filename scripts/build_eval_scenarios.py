@@ -267,7 +267,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="evaluation/data/scenarios.jsonl")
     args = parser.parse_args()
-    for i, s in enumerate(S):
+    for s in S:
         s["profile"]["candidate_id"] = f"{s['scenario_id']}-cand"
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

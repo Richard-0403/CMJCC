@@ -504,6 +504,21 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785071279024
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072292636
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072358964
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785073666038
       }
     ],
     "11.2 Add failure/recovery/grounding/handoff-rate metrics": [
@@ -516,6 +531,21 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785071288224
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072292967
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072359239
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785073667043
       }
     ],
     "12.1 Compute and frame the ablation deltas in the report": [
@@ -523,6 +553,21 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808673
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293140
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785073683414
+      },
+      {
+        "executionId": "28faba43-ad69-4915-aeb6-90585e8db870",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785075400409
       }
     ],
     "13. Checkpoint - P0 complete": [
@@ -530,6 +575,16 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808679
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293264
+      },
+      {
+        "executionId": "28faba43-ad69-4915-aeb6-90585e8db870",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785075445721
       }
     ],
     "14.1 Persist extraction method and aggregate source metrics": [
@@ -537,6 +592,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808685
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293369
       }
     ],
     "15.1 Persist retrieval outcome and compute retrieval metrics": [
@@ -544,6 +604,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808694
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293468
       }
     ],
     "16.1 Implement include_states and include_raw_model_outputs with redaction": [
@@ -551,6 +616,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808702
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293560
       }
     ],
     "17.1 Implement the consistency checker": [
@@ -558,6 +628,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808707
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293665
       }
     ],
     "17.2 Stop report generation on mismatch": [
@@ -565,6 +640,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808713
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072293936
       }
     ],
     "18.1 Write unified checksums.json and add a verify command": [
@@ -572,6 +652,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808719
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294124
       }
     ],
     "19.1 Implement the dataset validator and report": [
@@ -579,6 +664,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808725
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294230
       }
     ],
     "20.1 Implement replay recomputation and diff": [
@@ -586,6 +676,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808731
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294329
       }
     ],
     "22. Checkpoint - P1 complete": [
@@ -593,6 +688,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808737
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294432
       }
     ],
     "23.1 Persist score breakdowns and build the top-k contribution table": [
@@ -600,6 +700,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808743
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294547
       }
     ],
     "24.1 Enforce env-only keys, templates, and startup validation": [
@@ -607,6 +712,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808750
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294628
       }
     ],
     "25.1 Add the structured JSON logger and per-run trace export": [
@@ -614,6 +724,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808756
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294709
       }
     ],
     "27.1 Extend CI to gate release tagging": [
@@ -621,6 +736,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808762
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294799
       }
     ],
     "28.1 Add the freeze script": [
@@ -628,6 +748,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808768
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072294954
       }
     ],
     "29.1 Reconcile the two behavioural changes with the existing suite": [
@@ -635,6 +760,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808774
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072295064
       }
     ],
     "29.2 Run the full default suite and ruff": [
@@ -642,6 +772,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808780
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072295143
       }
     ],
     "30. Final checkpoint - all phases complete": [
@@ -649,6 +784,11 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785066808791
+      },
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785072295243
       }
     ],
     "1. Phase 1 groundwork: config + FeatureFlags field for variant differentiation (R5/R32)": [
@@ -705,6 +845,20 @@
         "executionId": "f97dd615-3c2c-48cb-87c5-9ce646f20f7e",
         "chatSessionId": "c2fd308f-5508-4e7e-9b08-c287190d3915",
         "timestamp": 1785071275913
+      }
+    ],
+    "11. R10 — Failure-path tests and non-trivial grounding/handoff metrics": [
+      {
+        "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785073667140
+      }
+    ],
+    "12. R32 — Ablation reporting framing (Δmemory / Δcontext)": [
+      {
+        "executionId": "28faba43-ad69-4915-aeb6-90585e8db870",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785075401186
       }
     ]
   }

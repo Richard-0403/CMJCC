@@ -187,3 +187,122 @@ def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
             if efficiencies else None,
         })
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------- R10 failure-path rates
+# These four rates back Requirement 10.8/10.9: over a scenario set that contains genuine
+# failure paths, grounding/handoff numbers must NOT be trivially fixed at 1.000, and the
+# pipeline must report how many injected failures were detected and how many recoverable
+# failures actually recovered. Each rate returns ``None`` (never a misleading 0.0/1.0) when
+# it has no data to average over, matching the None-on-empty convention used by
+# ``no_match_metrics`` / ``per_constraint_compliance`` above.
+
+_TRUTHY_STRINGS = {"true", "1", "yes", "y", "t"}
+
+
+def _as_bool(value) -> bool:
+    """Coerce a cell (bool / int / float / str / NaN) to a strict boolean.
+
+    Strings are matched case-insensitively against a small truthy set so a
+    ``run_metrics`` frame reloaded from CSV (where booleans round-trip as text)
+    behaves the same as one built in-memory. Missing values (NaN/None) are False.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUTHY_STRINGS
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    return bool(value)
+
+
+def _bool_mask(run_metrics: pd.DataFrame, column: str) -> pd.Series | None:
+    """Return a boolean Series for ``column`` or ``None`` when it is absent."""
+    if column not in run_metrics.columns:
+        return None
+    return run_metrics[column].map(_as_bool)
+
+
+def failure_detection_rate(run_metrics: pd.DataFrame) -> float | None:
+    """Fraction of injected failures the system detected: ``detected / injected`` (R10.8).
+
+    Reads two boolean columns from ``run_metrics``:
+
+    - ``failure_injected`` — a fault was injected into this run (dangling evidence
+      id, unsupported claim, invalid handoff, agent exception/timeout, ...).
+    - ``failure_detected`` — the system flagged/handled that fault (dropped the
+      claim, rejected the handoff, emitted a ``failure_code``, ...).
+
+    The numerator counts runs that were BOTH injected and detected, so a run that
+    reports a detection without an injected fault is never over-counted. Returns
+    ``None`` when the required columns are missing or no failures were injected
+    (empty denominator), so a happy-path-only set reads as N/A rather than 1.000.
+    """
+    injected = _bool_mask(run_metrics, "failure_injected")
+    detected = _bool_mask(run_metrics, "failure_detected")
+    if injected is None or detected is None:
+        return None
+    n_injected = int(injected.sum())
+    if n_injected == 0:
+        return None
+    return int((injected & detected).sum()) / n_injected
+
+
+def recovery_success_rate(run_metrics: pd.DataFrame) -> float | None:
+    """Fraction of recoverable failures that recovered: ``recovered / recoverable`` (R10.8).
+
+    Reads two boolean columns from ``run_metrics``:
+
+    - ``recoverable`` — the injected failure was designed to be recoverable
+      (timeout-with-retry, partial failure with rule fallback).
+    - ``recovered`` — the run actually recovered and completed.
+
+    The numerator counts runs that were BOTH recoverable and recovered. Returns
+    ``None`` when the columns are missing or nothing recoverable occurred, so the
+    rate is well-defined and never silently reported as a perfect 1.000.
+    """
+    recoverable = _bool_mask(run_metrics, "recoverable")
+    recovered = _bool_mask(run_metrics, "recovered")
+    if recoverable is None or recovered is None:
+        return None
+    n_recoverable = int(recoverable.sum())
+    if n_recoverable == 0:
+        return None
+    return int((recoverable & recovered).sum()) / n_recoverable
+
+
+def grounding_rate(bundles) -> float | None:
+    """Supported factual claims / all factual claims across ``bundles`` (R10.8/10.9).
+
+    Mirrors the per-run ``grounding`` definition in ``metrics.py``: ``non_factual``
+    claims are excluded from the denominator, and a claim counts as grounded only
+    when its ``support_status`` is exactly ``"supported"`` (``unsupported`` /
+    ``unknown`` never count). Over a failure-containing set some claims are dropped
+    or flagged, so the rate is strictly ``< 1.000`` (R10.9). Returns ``None`` when
+    there are no factual claims to score.
+    """
+    total = supported = 0
+    for b in bundles:
+        for c in b.claims:
+            if c.get("claim_type") == "non_factual":
+                continue
+            total += 1
+            if c.get("support_status") == "supported":
+                supported += 1
+    return (supported / total) if total else None
+
+
+def handoff_success_rate(bundles) -> float | None:
+    """Valid completed handoffs / all handoffs across ``bundles`` (R10.8/10.9).
+
+    A handoff succeeds only when it both passed validation and reached
+    ``status == "completed"`` (same rule as the per-run ``handoff_success`` metric
+    in ``metrics.py``). Schema-invalid or missing-field handoffs therefore drag the
+    rate strictly below ``1.000`` over a failure-containing set (R10.9). Returns
+    ``None`` when no handoffs were recorded.
+    """
+    total = valid = 0
+    for b in bundles:
+        for h in b.handoffs:
+            total += 1
+            if h.get("validation_passed") and h.get("status") == "completed":
+                valid += 1
+    return (valid / total) if total else None

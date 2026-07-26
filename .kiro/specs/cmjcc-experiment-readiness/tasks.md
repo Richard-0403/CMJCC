@@ -315,13 +315,13 @@ Conventions used throughout:
       across variants
     - _Requirements: 7.8, 7.9_
 
-- [ ] 11. R10 — Failure-path tests and non-trivial grounding/handoff metrics
-  - [ ] 11.1 Add fault-injection support helpers
+- [x] 11. R10 — Failure-path tests and non-trivial grounding/handoff metrics
+  - [x] 11.1 Add fault-injection support helpers
     - Create `tests/support/fault_injection.py`: a provider raising `LLMTimeout` N times then
       succeeding, a claim factory with dangling evidence ids, and a handoff factory omitting
       required fields
     - _Requirements: 10.4_
-  - [ ] 11.2 Add failure/recovery/grounding/handoff-rate metrics
+  - [x] 11.2 Add failure/recovery/grounding/handoff-rate metrics
     - In `src/jobrec_eval/metrics_extra.py` add `failure_detection_rate`,
       `recovery_success_rate`, `grounding_rate`, `handoff_success_rate`
     - _Requirements: 10.8_
@@ -348,8 +348,8 @@ Conventions used throughout:
     - **Property 20: Grounding and handoff rates are below 1.0 over failure-containing sets**
     - **Validates: Requirements 10.9**
 
-- [ ] 12. R32 — Ablation reporting framing (Δmemory / Δcontext)
-  - [ ] 12.1 Compute and frame the ablation deltas in the report
+- [x] 12. R32 — Ablation reporting framing (Δmemory / Δcontext)
+  - [x] 12.1 Compute and frame the ablation deltas in the report
     - In `src/jobrec_eval/report.py` compute `Δmemory = M_full − M_no_memory` and
       `Δcontext = M_full − M_no_context`; frame each difference as a "framework mechanism
       contribution under the controlled prototype instantiation" and avoid any claim of
