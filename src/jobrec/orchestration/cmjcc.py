@@ -26,7 +26,7 @@ from ..domain.extraction import ExtractedPreferenceSet
 from ..domain.handoff import EvidenceLogEntry
 from ..domain.job import ActiveSearchState
 from ..evidence_store import EvidenceStore
-from ..llm.field_validation import normalize_salary
+from ..llm.field_validation import salary_amount
 from ..utils.hashing import content_id
 from ..utils.time import utcnow
 from .clarification_policy import ClarificationPolicy
@@ -352,10 +352,11 @@ def _as_float(value) -> float | None:
     """Coerce a value to float, tolerating LLM variation.
 
     LLMs sometimes return a salary as an object like {"amount": 50000,
-    "period": "month"} or a string like "RM50000". Rather than re-implementing
-    salary parsing here, we delegate to :func:`normalize_salary` — the single
-    salary parser in the codebase — and return its extracted numeric amount so a
-    hard salary constraint is never silently dropped due to output shape.
+    "period": "month"} or a string like "RM50000", and hybrid-mode field
+    validation replaces a stated salary with the canonical
+    ``{min_salary, max_salary, currency, period}`` structure. Rather than
+    re-implementing salary parsing here, we delegate to :func:`salary_amount` —
+    the single salary parser/projection in the codebase — so a hard salary
+    constraint is never silently dropped due to output shape.
     """
-    normalized, _warnings = normalize_salary(value)
-    return normalized["min_salary"]
+    return salary_amount(value)

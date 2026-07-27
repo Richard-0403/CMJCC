@@ -53,15 +53,15 @@ Conventions used throughout:
       `use_prior_dialogue and use_multi_turn_continuation` so `one_shot` behaves as a genuine
       single-turn condition without a separate pipeline
     - _Requirements: 5.1, 5.5, 5.7, 5.8, 31.5_
-  - [ ]* 1.5 Property test: distinct variants resolve to distinct FeatureFlags
+  - [x] 1.5 Property test: distinct variants resolve to distinct FeatureFlags
     - Add to `tests/unit/test_variant_isolation.py`
     - **Property 6: All distinct variants resolve to distinct FeatureFlags (one_shot != no_memory)**
     - **Validates: Requirements 5.3, 5.6**
-  - [ ]* 1.6 Property test: ablation pairs differ only in target-mechanism flags
+  - [x] 1.6 Property test: ablation pairs differ only in target-mechanism flags
     - Add to `tests/unit/test_variant_isolation.py`
     - **Property 7: Ablation pairs differ only in their target-mechanism flags**
     - **Validates: Requirements 32.1, 32.2, 32.7**
-  - [ ]* 1.7 Unit test guarding one_shot != no_memory configuration
+  - [x] 1.7 Unit test guarding one_shot != no_memory configuration
     - Add an explicit test to `tests/unit/test_variant_isolation.py` that fails if resolved
       `one_shot` and `no_memory` flag sets ever become identical
     - _Requirements: 5.6_
@@ -72,7 +72,7 @@ Conventions used throughout:
       `src/jobrec/domain/run_record.py`
     - Populate it in the orchestrator's `_finish` from `dataclasses.asdict(self.flags)`
     - _Requirements: 5.4_
-  - [ ]* 2.2 Contract test for the new RunRecord field
+  - [x] 2.2 Contract test for the new RunRecord field
     - Extend `tests/contract/test_schemas.py` to assert the field serializes with a default
     - _Requirements: 5.4_
 
@@ -118,23 +118,23 @@ Conventions used throughout:
       `AppService.process_turn` -> `repo.save_turn` -> existing versioned
       `upsert_candidate_state` persists the new version (no new persistence method)
     - _Requirements: 4.2, 4.6, 4.8, 4.9_
-  - [ ]* 3.6 Property test: write-back increments version and never mutates input
+  - [x] 3.6 Property test: write-back increments version and never mutates input
     - Add to `tests/unit/test_memory_writeback.py`
     - **Property 1: Long-term write-back increments version monotonically and never mutates input**
     - **Validates: Requirements 4.2**
-  - [ ]* 3.7 Property test: superseded values deactivated with effective_to
+  - [x] 3.7 Property test: superseded values deactivated with effective_to
     - Add to `tests/unit/test_memory_writeback.py`
     - **Property 2: Superseded values are deactivated with an effective_to timestamp**
     - **Validates: Requirements 4.3**
-  - [ ]* 3.8 Property test: every long-term write is evidence-bound
+  - [x] 3.8 Property test: every long-term write is evidence-bound
     - Add to `tests/unit/test_memory_writeback.py`
     - **Property 3: Every long-term write is evidence-bound**
     - **Validates: Requirements 4.4, 4.10, 31.4**
-  - [ ]* 3.9 Property test: only long-term, confirmed preferences write to long-term memory
+  - [x] 3.9 Property test: only long-term, confirmed preferences write to long-term memory
     - Add to `tests/unit/test_memory_writeback.py`
     - **Property 4: Only long-term-scoped, confirmed preferences write to long-term memory**
     - **Validates: Requirements 4.5, 4.7, 4.9**
-  - [ ]* 3.10 Property test: non-override conflicts never overwrite long-term memory
+  - [x] 3.10 Property test: non-override conflicts never overwrite long-term memory
     - Add to `tests/unit/test_memory_writeback.py`
     - **Property 5: Non-override conflicts never overwrite long-term memory**
     - **Validates: Requirements 4.11**
@@ -166,19 +166,19 @@ Conventions used throughout:
       step; never drop a stated constraint (preserve as `UNCONFIRMED` with a warning)
     - Record per-field `extraction_method` (`rule`|`llm`) on `ExtractedPreference.metadata`
     - _Requirements: 8.8, 8.9, 31.9_
-  - [ ]* 5.4 Property test: salary normalization preserves the stated amount across shapes
+  - [x] 5.4 Property test: salary normalization preserves the stated amount across shapes
     - Add to `tests/unit/test_field_validation.py`
     - **Property 13: Salary normalization preserves the stated amount across input shapes**
     - **Validates: Requirements 8.2, 8.10**
-  - [ ]* 5.5 Property test: field validation is total and never silently drops a constraint
+  - [x] 5.5 Property test: field validation is total and never silently drops a constraint
     - Add to `tests/unit/test_field_validation.py`
     - **Property 14: Field validation is total and never silently drops a stated constraint**
     - **Validates: Requirements 8.7, 8.9, 8.11, 31.9**
-  - [ ]* 5.6 Property test: enum/skills/location/deadline normalizers produce well-typed output
+  - [x] 5.6 Property test: enum/skills/location/deadline normalizers produce well-typed output
     - Add to `tests/unit/test_field_validation.py`
     - **Property 15: Enum, skills, location, and deadline normalizers produce well-typed output**
     - **Validates: Requirements 8.3, 8.4, 8.5, 8.6**
-  - [ ]* 5.7 Unit tests for repair/retry/fallback ordering and warning emission
+  - [x] 5.7 Unit tests for repair/retry/fallback ordering and warning emission
     - Add concrete examples to `tests/unit/test_field_validation.py` (repair->retry->fallback
       order, warning for unrecoverable values)
     - _Requirements: 8.8, 8.11_
@@ -195,15 +195,15 @@ Conventions used throughout:
       `scenario_count`, `total_run_count`, `repeats_per_scenario`, `valid_pairs`,
       `discordant_pairs`
     - _Requirements: 6.3, 6.4, 6.7, 6.8_
-  - [ ]* 6.3 Update existing eval-stats tests for scenario-level pairing
+  - [x] 6.3 Update existing eval-stats tests for scenario-level pairing
     - Update `tests/eval/test_eval_stats.py` fixtures/expectations to scenario-level
       `n_pairs`, keeping them green
     - _Requirements: 6.3, 6.4, 31.10_
-  - [ ]* 6.4 Property test: task-success McNemar pairs at the scenario level
+  - [x] 6.4 Property test: task-success McNemar pairs at the scenario level
     - Add to `tests/eval/test_eval_stats.py`
     - **Property 8: Task-success McNemar pairs at the scenario level**
     - **Validates: Requirements 6.1, 6.3**
-  - [ ]* 6.5 Property test: deterministic repeat duplication changes neither pairs nor p-values
+  - [x] 6.5 Property test: deterministic repeat duplication changes neither pairs nor p-values
     - Add to `tests/eval/test_eval_stats.py`
     - **Property 9: Deterministic repeat duplication does not change pairs or p-values**
     - **Validates: Requirements 6.2, 6.7, 6.8**
@@ -238,12 +238,12 @@ Conventions used throughout:
     - Extend the `test-postgres` target in `Makefile` (or add `make test-pg`) to run
       `scripts/pg_local.sh` up -> `pytest -m postgres` -> down
     - _Requirements: 9.1_
-  - [ ]* 7.6 PostgreSQL integration tests for persistence and restart
+  - [x] 7.6 PostgreSQL integration tests for persistence and restart
     - Add `tests/integration/test_pg_persistence.py` marked `@pytest.mark.postgres` covering
       save/restore of all state records, session continuation after restart, valid evidence
       links, preserved candidate version history; skip cleanly without a DB
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.9_
-  - [ ]* 7.7 Unit test for fail-fast behaviour
+  - [x] 7.7 Unit test for fail-fast behaviour
     - Add to `tests/unit` a test asserting experiment mode with no DB raises
       `DB_UNAVAILABLE` and never falls back to in-memory
     - _Requirements: 9.6_
@@ -265,7 +265,7 @@ Conventions used throughout:
       scenarios, and manifests for each of the three MDV variants so the comparison is
       reproducible
     - _Requirements: 1.2, 1.3, 32.3_
-  - [ ]* 8.4 Unit/contract test for manifest contents
+  - [x] 8.4 Unit/contract test for manifest contents
     - Add a test asserting manifest keys (hashes, feature_flags, db/migration versions) are
       present
     - _Requirements: 11.2, 11.3_
@@ -298,19 +298,19 @@ Conventions used throughout:
       classify slots as Necessary (in `scenario.acceptable_slots`) vs Unnecessary and apply
       the penalty so skipping a necessary clarification is never scored more efficient
     - _Requirements: 7.4, 7.5_
-  - [ ]* 10.5 Property test: the clarification loop always terminates within max_turns
+  - [x] 10.5 Property test: the clarification loop always terminates within max_turns
     - Add to `tests/e2e/test_clarification_loop.py`
     - **Property 10: The clarification loop always terminates within max_turns**
     - **Validates: Requirements 7.6**
-  - [ ]* 10.6 Property test: repeated-slot re-asking is guarded and recorded
+  - [x] 10.6 Property test: repeated-slot re-asking is guarded and recorded
     - Add to `tests/e2e/test_clarification_loop.py`
     - **Property 11: Repeated-slot re-asking is guarded and recorded**
     - **Validates: Requirements 7.7**
-  - [ ]* 10.7 Property test: skipping a necessary clarification is never scored more efficient
+  - [x] 10.7 Property test: skipping a necessary clarification is never scored more efficient
     - Add to `tests/eval/test_eval_metrics.py`
     - **Property 12: Skipping a necessary clarification is never scored more efficient**
     - **Validates: Requirements 7.4, 7.5**
-  - [ ]* 10.8 E2E test: clarification-dependent scenario runs end-to-end across variants
+  - [x] 10.8 E2E test: clarification-dependent scenario runs end-to-end across variants
     - Add to `tests/e2e/test_clarification_loop.py`, asserting differing `response_turns`
       across variants
     - _Requirements: 7.8, 7.9_
@@ -325,25 +325,25 @@ Conventions used throughout:
     - In `src/jobrec_eval/metrics_extra.py` add `failure_detection_rate`,
       `recovery_success_rate`, `grounding_rate`, `handoff_success_rate`
     - _Requirements: 10.8_
-  - [ ]* 11.3 Failure-path unit tests
+  - [x] 11.3 Failure-path unit tests
     - Add `tests/unit/test_failure_paths.py`: invalid/missing/wrong-field evidence;
       unsupported salary/location/skill claims; schema-invalid and missing-field handoffs;
       agent exception, timeout-with-retry, partial failure with recovery; assert logging of
       event + final status
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
-  - [ ]* 11.4 Failure-metric integration test
+  - [x] 11.4 Failure-metric integration test
     - Add `tests/integration/test_failure_metrics.py` aggregating a failure-containing
       scenario set
     - _Requirements: 10.8_
-  - [ ]* 11.5 Property test: every supported claim resolves to a registered evidence id
+  - [x] 11.5 Property test: every supported claim resolves to a registered evidence id
     - Add to `tests/unit/test_failure_paths.py`
     - **Property 18: Every supported response claim resolves to a registered evidence id**
     - **Validates: Requirements 10.6, 31.4**
-  - [ ]* 11.6 Property test: invalid handoffs prevent a run from being scored as success
+  - [x] 11.6 Property test: invalid handoffs prevent a run from being scored as success
     - Add to `tests/unit/test_failure_paths.py`
     - **Property 19: Invalid handoffs prevent a run from being scored as success**
     - **Validates: Requirements 10.7**
-  - [ ]* 11.7 Property test: grounding and handoff rates are below 1.0 over failure sets
+  - [x] 11.7 Property test: grounding and handoff rates are below 1.0 over failure sets
     - Add to `tests/integration/test_failure_metrics.py`
     - **Property 20: Grounding and handoff rates are below 1.0 over failure-containing sets**
     - **Validates: Requirements 10.9**
@@ -355,24 +355,24 @@ Conventions used throughout:
       contribution under the controlled prototype instantiation" and avoid any claim of
       comprehensive superiority over external frameworks
     - _Requirements: 32.4, 32.5, 32.6_
-  - [ ]* 12.2 Unit test for delta computation and framing strings
+  - [x] 12.2 Unit test for delta computation and framing strings
     - Add a test asserting deltas are computed and the report omits superiority language
     - _Requirements: 32.4, 32.5, 32.6_
 
-- [ ] 13. Checkpoint - P0 complete
+- [x] 13. Checkpoint - P0 complete
   - Ensure all tests pass, the 68 existing tests remain green, and `ruff` is clean; ask the
     user if questions arise.
 
-- [ ] 14. R13 — Extraction-source and fallback statistics
-  - [ ] 14.1 Persist extraction method and aggregate source metrics
+- [x] 14. R13 — Extraction-source and fallback statistics
+  - [x] 14.1 Persist extraction method and aggregate source metrics
     - Ensure `extracted_preferences.json` carries per-field `extraction_method` and
       `FieldResult.source`; add `extraction_source_metrics` to
       `src/jobrec_eval/metrics_extra.py` aggregating rule-vs-LLM and fallback counts per
       variant and per scenario type; report `schema_failure_rate`/`fallback_rate` for hybrid
     - _Requirements: 8.12, 13.1, 13.2_
 
-- [ ] 15. R14 — Retrieval-layer evaluation
-  - [ ] 15.1 Persist retrieval outcome and compute retrieval metrics
+- [x] 15. R14 — Retrieval-layer evaluation
+  - [x] 15.1 Persist retrieval outcome and compute retrieval metrics
     - Persist `result.retrieval_outcome` to `retrieval_results.json` (initial pool, retrieval
       score, full-catalog-fallback count, pool size, retrieval latency); add
       `retrieval_metrics(bundles)` to `src/jobrec_eval/metrics_extra.py` computing Recall@pool
@@ -380,167 +380,167 @@ Conventions used throughout:
       errors separately from ranking errors
     - _Requirements: 14.1, 14.2_
 
-- [ ] 16. R12 — Run-detail API parameters in the SQL repository
-  - [ ] 16.1 Implement include_states and include_raw_model_outputs with redaction
+- [x] 16. R12 — Run-detail API parameters in the SQL repository
+  - [x] 16.1 Implement include_states and include_raw_model_outputs with redaction
     - In `src/jobrec/storage/repositories.py` `get_run`, load state versions when
       `include_states` and model-call payloads when `include_raw_model_outputs`; add a
       `redact(text)` helper honouring `config.logging.redact_candidate_text`
     - _Requirements: 12.1, 12.2, 12.3_
-  - [ ]* 16.2 API tests for both parameters and redaction
+  - [x] 16.2 API tests for both parameters and redaction
     - Add `tests/integration/test_run_detail_api.py` exercising both params and redaction
     - _Requirements: 12.4_
 
-- [ ] 17. R15 + R32.7 — Pre-comparison configuration-consistency gate
-  - [ ] 17.1 Implement the consistency checker
+- [x] 17. R15 + R32.7 — Pre-comparison configuration-consistency gate
+  - [x] 17.1 Implement the consistency checker
     - Create `src/jobrec_eval/consistency.py` with `check_consistency(manifests)` and
       `require_consistent(manifests, target_flag_set=None)` verifying equality of catalog/
       scenario/prompt hashes, model settings, top-k, pool size, seed, commit; for ablation
       pairs assert via `flag_diff` that only target-mechanism flags differ; write consistency
       flags into each run manifest
     - _Requirements: 15.1, 15.3, 32.7_
-  - [ ] 17.2 Stop report generation on mismatch
+  - [x] 17.2 Stop report generation on mismatch
     - In `src/jobrec_eval/report.py` call `require_consistent` before generating output and
       halt on mismatch; store `consistency_flags` on `RunRecord`
     - _Requirements: 15.2_
-  - [ ]* 17.3 Property test: consistency gate proceeds iff all compared runs match
+  - [x] 17.3 Property test: consistency gate proceeds iff all compared runs match
     - Add to `tests/eval/test_consistency.py`
     - **Property 22: The consistency gate proceeds iff all compared runs match**
     - **Validates: Requirements 15.1, 15.2, 32.7**
 
-- [ ] 18. R16 — Unified checksums for all artifacts
-  - [ ] 18.1 Write unified checksums.json and add a verify command
+- [x] 18. R16 — Unified checksums for all artifacts
+  - [x] 18.1 Write unified checksums.json and add a verify command
     - Create `src/jobrec/evaluation/checksums.py` `write_checksums(exp_dir)` covering all
       input+output artifacts; add a `verify` subcommand to `src/jobrec_eval/cli.py` that
       recomputes, prints the offending artifact on mismatch, and exits non-zero
     - _Requirements: 16.1, 16.2, 16.3_
-  - [ ]* 18.2 Property test: checksums round-trip and detect tampering
+  - [x] 18.2 Property test: checksums round-trip and detect tampering
     - Add to `tests/eval/test_checksums.py`
     - **Property 23: Checksums round-trip and detect tampering**
     - **Validates: Requirements 16.1, 16.2, 16.3**
 
-- [ ] 19. R17 — Data-quality validation
-  - [ ] 19.1 Implement the dataset validator and report
+- [x] 19. R17 — Data-quality validation
+  - [x] 19.1 Implement the dataset validator and report
     - Create `src/jobrec_eval/data_quality.py` `validate_dataset(catalog, scenarios)`
       checking duplicate ids, salary min>max, unknown currencies, invalid enums, expired
       deadlines, empty required fields, per-scenario relevance/hard-constraint references, and
       true no-match scenarios (via `JobContextAgent`); emit `data_quality_report.json` with
       offending identifier + violation type
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
-  - [ ]* 19.2 Property test: data-quality validation flags every injected defect
+  - [x] 19.2 Property test: data-quality validation flags every injected defect
     - Add to `tests/eval/test_data_quality.py`
     - **Property 24: Data-quality validation flags every injected defect**
     - **Validates: Requirements 17.1, 17.2, 17.4**
 
-- [ ] 20. R18 — Artifact replay and deterministic recomputation
-  - [ ] 20.1 Implement replay recomputation and diff
+- [x] 20. R18 — Artifact replay and deterministic recomputation
+  - [x] 20.1 Implement replay recomputation and diff
     - Create `src/jobrec/evaluation/replay_check.py` using `RunMode.REPLAY` + saved
       `model_calls.jsonl` (existing `ReplayProvider`) to recompute key-state hashes (extracted
       slots, state versions, filtered jobs, ranking output, explanation claims) and write
       `replay_diff.json` recording any differences
     - _Requirements: 18.1, 18.2, 18.3, 18.4_
-  - [ ]* 20.2 Property test: deterministic replay reproduces identical key-state hashes
+  - [x] 20.2 Property test: deterministic replay reproduces identical key-state hashes
     - Add to `tests/golden/test_replay.py`
     - **Property 21: Deterministic replay reproduces identical key-state hashes**
     - **Validates: Requirements 18.2**
 
-- [ ] 21. R19–R24 — Dedicated test suites
-  - [ ]* 21.1 Candidate-memory test suite (R19)
+- [x] 21. R19–R24 — Dedicated test suites
+  - [x] 21.1 Candidate-memory test suite (R19)
     - Complete `tests/unit/test_memory_writeback.py` covering long-term write-back,
       Persistence_Scope handling, versioning, and cross-session inheritance
     - _Requirements: 19.1, 19.2_
-  - [ ]* 21.2 Constraint-orchestration test suite (R20)
+  - [x] 21.2 Constraint-orchestration test suite (R20)
     - Add `tests/unit/test_constraint_orchestration.py` covering hard-constraint filtering,
       unknown-constraint policy, and no-match diagnosis
     - _Requirements: 20.1, 20.2_
     - _Properties: 16_
-  - [ ]* 21.3 Property test: no hard-violating job is selected under the full variant
+  - [x] 21.3 Property test: no hard-violating job is selected under the full variant
     - Add to `tests/unit/test_constraint_orchestration.py`
     - **Property 16: No hard-violating job is ever selected under the full variant**
     - **Validates: Requirements 31.2**
-  - [ ]* 21.4 Dialogue-conflict test suite (R21)
+  - [x] 21.4 Dialogue-conflict test suite (R21)
     - Add `tests/unit/test_dialogue_conflicts.py` covering value mismatch, temporal override,
       and scope mismatch resolutions
     - _Requirements: 21.1, 21.2_
-  - [ ]* 21.5 Explanation-grounding test suite (R22)
+  - [x] 21.5 Explanation-grounding test suite (R22)
     - Add `tests/unit/test_explanation_grounding.py` covering supported, unsupported, and
       dropped claims
     - _Requirements: 22.1, 22.2_
-  - [ ]* 21.6 Agent-handoff test suite (R23)
+  - [x] 21.6 Agent-handoff test suite (R23)
     - Add `tests/unit/test_agent_handoff.py` covering valid, schema-invalid, and
       missing-field handoffs
     - _Requirements: 23.1, 23.2_
-  - [ ]* 21.7 Variant-isolation test suite (R24)
+  - [x] 21.7 Variant-isolation test suite (R24)
     - Complete `tests/unit/test_variant_isolation.py` verifying each variant resolves distinct
       FeatureFlags and behaviour plus `flag_diff` attribution
     - _Requirements: 24.1, 24.2_
 
-- [ ] 22. Checkpoint - P1 complete
+- [x] 22. Checkpoint - P1 complete
   - Ensure all tests pass, the 68 existing tests remain green, and `ruff` is clean; ask the
     user if questions arise.
 
-- [ ] 23. R25 — Ranking score-breakdown persistence and top-k table
-  - [ ] 23.1 Persist score breakdowns and build the top-k contribution table
+- [x] 23. R25 — Ranking score-breakdown persistence and top-k table
+  - [x] 23.1 Persist score breakdowns and build the top-k contribution table
     - Confirm `RankedJob.features` breakdown is persisted in `recommendation_decision.json`;
       add `topk_contribution_table(bundles)` to `src/jobrec_eval/metrics_extra.py`
     - _Requirements: 25.1, 25.2_
     - _Properties: 17_
-  - [ ]* 23.2 Property test: ranking total_score equals sum of feature contributions
+  - [x] 23.2 Property test: ranking total_score equals sum of feature contributions
     - Add to `tests/unit/test_memory_and_ranking.py`
     - **Property 17: Ranking total_score equals the sum of feature contributions**
     - **Validates: Requirements 25.1, 31.1**
 
-- [ ] 24. R26 — Secret and configuration management
-  - [ ] 24.1 Enforce env-only keys, templates, and startup validation
+- [x] 24. R26 — Secret and configuration management
+  - [x] 24.1 Enforce env-only keys, templates, and startup validation
     - Ensure `src/jobrec/llm/remote_provider.py` reads keys only from env and add a log filter
       that never logs keys; add `config/deterministic.yaml` + `config/hybrid.yaml` templates
       and keep `.env.example`; add `validate_startup(config)` in `src/jobrec/app_service.py`
       that fails fast with an explicit error when required config/API env is missing
     - _Requirements: 26.1, 26.2, 26.3, 26.4_
-  - [ ]* 24.2 Unit tests for redaction and startup validation
+  - [x] 24.2 Unit tests for redaction and startup validation
     - Add tests asserting keys are never logged and missing config fails fast
     - _Requirements: 26.1, 26.3, 26.4_
 
-- [ ] 25. R27 — Structured JSON logging
-  - [ ] 25.1 Add the structured JSON logger and per-run trace export
+- [x] 25. R27 — Structured JSON logging
+  - [x] 25.1 Add the structured JSON logger and per-run trace export
     - Create `src/jobrec/utils/observability.py` emitting
       `{run_id, session_id, scenario_id, variant, component, event, severity}` with
       warning/validation_error/system_failure severities; export `log_trace.jsonl` per run in
       the bundle
     - _Requirements: 27.1, 27.2, 27.3_
 
-- [ ] 26. R28 — Performance tests
-  - [ ]* 26.1 Latency tests across catalog sizes
+- [x] 26. R28 — Performance tests
+  - [x] 26.1 Latency tests across catalog sizes
     - Add `tests/perf/test_latency.py` measuring end-to-end and per-component latency (median,
       IQR, P95) for catalog sizes 100/200/300 and reporting LLM latency separately from rule
       latency using `component_latency_ms`
     - _Requirements: 28.1, 28.2, 28.3_
 
-- [ ] 27. R29 — Continuous integration gate
-  - [ ] 27.1 Extend CI to gate release tagging
+- [x] 27. R29 — Continuous integration gate
+  - [x] 27.1 Extend CI to gate release tagging
     - Extend `.github/workflows/ci.yml` with jobs for unit tests, ruff lint, type-check,
       coverage, a deterministic smoke eval (`full,no_memory,no_context` repeats=1 on a tiny
       fixture), and data-quality/catalog validation, blocking release tagging on any failure
     - _Requirements: 29.1, 29.2_
 
-- [ ] 28. R30 — Code and version freeze
-  - [ ] 28.1 Add the freeze script
+- [x] 28. R30 — Code and version freeze
+  - [x] 28.1 Add the freeze script
     - Create `scripts/freeze.sh` that creates an annotated git tag and records commit hash,
       dependency lock, run instructions, DB schema dump, and a final manifest referencing the
       frozen commit + lock
     - _Requirements: 30.1, 30.2_
 
-- [ ] 29. Regression guard - keep the 68 existing tests green and ruff clean
-  - [ ] 29.1 Reconcile the two behavioural changes with the existing suite
+- [x] 29. Regression guard - keep the 68 existing tests green and ruff clean
+  - [x] 29.1 Reconcile the two behavioural changes with the existing suite
     - After the `FeatureFlags` matrix change (task 1) and the `statistics.compare`
       scenario-level change (task 6), update any existing test that assumed
       `one_shot == no_memory` or run-level `n_pairs` so the full existing suite passes
     - _Requirements: 5.6, 6.3, 31.10_
-  - [ ] 29.2 Run the full default suite and ruff
+  - [x] 29.2 Run the full default suite and ruff
     - Run the 68-test default suite plus all new non-optional tests and `ruff` (clean),
       confirming no regressions across all phases
     - _Requirements: 31.10_
 
-- [ ] 30. Final checkpoint - all phases complete
+- [x] 30. Final checkpoint - all phases complete
   - Ensure all tests pass, the 68 existing tests remain green, `ruff` is clean, and MDV +
     P0/P1/P2 artifacts are produced; ask the user if questions arise.
 

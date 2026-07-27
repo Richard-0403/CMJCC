@@ -1,13 +1,22 @@
 """Remote LLM provider (OpenAI-compatible chat completions via httpx).
 
-Only used in ``hybrid`` mode when explicitly configured. API keys are read from
-the environment, never hard-coded or logged. This provider is intentionally not
-exercised in deterministic CI.
+Only used in ``hybrid`` mode when explicitly configured. This provider is
+intentionally not exercised in deterministic CI.
+
+Secret handling (R26.1): the API key is read **only** from the environment
+(:data:`API_KEY_ENV`). There is no constructor argument, config field or file
+that can carry it — ``AppConfig`` forbids extra keys, so a key cannot even be
+smuggled in through YAML. The key is stored in a private attribute, never placed
+in :meth:`RemoteLLMProvider.manifest` (which is persisted into run artifacts),
+never rendered by ``repr``, and the module logger carries
+:class:`~jobrec.utils.redaction.SecretLogFilter` so nothing this module logs —
+including a transport error that quoted a request — can contain it.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any
@@ -15,7 +24,25 @@ from typing import Any
 import httpx
 
 from ..utils.hashing import content_id
+from ..utils.redaction import install_secret_log_filter, redact, secret_values
 from .provider import LLMCallRecord, LLMError, LLMInvalidJSON, LLMTimeout
+
+#: Environment variables this provider reads. Keys live ONLY in the environment.
+API_KEY_ENV = "JOBREC_LLM_API_KEY"
+BASE_URL_ENV = "JOBREC_LLM_BASE_URL"
+MODEL_ENV = "JOBREC_LLM_MODEL"
+
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_MODEL = "gpt-4o-mini"
+
+logger = logging.getLogger(__name__)
+#: R26.1 — every record from this module is scrubbed before any handler sees it.
+install_secret_log_filter(logger)
+
+
+def _scrub(text: str) -> str:
+    """Redact credential material from a message before it is raised or logged."""
+    return redact(str(text), secrets=secret_values())
 
 
 def _extract_json(text: str) -> dict | None:
@@ -43,18 +70,35 @@ class RemoteLLMProvider:
         self,
         model: str | None = None,
         base_url: str | None = None,
-        api_key_env: str = "JOBREC_LLM_API_KEY",
+        api_key_env: str = API_KEY_ENV,
         timeout_seconds: int = 30,
         extraction_temperature: float = 0.0,
         response_temperature: float = 0.2,
     ) -> None:
         self.name = "remote"
-        self.model = model or os.environ.get("JOBREC_LLM_MODEL", "gpt-4o-mini")
-        self.base_url = base_url or os.environ.get("JOBREC_LLM_BASE_URL", "https://api.openai.com/v1")
-        self._api_key = os.environ.get(api_key_env)
+        self.api_key_env = api_key_env
+        self.model = model or os.environ.get(MODEL_ENV, DEFAULT_MODEL)
+        self.base_url = base_url or os.environ.get(BASE_URL_ENV, DEFAULT_BASE_URL)
+        # Env-only (R26.1): the caller passes the variable NAME, never a value.
+        self._api_key = os.environ.get(api_key_env) or None
         self.timeout = timeout_seconds
         self.extraction_temperature = extraction_temperature
         self.response_temperature = response_temperature
+        if self._api_key is None:
+            logger.warning(
+                "remote provider constructed without a key: export %s", api_key_env
+            )
+
+    @property
+    def has_api_key(self) -> bool:
+        """Whether a key was found in the environment. The value stays private."""
+        return self._api_key is not None
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return (
+            f"RemoteLLMProvider(model={self.model!r}, base_url={self.base_url!r}, "
+            f"api_key_env={self.api_key_env!r}, api_key_present={self.has_api_key})"
+        )
 
     def _post(self, body: dict) -> dict:
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
@@ -65,7 +109,9 @@ class RemoteLLMProvider:
 
     def _chat(self, prompt: str, temperature: float, json_mode: bool) -> tuple[str, float]:
         if not self._api_key:
-            raise LLMTimeout("no API key configured for remote provider")
+            raise LLMTimeout(
+                f"no API key configured for remote provider: set {self.api_key_env}"
+            )
         body: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -79,7 +125,7 @@ class RemoteLLMProvider:
         try:
             data = self._post(body)
         except httpx.TimeoutException as exc:
-            raise LLMTimeout(str(exc)) from exc
+            raise LLMTimeout(_scrub(exc)) from exc
         except httpx.HTTPStatusError as exc:
             # Fallback: retry once without response_format / temperature, which
             # some proxies or newer models reject.
@@ -88,9 +134,9 @@ class RemoteLLMProvider:
             try:
                 data = self._post(body)
             except httpx.HTTPError as exc2:
-                raise LLMError(f"remote model error: {exc2}") from exc
+                raise LLMError(f"remote model error: {_scrub(exc2)}") from exc
         except httpx.HTTPError as exc:
-            raise LLMError(f"remote model error: {exc}") from exc
+            raise LLMError(f"remote model error: {_scrub(exc)}") from exc
         latency_ms = (time.perf_counter() - start) * 1000
         return data["choices"][0]["message"]["content"], latency_ms
 
@@ -123,5 +169,7 @@ class RemoteLLMProvider:
         return raw, record
 
     def manifest(self) -> dict[str, Any]:
+        """Reproducibility metadata. Records the key's SOURCE, never its value."""
         return {"provider": self.name, "model": self.model, "mode": "hybrid",
-                "base_url": self.base_url}
+                "base_url": self.base_url, "api_key_env": self.api_key_env,
+                "api_key_present": self.has_api_key}

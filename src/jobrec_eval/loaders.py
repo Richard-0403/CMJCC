@@ -47,6 +47,12 @@ class RunBundle:
     clarification: dict | None = None
     dialogue_state: dict | None = None
     dialogue_trace: list[dict] | None = None
+    # ExtractedPreferenceSet dump; each preference's ``metadata`` carries
+    # ``extraction_method`` and ``extraction_source`` (R13.1).
+    extracted_preferences: dict | None = None
+    # retrieval_results.json: initial pool + scores, pool size, full-catalog
+    # fallback signal and retrieval latency (R14.1).
+    retrieval: dict | None = None
 
     @property
     def run_id(self) -> str:
@@ -109,6 +115,9 @@ def load_bundles(experiment_dir: str | Path) -> list[RunBundle]:
                 ))
                 bundles[-1].dialogue_state = _read_json(run_dir / "dialogue_state.json")
                 bundles[-1].dialogue_trace = _read_jsonl(run_dir / "dialogue_trace.jsonl")
+                bundles[-1].extracted_preferences = _read_json(
+                    run_dir / "extracted_preferences.json")
+                bundles[-1].retrieval = _read_json(run_dir / "retrieval_results.json")
     return bundles
 
 

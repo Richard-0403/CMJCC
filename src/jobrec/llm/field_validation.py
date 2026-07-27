@@ -45,6 +45,11 @@ DEFAULT_PERIOD: str = "unknown"
 
 _VALID_PERIODS = {"hour", "month", "year", "unknown"}
 
+# Emitted when a stated amount is an integer too large to represent as a float
+# (e.g. ``json.loads`` yielding an arbitrary-precision literal). The amount is
+# unrecoverable, so it is reported rather than raised.
+_AMOUNT_OUT_OF_RANGE = "salary: amount out of representable range"
+
 # Currency tokens -> ISO-ish currency codes (mirrors the rule extractor).
 _CURRENCY_MAP = {
     "rm": "MYR", "myr": "MYR", "ringgit": "MYR",
@@ -82,15 +87,24 @@ class FieldResult:
 # --------------------------------------------------------------------------- #
 # Salary
 # --------------------------------------------------------------------------- #
-def _coerce_amount(value: Any) -> float | None:
-    """Best-effort numeric coercion from a scalar/string, tolerating currency."""
+def _coerce_amount(value: Any) -> tuple[float | None, list[str]]:
+    """Best-effort numeric coercion from a scalar/string, tolerating currency.
+
+    Returns ``(amount, warnings)``. Never raises: an arbitrary-precision integer
+    beyond the float range (``json.loads`` happily produces those) is
+    unrecoverable, so it yields ``None`` plus a structured warning instead of an
+    ``OverflowError``.
+    """
     if value is None or isinstance(value, bool):
-        return None
+        return None, []
     if isinstance(value, (int, float)):
-        return float(value)
+        try:
+            return float(value), []
+        except OverflowError:
+            return None, [_AMOUNT_OUT_OF_RANGE]
     if isinstance(value, str):
-        return _amount_from_string(value)
-    return None
+        return _amount_from_string(value), []
+    return None, []
 
 
 def _amount_from_string(text: str) -> float | None:
@@ -176,27 +190,37 @@ def normalize_salary(raw: Any) -> tuple[dict, list[str]]:
             if period not in _VALID_PERIODS:
                 warnings.append(f"salary: unknown period '{raw_period}', defaulted to '{DEFAULT_PERIOD}'")
                 period = DEFAULT_PERIOD
-        min_salary = _coerce_amount(
+        amount_warnings: list[str] = []
+        min_salary, min_warnings = _coerce_amount(
             raw.get("min_salary") if raw.get("min_salary") is not None else raw.get("min")
         )
-        max_salary = _coerce_amount(
+        max_salary, max_warnings = _coerce_amount(
             raw.get("max_salary") if raw.get("max_salary") is not None else raw.get("max")
         )
+        amount_warnings.extend(min_warnings)
+        amount_warnings.extend(max_warnings)
         if min_salary is None and max_salary is None:
-            amount = _coerce_amount(
+            amount, single_warnings = _coerce_amount(
                 raw.get("amount")
                 if raw.get("amount") is not None
                 else (raw.get("value") if raw.get("value") is not None else raw.get("salary"))
             )
+            amount_warnings.extend(single_warnings)
             if amount is not None:
                 min_salary = max_salary = amount
-        if min_salary is None and max_salary is None:
+        # Report the out-of-range amount once rather than repeating it per key.
+        if _AMOUNT_OUT_OF_RANGE in amount_warnings:
+            warnings.append(_AMOUNT_OUT_OF_RANGE)
+        elif min_salary is None and max_salary is None:
             warnings.append("salary: object provided without a recognizable amount")
         return _salary_structure(min_salary, max_salary, currency, period), warnings
 
     # ---- numeric shape ------------------------------------------------------
     if isinstance(raw, (int, float)) and not isinstance(raw, bool):
-        amount = float(raw)
+        amount, amount_warnings = _coerce_amount(raw)
+        if amount is None:
+            warnings.extend(amount_warnings)
+            return _salary_structure(None, None, currency, period), warnings
         return _salary_structure(amount, amount, currency, period), warnings
 
     # ---- string shape -------------------------------------------------------
@@ -215,6 +239,23 @@ def normalize_salary(raw: Any) -> tuple[dict, list[str]]:
     # ---- wrong type ---------------------------------------------------------
     warnings.append(f"salary: unsupported type {type(raw).__name__}")
     return _salary_structure(None, None, currency, period), warnings
+
+
+def salary_amount(raw: Any) -> float | None:
+    """Project any salary shape onto the single scalar amount the domain stores.
+
+    ``normalize_salary`` (and therefore ``validate_field``) returns the canonical
+    ``{min_salary, max_salary, currency, period}`` structure, but the domain models
+    carry a scalar monthly minimum (``ActiveSearchState.salary_min``,
+    ``CandidateState.salary_min``). This is the one place that bridges the two:
+    every consumer that needs a number from a salary-typed value calls it instead
+    of ``float()``, so the canonical structure never reaches a numeric coercion.
+
+    Total, like the normalizers: an unrecoverable value yields ``None`` (the caller
+    decides how to preserve the stated constraint) and never raises.
+    """
+    normalized, _warnings = normalize_salary(raw)
+    return normalized["min_salary"]
 
 
 def _clean_currency(value: Any) -> str | None:

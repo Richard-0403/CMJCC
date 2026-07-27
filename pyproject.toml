@@ -29,6 +29,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "hypothesis>=6.100,<7",
     "coverage>=7.4",
     "ruff>=0.4",
     "mypy>=1.9",
@@ -50,7 +51,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra"
 pythonpath = ["."]
-markers = ["postgres: tests that require a reachable PostgreSQL database"]
+markers = [
+    "postgres: tests that require a reachable PostgreSQL database",
+    "perf: latency measurements across catalog sizes (R28); excluded from the default run via -m 'not perf', run with `make test-perf`",
+]
 
 [tool.ruff]
 line-length = 100

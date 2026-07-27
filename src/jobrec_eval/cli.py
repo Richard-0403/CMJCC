@@ -5,12 +5,21 @@
 
 Sub-stages (validate/run/normalize/compute-metrics/compute-statistics/plot/
 report/audit) are also exposed, but `pipeline` runs them end to end.
+
+Artifact integrity is checked with one command (R16.2):
+
+    python -m jobrec_eval.cli verify evaluation/outputs/<experiment_id>
+
+Input data quality is checked before a run (R17); it exits non-zero on any
+error-severity violation:
+
+    python -m jobrec_eval.cli validate --scenarios evaluation/data/scenarios.jsonl \
+        --catalog data/processed/jobs.jsonl --report-dir evaluation/outputs
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -19,6 +28,12 @@ import yaml
 
 from jobrec.catalog import catalog_hash, load_catalog
 from jobrec.config import load_config
+from jobrec.evaluation.checksums import (
+    CHECKSUMS_FILENAME,
+    MissingChecksumsError,
+    verify_checksums,
+    write_checksums,
+)
 from jobrec.evaluation.experiment_runner import ExperimentRunner
 
 from . import EVAL_VERSION
@@ -29,6 +44,11 @@ from .annotation import (
     relevance_agreement,
 )
 from .casestudies import error_taxonomy, extract_cases, render_cases_md
+from .data_quality import (
+    DATA_QUALITY_REPORT_FILENAME,
+    validate_dataset,
+    write_data_quality_report,
+)
 from .loaders import load_bundles, normalize
 from .metrics import (
     MetricsComputer,
@@ -36,7 +56,14 @@ from .metrics import (
     latency_percentiles,
     variant_summary,
 )
-from .metrics_extra import clarification_metrics, no_match_metrics, per_constraint_compliance
+from .metrics_extra import (
+    clarification_metrics,
+    extraction_source_metrics,
+    no_match_metrics,
+    per_constraint_compliance,
+    retrieval_metrics,
+    topk_contribution_table,
+)
 from .plots import plot_all
 from .relevance import ORACLE_VERSION, build_references, grade_catalog, grade_lookup
 from .report import write_report
@@ -50,10 +77,6 @@ PRIMARY = ["ndcg_at_5", "hcsr", "task_success", "grounding", "mean_violation_cou
 def _write_csv(df: pd.DataFrame, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
@@ -136,9 +159,15 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     compliance = per_constraint_compliance(mc, bundles)
     nomatch = no_match_metrics(run_metrics)
     clarify = clarification_metrics(run_metrics)
+    extraction_sources = extraction_source_metrics(bundles, scenarios)
+    retrieval = retrieval_metrics(bundles, labels, relevance_threshold=2)
+    topk_contribution = topk_contribution_table(bundles, top_k=cfg.experiment.top_k)
     _write_csv(compliance, out / "metrics" / "constraint_compliance.csv")
     _write_csv(nomatch, out / "metrics" / "no_match_metrics.csv")
     _write_csv(clarify, out / "metrics" / "clarification_metrics.csv")
+    _write_csv(extraction_sources, out / "metrics" / "extraction_source_metrics.csv")
+    _write_csv(retrieval, out / "metrics" / "retrieval_metrics.csv")
+    _write_csv(topk_contribution, out / "metrics" / "topk_contribution.csv")
 
     # ---- case studies + error taxonomy ---------------------------------
     grade = grade_lookup(labels)
@@ -198,6 +227,9 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
         "constraint_compliance": compliance.to_dict(orient="records"),
         "no_match_metrics": nomatch.to_dict(orient="records"),
         "clarification_metrics": clarify.to_dict(orient="records"),
+        "extraction_source_metrics": extraction_sources.to_dict(orient="records"),
+        "retrieval_metrics": retrieval.to_dict(orient="records"),
+        "topk_contribution": topk_contribution.to_dict(orient="records"),
         "error_taxonomy": err_tax.to_dict(orient="records"),
         "case_studies_md": cases_md,
         "relevance_agreement": rel_agree,
@@ -219,7 +251,9 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
         "p_value_adjustment": "holm", "relevance_source": "automatic_oracle",
     }, sort_keys=False))
 
-    report_path = write_report(data, out)
+    # Report output is gated on configuration consistency of the compared runs
+    # (R15.2/R32.7): on mismatch write_report raises and nothing is written.
+    report_path = write_report(data, out, experiment_dir=exp_dir)
 
     # ---- audit ----------------------------------------------------------
     _write_audit(out, run_metrics, references, scenarios)
@@ -245,10 +279,79 @@ def _write_audit(out: Path, run_metrics: pd.DataFrame, references, scenarios):
     ]
     _write_csv(pd.DataFrame(lineage), out / "audit" / "data_lineage.csv")
 
-    lines = []
-    for p in sorted(out.rglob("*.csv")) + sorted(out.rglob("*.json")):
-        lines.append(f"{_sha256(p)}  {p.relative_to(out)}")
-    (out / "audit" / "checksums.sha256").write_text("\n".join(lines) + "\n")
+    # Unified checksum manifest over EVERY artifact in the output directory --
+    # normalized data, metrics, statistics, plots, report and audit tables
+    # (R16.1). Written last so it covers everything the pipeline produced, and
+    # verifiable with `python -m jobrec_eval.cli verify <dir>`.
+    write_checksums(out)
+
+
+def run_validate(
+    scenarios_path: str,
+    catalog_path: str,
+    *,
+    config_path: str | None = None,
+    relevance_labels: str | None = None,
+    report_dir: str | None = None,
+    verify_no_match: bool = True,
+) -> int:
+    """Validate the catalog + scenario set and return an exit code (R17).
+
+    Loading the catalog through :func:`jobrec.catalog.load_catalog` keeps the
+    schema check that ``scripts/validate_catalog.py`` performs, then
+    :func:`~jobrec_eval.data_quality.validate_dataset` adds the semantic checks.
+    Every finding is printed with its offending identifier; the report is written
+    when ``report_dir`` is given. Returns non-zero when an ``error``-severity
+    violation was found, so CI can gate on it.
+    """
+    cfg = (load_config(config_path, base_dir=str(Path(config_path).parent))
+           if config_path else load_config())
+    scenarios = load_scenarios(scenarios_path)
+    catalog = load_catalog(catalog_path)
+
+    labels = relevance_labels
+    if labels is None:
+        default_labels = Path(scenarios_path).parent / "relevance_labels.csv"
+        labels = str(default_labels) if default_labels.is_file() else None
+
+    report = validate_dataset(
+        catalog, scenarios, config=cfg, relevance_labels=labels,
+        verify_no_match=verify_no_match,
+    )
+    print(report.summary())
+    for finding in report.findings:
+        print(f"  - {finding.describe()}")
+    if report_dir:
+        path = write_data_quality_report(report, report_dir)
+        print(f"report: {path}")
+    return 0 if report.ok else 1
+
+
+def run_verify(artifact_dir: str, *, report_untracked: bool = True) -> int:
+    """Verify a directory against its ``checksums.json`` and return an exit code.
+
+    Returns 0 when every recorded artifact still matches, and non-zero otherwise:
+    2 when the directory or its manifest is unusable, 1 when at least one
+    artifact mismatches. Each offending artifact is printed by name (R16.2/16.3).
+    """
+    root = Path(artifact_dir)
+    try:
+        findings = verify_checksums(root, report_untracked=report_untracked)
+    except MissingChecksumsError:
+        print(f"FAIL: no {CHECKSUMS_FILENAME} found in {root}")
+        return 2
+    except (NotADirectoryError, ValueError) as exc:
+        print(f"FAIL: {exc}")
+        return 2
+
+    if not findings:
+        print(f"OK: all artifacts in {root} match {CHECKSUMS_FILENAME}")
+        return 0
+
+    print(f"FAIL: {len(findings)} artifact mismatch(es) in {root}")
+    for finding in findings:
+        print(f"  - {finding.describe()}")
+    return 1
 
 
 def main() -> None:
@@ -267,9 +370,23 @@ def main() -> None:
     p.add_argument("--variants", default=None,
                    help="comma-separated subset of variants (default: all five)")
 
-    v = sub.add_parser("validate", help="validate scenarios + catalog")
+    v = sub.add_parser("validate", help="validate scenarios + catalog (data quality, R17)")
     v.add_argument("--scenarios", default="evaluation/data/scenarios.jsonl")
     v.add_argument("--catalog", default="data/processed/jobs.jsonl")
+    v.add_argument("--config", default=None,
+                   help="config supplying the reference date and constraint policies")
+    v.add_argument("--relevance-labels", default=None,
+                   help="relevance-label CSV (default: relevance_labels.csv beside --scenarios)")
+    v.add_argument("--report-dir", default=None,
+                   help=f"write {DATA_QUALITY_REPORT_FILENAME} into this directory")
+    v.add_argument("--skip-no-match-check", action="store_true",
+                   help="skip replaying no-match scenarios against the catalog")
+
+    ver = sub.add_parser("verify", help=f"verify artifacts against {CHECKSUMS_FILENAME}")
+    ver.add_argument("artifact_dir",
+                     help="experiment or evaluation output directory to verify")
+    ver.add_argument("--allow-untracked", action="store_true",
+                     help="ignore files added after the manifest was written")
 
     args = parser.parse_args()
     if args.command == "pipeline":
@@ -279,9 +396,18 @@ def main() -> None:
                               args.bootstrap_seed, variants=variants)
         print(json.dumps(result, indent=2))
     elif args.command == "validate":
-        scenarios = load_scenarios(args.scenarios)
-        catalog = load_catalog(args.catalog)
-        print(f"OK: {len(scenarios)} scenarios, {len(catalog)} catalog jobs")
+        code = run_validate(
+            args.scenarios, args.catalog, config_path=args.config,
+            relevance_labels=args.relevance_labels, report_dir=args.report_dir,
+            verify_no_match=not args.skip_no_match_check,
+        )
+        if code != 0:
+            raise SystemExit(code)
+    elif args.command == "verify":
+        code = run_verify(args.artifact_dir,
+                          report_untracked=not args.allow_untracked)
+        if code != 0:
+            raise SystemExit(code)
 
 
 if __name__ == "__main__":

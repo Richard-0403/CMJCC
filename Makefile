@@ -1,5 +1,5 @@
-.PHONY: install lint typecheck test test-unit test-e2e test-postgres test-pg prepare-data \
-        build-index serve demo run-experiments export-artifacts clean
+.PHONY: install lint typecheck test test-unit test-e2e test-perf test-postgres test-pg \
+        prepare-data build-index serve demo run-experiments export-artifacts clean
 
 VENV ?= .venv
 PY = $(VENV)/bin/python
@@ -17,7 +17,7 @@ typecheck:
 	$(VENV)/bin/mypy src || true
 
 test:
-	$(VENV)/bin/coverage run -m pytest -m "not postgres"
+	$(VENV)/bin/coverage run -m pytest -m "not postgres and not perf"
 	$(VENV)/bin/coverage report --include="src/jobrec/*"
 
 test-unit:
@@ -25,6 +25,11 @@ test-unit:
 
 test-e2e:
 	$(VENV)/bin/pytest tests/e2e tests/golden -q
+
+# Latency measurements across catalog sizes 100/200/300 (R28). Excluded from `make test`
+# (marker `perf`); the numbers are printed and written to artifacts/reports/perf_latency.json.
+test-perf:
+	$(VENV)/bin/pytest tests/perf -q
 
 test-postgres:
 	$(VENV)/bin/pytest -m postgres -q

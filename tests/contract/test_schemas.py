@@ -8,8 +8,19 @@ from pydantic import ValidationError
 from jobrec.domain.evidence import EvidenceItem
 from jobrec.domain.extraction import ExtractedPreferenceSet
 from jobrec.domain.job import JobPosting
+from jobrec.domain.run_record import RunRecord
 from jobrec.llm.provider import LLMInvalidJSON
 from jobrec.llm.structured_output import parse_extraction
+
+
+def _run_record(**overrides) -> RunRecord:
+    fields = {
+        "run_id": "r", "session_id": "s", "candidate_id": "c", "experiment_variant": "full",
+        "started_at": "2026-01-01T00:00:00Z", "config_hash": "ch", "catalog_hash": "cath",
+        "prompt_hash": "ph", "code_version": "0.1.0",
+    }
+    fields.update(overrides)
+    return RunRecord(**fields)
 
 
 def test_evidence_item_requires_fields():
@@ -54,3 +65,16 @@ def test_parse_extraction_accepts_valid():
                "ambiguous_fields": [], "extraction_warnings": []}
     result = parse_extraction(payload)
     assert isinstance(result, ExtractedPreferenceSet)
+
+
+def test_run_record_feature_flags_defaults_to_empty_dict():
+    record = _run_record()
+    assert record.feature_flags == {}
+    assert record.model_dump(mode="json")["feature_flags"] == {}
+
+
+def test_run_record_feature_flags_round_trip():
+    flags = {"variant": "no_memory", "use_persistent_memory": False, "top_k": 5}
+    dumped = _run_record(feature_flags=flags).model_dump(mode="json")
+    assert dumped["feature_flags"] == flags
+    assert RunRecord.model_validate(dumped).feature_flags == flags

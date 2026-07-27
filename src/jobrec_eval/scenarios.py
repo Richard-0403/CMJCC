@@ -20,6 +20,13 @@ class Scenario:
     expected_response: str = "recommendation"
     turns: list[str] = field(default_factory=list)
     notes: str = ""
+    # Reference data shipped with the scenario: the candidate profile the run
+    # starts from and the full ``expects`` block (of which ``expected_response``
+    # is one entry). Both are needed to replay a scenario and to check its
+    # reference metadata (R17.2); they default to empty so existing callers that
+    # build a Scenario by keyword are unaffected.
+    profile: dict = field(default_factory=dict)
+    expects: dict = field(default_factory=dict)
 
     @property
     def is_multi_turn(self) -> bool:
@@ -47,5 +54,7 @@ def load_scenarios(path: str | Path) -> dict[str, Scenario]:
                 expected_response=d.get("expects", {}).get("response_type", "recommendation"),
                 turns=d.get("turns", []),
                 notes=d.get("notes", ""),
+                profile=d.get("profile", {}) or {},
+                expects=d.get("expects", {}) or {},
             )
     return out

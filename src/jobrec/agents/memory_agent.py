@@ -24,6 +24,7 @@ from ..domain.enums import (
 from ..domain.evidence import EvidenceItem, PreferenceValue
 from ..domain.extraction import ExtractedPreference, ExtractedPreferenceSet
 from ..evidence_store import EvidenceStore
+from ..llm.field_validation import salary_amount
 from ..utils.hashing import content_id
 from ..utils.time import utcnow
 
@@ -47,6 +48,25 @@ _SCALAR_FIELDS = {
     "salary_currency": "salary_currency",
     "education_level": "education_level",
 }
+
+
+def long_term_value(field_name: str, value: Any) -> Any:
+    """Project a validated preference value onto the shape long-term memory stores.
+
+    ``CandidateState.salary_min`` carries a scalar monthly amount — the same shape
+    :meth:`MemoryAgent.create_candidate_state` writes from a structured profile —
+    whereas hybrid-mode field validation normalizes a stated salary to the canonical
+    ``{min_salary, max_salary, currency, period}`` structure (R8.2). Projecting here
+    keeps long-term memory on one salary shape regardless of run mode, so later turns
+    (and every consumer of ``CandidateState``) see a comparable number.
+
+    An unrecoverable value is returned unchanged rather than dropped to ``None``
+    (R8.9). Every other field passes through untouched.
+    """
+    if field_name == "salary_min":
+        amount = salary_amount(value)
+        return amount if amount is not None else value
+    return value
 
 
 def resolve_scope(p: ExtractedPreference) -> PersistenceScope:
@@ -295,8 +315,18 @@ class MemoryAgent:
             return None
 
         # Salary: most recent explicit statement controls the active search.
+        # Both sides go through the single salary parser rather than float(): in
+        # hybrid mode the incoming value is the canonical
+        # {min_salary, max_salary, currency, period} structure produced by field
+        # validation (R8.2), while long-term memory carries a scalar amount.
         if field == "salary_min":
-            if existing_vals and float(incoming) != float(existing_vals[0]):
+            incoming_amount = salary_amount(incoming)
+            existing_amount = salary_amount(existing_vals[0]) if existing_vals else None
+            if incoming_amount is None or existing_amount is None:
+                # Nothing comparable: no conflict is asserted. The stated constraint
+                # itself is untouched here and still reaches ActiveSearchState (R8.9).
+                return None
+            if incoming_amount != existing_amount:
                 return mk("temporal_override", "low", "use_current_for_search", "conflict.salary")
             return None
 
@@ -373,7 +403,11 @@ class MemoryAgent:
 
         for pref in writable:
             field = pref.field_name
-            value = pref.normalized_value
+            # One shape per field in long-term memory; the evidence is registered
+            # against the SAME projected value so the content-addressed evidence id
+            # stays reproducible from ``PreferenceValue.value`` alone (see
+            # ``register_profile_evidence``).
+            value = long_term_value(field, pref.normalized_value)
             ev = self.store.register_field(
                 EvidenceSource.DIALOGUE, candidate.candidate_id, field, value,
                 confidence=pref.confidence, confirmation=ConfirmationStatus.CONFIRMED,

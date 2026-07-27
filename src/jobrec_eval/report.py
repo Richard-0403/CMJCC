@@ -5,6 +5,14 @@ plots; it does not recompute metrics. Wording rules (guide sections 24.1, 28)
 are respected: engineering thresholds, observed differences, confidence
 intervals and statistical significance are distinguished, and over-strong claims
 are avoided.
+
+Report *output* is additionally gated on configuration consistency (R15.2): a
+comparison report is only written when the compared runs share catalog,
+scenarios, prompts, model settings and commit, and when each ablation pair
+differs in nothing but its own mechanism's feature flags (R32.7). The gate lives
+in :func:`write_report` (and :func:`require_consistent_runs`), not in
+:func:`generate_markdown`, because rendering the template is a pure function of
+the assembled data while writing files is the point at which output is produced.
 """
 
 from __future__ import annotations
@@ -13,6 +21,22 @@ import json
 from pathlib import Path
 
 import pandas as pd
+
+from jobrec.orchestration.feature_flags import CONTEXT_FLAGS, MEMORY_FLAGS
+
+from .consistency import (
+    ConsistencyError,
+    load_run_manifests,
+    require_consistent,
+    save_run_manifests,
+)
+
+#: Ablation pairs whose Δ this report attributes to a single mechanism, with the
+#: flag group that is allowed to differ between the two variants (R32.7).
+_ABLATION_PAIRS: tuple[tuple[str, str, frozenset[str] | set[str]], ...] = (
+    ("full", "no_memory", MEMORY_FLAGS),
+    ("full", "no_context", CONTEXT_FLAGS),
+)
 
 
 def _fmt(x, nd=3):
@@ -363,17 +387,133 @@ next steps.
 - Analysis plan: `manifests/analysis_plan.yaml`
 - All metric tables: `metrics/*.csv`; statistics: `statistics/*.csv`
 - Relevance labels (automatic oracle): `../normalized/relevance_labels.csv`
-- Data lineage: `audit/data_lineage.csv`; checksums: `audit/checksums.sha256`
+- Data lineage: `audit/data_lineage.csv`; checksums: `checksums.json`
+  (verify with `python -m jobrec_eval.cli verify <output_dir>`)
 """
     return md
 
 
-def write_report(data: dict, out_dir: str | Path) -> Path:
+def _variant_of(manifest: dict) -> str | None:
+    flags = manifest.get("feature_flags")
+    variant = flags.get("variant") if isinstance(flags, dict) else None
+    return str(getattr(variant, "value", variant)) if variant else None
+
+
+def _consistency_scopes(manifests: list[dict]) -> list[tuple[set[str] | None, list[dict]]]:
+    """The scopes the gate verifies: the whole comparison, then each ablation pair.
+
+    The whole comparison is checked without a target flag set (R15.1: shared
+    catalog/scenarios/prompts/settings/commit). Each ablation pair present in the
+    manifests is then checked against its own mechanism's flag group, so a Δ the
+    report attributes to that mechanism cannot be contaminated by another flag
+    (R32.7).
+    """
+    scopes: list[tuple[set[str] | None, list[dict]]] = [(None, manifests)]
+    by_variant: dict[str | None, list[dict]] = {}
+    for manifest in manifests:
+        by_variant.setdefault(_variant_of(manifest), []).append(manifest)
+    for base, other, target in _ABLATION_PAIRS:
+        if by_variant.get(base) and by_variant.get(other):
+            scopes.append((set(target), by_variant[base] + by_variant[other]))
+    return scopes
+
+
+def _mirror_onto_run_records(manifest_paths: list[Path]) -> list[Path]:
+    """Copy each manifest's consistency block onto its run record (R15.3).
+
+    The manifest is the authoritative location for the gate result; mirroring it
+    into the sibling ``run_record.json`` populates
+    :attr:`jobrec.domain.run_record.RunRecord.consistency_flags`, so a run carries
+    its own verification outcome. Unreadable or unexpected payloads are skipped
+    rather than failing the gate.
+    """
+    written: list[Path] = []
+    for manifest_path in manifest_paths:
+        record_path = Path(manifest_path).with_name("run_record.json")
+        try:
+            manifest = json.loads(Path(manifest_path).read_text())
+            record = json.loads(record_path.read_text())
+        except (OSError, ValueError):
+            continue
+        block = manifest.get("consistency") if isinstance(manifest, dict) else None
+        if not isinstance(block, dict) or not isinstance(record, dict):
+            continue
+        record["consistency_flags"] = {
+            "consistent": block.get("consistent"),
+            **(block.get("flags") or {}),
+            "compared_runs": block.get("compared_runs", []),
+            "mismatched_fields": block.get("mismatched_fields", []),
+        }
+        record_path.write_text(json.dumps(record, indent=2, default=str))
+        written.append(record_path)
+    return written
+
+
+def require_consistent_runs(manifests: list[dict]) -> None:
+    """Halt unless every compared run shares the same configuration (R15.2).
+
+    Verification stops at the first failing scope; the resulting flags are stamped
+    into the manifests, persisted to disk and mirrored onto the run records before
+    the mismatch is raised, so a blocked report still leaves an auditable trail
+    (R15.3). Raises :class:`~jobrec_eval.consistency.ConsistencyError` on mismatch
+    and :class:`ValueError` when there is nothing to verify.
+    """
+    if not manifests:
+        raise ValueError(
+            "configuration consistency cannot be verified without run manifests; "
+            "refusing to generate a comparison report")
+    error: ConsistencyError | None = None
+    for target, subset in _consistency_scopes(manifests):
+        try:
+            require_consistent(subset, target)
+        except ConsistencyError as exc:
+            error = exc
+            break
+    _mirror_onto_run_records(save_run_manifests(manifests))
+    if error is not None:
+        raise error
+
+
+def write_report(data: dict, out_dir: str | Path, *,
+                 experiment_dir: str | Path | None = None,
+                 manifests: list[dict] | None = None) -> Path:
+    """Verify configuration consistency, then write the report bundle.
+
+    Args:
+        data: The assembled report data dict.
+        out_dir: Analysis output directory; the report lands under ``report/``.
+        experiment_dir: Directory holding the run bundles whose ``run_manifest.json``
+            files describe the compared runs.
+        manifests: Already-loaded run manifests, as an alternative to
+            ``experiment_dir``.
+
+    Returns:
+        Path of the written Markdown report.
+
+    Raises:
+        ConsistencyError: The compared runs do not match; nothing is written
+            (R15.2).
+        ValueError: Neither manifest source was supplied, or no manifests exist.
+    """
+    if manifests is None:
+        if experiment_dir is None:
+            raise ValueError(
+                "write_report needs experiment_dir or manifests: configuration "
+                "consistency must be verified before any report output is produced")
+        manifests = load_run_manifests(experiment_dir)
+        if not manifests:
+            raise ValueError(
+                f"no run_manifest.json found under {experiment_dir}; configuration "
+                "consistency of the compared runs cannot be verified")
+    require_consistent_runs(manifests)
+
     out_dir = Path(out_dir)
     (out_dir / "report").mkdir(parents=True, exist_ok=True)
+    # UTF-8 explicitly: the Markdown carries Δ and − and must not depend on the
+    # platform's default encoding (locale codecs such as GBK cannot encode them).
     (out_dir / "report" / "analysis_report_data.json").write_text(
-        json.dumps(data, indent=2, default=str))
+        json.dumps(data, indent=2, default=str), encoding="utf-8")
     md = generate_markdown(data)
     report_path = out_dir / "report" / "analysis_report.md"
-    report_path.write_text(md)
+    report_path.write_text(md, encoding="utf-8")
     return report_path

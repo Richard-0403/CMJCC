@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
+from datetime import date
 from pathlib import Path
 
 from .agents.memory_agent import MemoryAgent
@@ -17,7 +19,7 @@ from .catalog import catalog_hash, load_catalog
 from .config import AppConfig
 from .domain.candidate import CandidateState
 from .domain.dialogue import DialogueState
-from .domain.enums import ErrorCode, ExperimentVariant
+from .domain.enums import ErrorCode, ExperimentVariant, RunMode
 from .evidence_store import EvidenceStore
 from .orchestration.orchestrator import ConversationOrchestrator, TurnResult, make_provider
 from .storage.repositories import InMemoryRepository, Repository
@@ -39,6 +41,13 @@ class AppService:
         self.catalog_hash = catalog_hash(self.jobs)
         self.catalog_snapshot_id = self._snapshot_id(catalog_path)
         self.repo: Repository = repository or InMemoryRepository()
+        # Repositories redact run-detail output per config (R12.3); inject the
+        # resolved config when the repository was built without one.
+        if getattr(self.repo, "config", None) is None:
+            try:
+                self.repo.config = config  # type: ignore[attr-defined]
+            except AttributeError:  # a custom repository may not accept one
+                pass
         self.replay_dir = replay_dir
         # per-session orchestrator + evidence store cache
         self._sessions: dict[str, tuple[ConversationOrchestrator, EvidenceStore]] = {}
@@ -121,6 +130,147 @@ class AppService:
             return False
 
 
+#: Accepted ``logging.level`` names (mirrors the stdlib level names).
+_LOG_LEVELS = frozenset(
+    {"CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG", "NOTSET"}
+)
+
+
+def _api_env_problems(config: AppConfig, env: Mapping[str, str]) -> list[str]:
+    """Report missing API environment for a run mode that needs a live model (R26.4).
+
+    Only a ``hybrid`` run through the ``remote`` provider talks to a model API, so
+    only that combination requires a key. Deterministic and replay runs need none,
+    which is what keeps CI key-free. The key is looked up by NAME
+    (:data:`~jobrec.llm.remote_provider.API_KEY_ENV`); its value is never echoed.
+    """
+    from .llm.remote_provider import API_KEY_ENV, BASE_URL_ENV, MODEL_ENV
+
+    if config.llm.mode != RunMode.HYBRID or config.llm.provider != "remote":
+        return []
+    if (env.get(API_KEY_ENV) or "").strip():
+        return []
+    return [
+        f"llm.mode=hybrid with llm.provider=remote requires the API key in the "
+        f"environment variable {API_KEY_ENV} (optionally {BASE_URL_ENV} and "
+        f"{MODEL_ENV}); keys are read from the environment only and are never "
+        f"read from configuration files"
+    ]
+
+
+def _startup_problems(
+    config: AppConfig, catalog_path: str | None, env: Mapping[str, str]
+) -> list[str]:
+    """Collect every startup problem so one error reports all of them at once."""
+    problems: list[str] = []
+
+    try:
+        date.fromisoformat(config.project.reference_date)
+    except (TypeError, ValueError):
+        problems.append(
+            f"project.reference_date must be an ISO date (YYYY-MM-DD), got "
+            f"{config.project.reference_date!r}"
+        )
+
+    exp = config.experiment
+    if exp.top_k < 1:
+        problems.append(f"experiment.top_k must be >= 1, got {exp.top_k}")
+    if exp.retrieval_pool_size < exp.top_k:
+        problems.append(
+            f"experiment.retrieval_pool_size ({exp.retrieval_pool_size}) must be >= "
+            f"experiment.top_k ({exp.top_k})"
+        )
+    if exp.repeat_count < 1:
+        problems.append(f"experiment.repeat_count must be >= 1, got {exp.repeat_count}")
+    if exp.max_dialogue_turns < 1:
+        problems.append(
+            f"experiment.max_dialogue_turns must be >= 1, got {exp.max_dialogue_turns}"
+        )
+
+    threshold = config.memory.clarification_confidence_threshold
+    if not 0.0 <= threshold <= 1.0:
+        problems.append(
+            f"memory.clarification_confidence_threshold must be within [0, 1], got {threshold}"
+        )
+
+    weights = config.ranking.weights
+    if not weights:
+        problems.append("ranking.weights must define at least one feature weight")
+    else:
+        negative = sorted(name for name, value in weights.items() if value < 0)
+        if negative:
+            problems.append(f"ranking.weights must be non-negative; negative: {negative}")
+        elif sum(weights.values()) <= 0:
+            problems.append("ranking.weights must sum to a positive total")
+    if config.ranking.salary_scale <= 0:
+        problems.append(
+            f"ranking.salary_scale must be > 0, got {config.ranking.salary_scale}"
+        )
+
+    retrieval_total = (
+        config.retrieval.lexical_weight
+        + config.retrieval.semantic_weight
+        + config.retrieval.structured_weight
+    )
+    if retrieval_total <= 0:
+        problems.append("retrieval weights must sum to a positive total")
+
+    if config.llm.timeout_seconds <= 0:
+        problems.append(
+            f"llm.timeout_seconds must be > 0, got {config.llm.timeout_seconds}"
+        )
+    if config.llm.max_retries < 0:
+        problems.append(f"llm.max_retries must be >= 0, got {config.llm.max_retries}")
+
+    level = str(config.logging.level or "").upper()
+    if level not in _LOG_LEVELS:
+        problems.append(
+            f"logging.level must be one of {sorted(_LOG_LEVELS)}, got {config.logging.level!r}"
+        )
+
+    if catalog_path is not None and not Path(catalog_path).exists():
+        problems.append(f"catalog file not found: {catalog_path}")
+
+    problems.extend(_api_env_problems(config, env))
+    return problems
+
+
+def validate_startup(
+    config: AppConfig,
+    *,
+    catalog_path: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> AppConfig:
+    """Validate that required configuration and API environment are present (R26.3).
+
+    Called at startup by the CLI and by :func:`build_default_service`, so both
+    entry points refuse to run on a config that cannot produce a valid experiment.
+    Every problem found is reported in a single explicit
+    ``RuntimeError(ErrorCode.CONFIG_INVALID, ...)`` (R26.4) rather than surfacing
+    later as an obscure failure mid-run; no value of a secret env var appears in
+    the message.
+
+    This complements — and never duplicates — the database guard in
+    :func:`build_default_service`: reachability of PostgreSQL stays that guard's
+    responsibility and keeps reporting ``ErrorCode.DB_UNAVAILABLE``.
+
+    Returns ``config`` so callers can validate inline.
+    """
+    if not isinstance(config, AppConfig):
+        raise RuntimeError(
+            ErrorCode.CONFIG_INVALID,
+            f"startup validation requires a resolved AppConfig, got {type(config).__name__}",
+        )
+    problems = _startup_problems(config, catalog_path, os.environ if env is None else env)
+    if problems:
+        detail = "; ".join(problems)
+        raise RuntimeError(
+            ErrorCode.CONFIG_INVALID,
+            f"invalid startup configuration ({len(problems)} problem(s)): {detail}",
+        )
+    return config
+
+
 def _resolve_require_db(config: AppConfig) -> bool:
     """Resolve whether a live database is REQUIRED for this run.
 
@@ -149,8 +299,14 @@ def build_default_service(
     with ``RuntimeError(ErrorCode.DB_UNAVAILABLE, ...)`` instead of silently
     degrading to an in-memory repository. Deterministic unit tests should pass
     ``require_db=False`` to keep using the in-memory/SQLite path.
+
+    Configuration and API environment are validated first (:func:`validate_startup`,
+    R26.3/26.4); database reachability is checked after, so a config problem is
+    reported as ``CONFIG_INVALID`` and an unreachable database as ``DB_UNAVAILABLE``.
     """
     from .storage.db import is_database_available
+
+    validate_startup(config, catalog_path=catalog_path)
 
     if require_db is None:
         require_db = _resolve_require_db(config)

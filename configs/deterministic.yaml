@@ -1,6 +1,28 @@
+# Deterministic run template (R26.2).
+#
+# Layers over configs/base.yaml (see load_config). No model API is contacted:
+# the mock provider produces the same output for the same input, which is what
+# makes the main experiment reproducible and lets CI run without any secret.
+#
+# Secrets: none required. API keys are NEVER read from configuration - only from
+# the environment (see .env.example). Do not add a key field to this file.
+#
+#   python -m jobrec.cli.main run-scenarios --config configs/deterministic.yaml
+project:
+  environment: local
+
+experiment:
+  variant: full
+  random_seed: 42
+
 llm:
   mode: deterministic
   provider: mock
   extraction_temperature: 0.0
   response_temperature: 0.0
   save_raw_responses: true
+
+logging:
+  level: INFO
+  format: json
+  redact_candidate_text: false

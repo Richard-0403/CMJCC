@@ -1,5 +1,98 @@
 {
-  "pbtResults": {},
+  "pbtResults": {
+    "1.5 Property test: distinct variants resolve to distinct FeatureFlags": {
+      "status": "passed",
+      "lastRunTimestamp": 1785078613924
+    },
+    "1.6 Property test: ablation pairs differ only in target-mechanism flags": {
+      "status": "passed",
+      "lastRunTimestamp": 1785078620914
+    },
+    "5.4 Property test: salary normalization preserves the stated amount across shapes": {
+      "status": "passed",
+      "lastRunTimestamp": 1785080575344
+    },
+    "3.6 Property test: write-back increments version and never mutates input": {
+      "status": "passed",
+      "lastRunTimestamp": 1785080587779
+    },
+    "3.7 Property test: superseded values deactivated with effective_to": {
+      "status": "passed",
+      "lastRunTimestamp": 1785080866073
+    },
+    "5.5 Property test: field validation is total and never silently drops a constraint": {
+      "status": "passed",
+      "lastRunTimestamp": 1785081661043
+    },
+    "3.8 Property test: every long-term write is evidence-bound": {
+      "status": "passed",
+      "lastRunTimestamp": 1785082008736
+    },
+    "5.6 Property test: enum/skills/location/deadline normalizers produce well-typed output": {
+      "status": "passed",
+      "lastRunTimestamp": 1785082200319
+    },
+    "3.9 Property test: only long-term, confirmed preferences write to long-term memory": {
+      "status": "passed",
+      "lastRunTimestamp": 1785082823614
+    },
+    "3.10 Property test: non-override conflicts never overwrite long-term memory": {
+      "status": "passed",
+      "lastRunTimestamp": 1785083342505
+    },
+    "6.4 Property test: task-success McNemar pairs at the scenario level": {
+      "status": "passed",
+      "lastRunTimestamp": 1785083560252
+    },
+    "6.5 Property test: deterministic repeat duplication changes neither pairs nor p-values": {
+      "status": "passed",
+      "lastRunTimestamp": 1785084699915
+    },
+    "10.7 Property test: skipping a necessary clarification is never scored more efficient": {
+      "status": "passed",
+      "lastRunTimestamp": 1785084720975
+    },
+    "10.5 Property test: the clarification loop always terminates within max_turns": {
+      "status": "passed",
+      "lastRunTimestamp": 1785085566088
+    },
+    "10.6 Property test: repeated-slot re-asking is guarded and recorded": {
+      "status": "passed",
+      "lastRunTimestamp": 1785086011973
+    },
+    "11.5 Property test: every supported claim resolves to a registered evidence id": {
+      "status": "passed",
+      "lastRunTimestamp": 1785088047197
+    },
+    "11.7 Property test: grounding and handoff rates are below 1.0 over failure sets": {
+      "status": "passed",
+      "lastRunTimestamp": 1785088226485
+    },
+    "11.6 Property test: invalid handoffs prevent a run from being scored as success": {
+      "status": "passed",
+      "lastRunTimestamp": 1785089098383
+    },
+    "18.2 Property test: checksums round-trip and detect tampering": {
+      "status": "passed",
+      "lastRunTimestamp": 1785095459752
+    },
+    "19.2 Property test: data-quality validation flags every injected defect": {
+      "status": "passed",
+      "lastRunTimestamp": 1785095519836
+    },
+    "17.3 Property test: consistency gate proceeds iff all compared runs match": {
+      "status": "passed",
+      "lastRunTimestamp": 1785095551157
+    },
+    "23.2 Property test: ranking total_score equals sum of feature contributions": {
+      "status": "passed",
+      "lastRunTimestamp": 1785095696922
+    },
+    "21.3 Property test: no hard-violating job is selected under the full variant": {
+      "status": "passed",
+      "lastRunTimestamp": 1785096214223
+    }
+  },
   "executionHistory": {
     "1.1 Add `use_multi_turn_continuation` to `FeatureFlags` and the variant matrix": [
       {
@@ -585,6 +678,21 @@
         "executionId": "28faba43-ad69-4915-aeb6-90585e8db870",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785075445721
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202323
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319124
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785089894005
       }
     ],
     "14.1 Persist extraction method and aggregate source metrics": [
@@ -597,6 +705,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072293369
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202470
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319251
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785091278932
       }
     ],
     "15.1 Persist retrieval outcome and compute retrieval metrics": [
@@ -609,6 +732,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072293468
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202567
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319455
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785092614327
       }
     ],
     "16.1 Implement include_states and include_raw_model_outputs with redaction": [
@@ -621,6 +759,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072293560
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202676
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319628
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785091279799
       }
     ],
     "17.1 Implement the consistency checker": [
@@ -633,6 +786,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072293665
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202917
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320026
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785091282622
       }
     ],
     "17.2 Stop report generation on mismatch": [
@@ -645,6 +813,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072293936
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203043
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320143
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785092615708
       }
     ],
     "18.1 Write unified checksums.json and add a verify command": [
@@ -657,6 +840,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294124
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203265
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320435
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785092616757
       }
     ],
     "19.1 Implement the dataset validator and report": [
@@ -669,6 +867,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294230
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203516
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320816
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785093791558
       }
     ],
     "20.1 Implement replay recomputation and diff": [
@@ -681,6 +894,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294329
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203793
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321053
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785093792572
       }
     ],
     "22. Checkpoint - P1 complete": [
@@ -693,6 +921,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294432
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204848
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322374
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785137303049
       }
     ],
     "23.1 Persist score breakdowns and build the top-k contribution table": [
@@ -705,6 +948,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294547
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204982
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322506
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095087230
       }
     ],
     "24.1 Enforce env-only keys, templates, and startup validation": [
@@ -717,6 +975,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294628
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205199
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322821
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785134421670
       }
     ],
     "25.1 Add the structured JSON logger and per-run trace export": [
@@ -729,6 +1002,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294709
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205427
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323074
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785134423106
       }
     ],
     "27.1 Extend CI to gate release tagging": [
@@ -741,6 +1029,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294799
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205730
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323310
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136235558
       }
     ],
     "28.1 Add the freeze script": [
@@ -753,6 +1056,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072294954
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205849
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323455
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785137304053
       }
     ],
     "29.1 Reconcile the two behavioural changes with the existing suite": [
@@ -765,6 +1083,21 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072295064
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205966
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323600
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785140169102
       }
     ],
     "29.2 Run the full default suite and ruff": [
@@ -777,6 +1110,31 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072295143
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077206074
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323735
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785140170496
+      },
+      {
+        "executionId": "fd167774-2485-412b-9b59-297ab42a1815",
+        "chatSessionId": "sess_7d4c30da-e583-47b4-9071-6152fc3a800e",
+        "timestamp": 1785142249806
+      },
+      {
+        "executionId": "fd167774-2485-412b-9b59-297ab42a1815",
+        "chatSessionId": "sess_7d4c30da-e583-47b4-9071-6152fc3a800e",
+        "timestamp": 1785143321731
       }
     ],
     "30. Final checkpoint - all phases complete": [
@@ -789,6 +1147,26 @@
         "executionId": "c1b89eee-8aa5-4a4f-a149-7061bb09196b",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785072295243
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077206185
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323874
+      },
+      {
+        "executionId": "fd167774-2485-412b-9b59-297ab42a1815",
+        "chatSessionId": "sess_7d4c30da-e583-47b4-9071-6152fc3a800e",
+        "timestamp": 1785143328807
+      },
+      {
+        "executionId": "fd167774-2485-412b-9b59-297ab42a1815",
+        "chatSessionId": "sess_7d4c30da-e583-47b4-9071-6152fc3a800e",
+        "timestamp": 1785144930182
       }
     ],
     "1. Phase 1 groundwork: config + FeatureFlags field for variant differentiation (R5/R32)": [
@@ -859,6 +1237,959 @@
         "executionId": "28faba43-ad69-4915-aeb6-90585e8db870",
         "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
         "timestamp": 1785075401186
+      }
+    ],
+    "1.5 Property test: distinct variants resolve to distinct FeatureFlags": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077198537
+      },
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077222084
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077314892
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077830512
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078652356
+      }
+    ],
+    "1.6 Property test: ablation pairs differ only in target-mechanism flags": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077198720
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315046
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077864998
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078659958
+      }
+    ],
+    "1.7 Unit test guarding one_shot != no_memory configuration": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077198840
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315161
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077874393
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078666809
+      }
+    ],
+    "2.2 Contract test for the new RunRecord field": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077198962
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315262
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077881069
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078675075
+      }
+    ],
+    "3.6 Property test: write-back increments version and never mutates input": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199075
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315404
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078691292
+      },
+      {
+        "executionId": "5edea839-5764-4164-83a3-9cd824d7eae5",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785079771833
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785081317462
+      }
+    ],
+    "3.7 Property test: superseded values deactivated with effective_to": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199193
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315510
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078692771
+      },
+      {
+        "executionId": "5edea839-5764-4164-83a3-9cd824d7eae5",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785079773395
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785081317575
+      }
+    ],
+    "3.8 Property test: every long-term write is evidence-bound": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199346
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315646
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078693790
+      },
+      {
+        "executionId": "5edea839-5764-4164-83a3-9cd824d7eae5",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785079774268
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785082234634
+      }
+    ],
+    "3.9 Property test: only long-term, confirmed preferences write to long-term memory": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199478
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315758
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078695214
+      },
+      {
+        "executionId": "5edea839-5764-4164-83a3-9cd824d7eae5",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785079776583
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785083014038
+      }
+    ],
+    "3.10 Property test: non-override conflicts never overwrite long-term memory": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199610
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077315882
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078696274
+      },
+      {
+        "executionId": "5edea839-5764-4164-83a3-9cd824d7eae5",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785079777312
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785083369411
+      }
+    ],
+    "5.4 Property test: salary normalization preserves the stated amount across shapes": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199735
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316016
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078703716
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785081317690
+      }
+    ],
+    "5.5 Property test: field validation is total and never silently drops a constraint": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199845
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316118
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078705142
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785081820254
+      }
+    ],
+    "5.6 Property test: enum/skills/location/deadline normalizers produce well-typed output": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077199961
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316231
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078706340
+      },
+      {
+        "executionId": "5ad46541-9dea-4d34-8603-856b95aba753",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785082235854
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785082572420
+      }
+    ],
+    "5.7 Unit tests for repair/retry/fallback ordering and warning emission": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200077
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316352
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785078707436
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785083015058
+      }
+    ],
+    "6.3 Update existing eval-stats tests for scenario-level pairing": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200186
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316476
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785083370435
+      }
+    ],
+    "6.4 Property test: task-success McNemar pairs at the scenario level": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200293
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077316980
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785084461220
+      }
+    ],
+    "6.5 Property test: deterministic repeat duplication changes neither pairs nor p-values": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200405
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317163
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785085594403
+      }
+    ],
+    "7.6 PostgreSQL integration tests for persistence and restart": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200521
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317271
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785084462000
+      }
+    ],
+    "7.7 Unit test for fail-fast behaviour": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200647
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317392
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785084463457
+      }
+    ],
+    "8.4 Unit/contract test for manifest contents": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200758
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317516
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785083371654
+      }
+    ],
+    "10.5 Property test: the clarification loop always terminates within max_turns": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200869
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317792
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785085595365
+      }
+    ],
+    "10.6 Property test: repeated-slot re-asking is guarded and recorded": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077200997
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077317950
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785087788627
+      }
+    ],
+    "10.7 Property test: skipping a necessary clarification is never scored more efficient": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201116
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318083
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785085596813
+      }
+    ],
+    "10.8 E2E test: clarification-dependent scenario runs end-to-end across variants": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201222
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318234
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785089129592
+      }
+    ],
+    "11.3 Failure-path unit tests": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201348
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318414
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785087789503
+      }
+    ],
+    "11.4 Failure-metric integration test": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201495
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318535
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785087790901
+      }
+    ],
+    "11.5 Property test: every supported claim resolves to a registered evidence id": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201613
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318652
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785088250763
+      }
+    ],
+    "11.6 Property test: invalid handoffs prevent a run from being scored as success": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201732
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318769
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785089130494
+      }
+    ],
+    "11.7 Property test: grounding and handoff rates are below 1.0 over failure sets": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077201865
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077318885
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785088251779
+      }
+    ],
+    "12.2 Unit test for delta computation and framing strings": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202202
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319008
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785088253219
+      }
+    ],
+    "16.2 API tests for both parameters and redaction": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077202792
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077319866
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785093793975
+      }
+    ],
+    "17.3 Property test: consistency gate proceeds iff all compared runs match": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203148
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320259
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095824569
+      }
+    ],
+    "18.2 Property test: checksums round-trip and detect tampering": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203398
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320605
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095825351
+      }
+    ],
+    "19.2 Property test: data-quality validation flags every injected defect": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203685
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077320926
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095826582
+      }
+    ],
+    "20.2 Property test: deterministic replay reproduces identical key-state hashes": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077203910
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321163
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095827689
+      }
+    ],
+    "21.1 Candidate-memory test suite (R19)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204021
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321305
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096465275
+      }
+    ],
+    "21.2 Constraint-orchestration test suite (R20)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204137
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321462
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096466276
+      }
+    ],
+    "21.3 Property test: no hard-violating job is selected under the full variant": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204244
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321610
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096467705
+      }
+    ],
+    "21.4 Dialogue-conflict test suite (R21)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204362
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321754
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096468572
+      }
+    ],
+    "21.5 Explanation-grounding test suite (R22)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204475
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077321887
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096469979
+      }
+    ],
+    "21.6 Agent-handoff test suite (R23)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204592
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322035
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785096470988
+      }
+    ],
+    "21.7 Variant-isolation test suite (R24)": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077204718
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322197
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785134420299
+      }
+    ],
+    "23.2 Property test: ranking total_score equals sum of feature contributions": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205091
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322706
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095828724
+      }
+    ],
+    "24.2 Unit tests for redaction and startup validation": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205313
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077322945
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136233197
+      }
+    ],
+    "26.1 Latency tests across catalog sizes": [
+      {
+        "executionId": "49d57c9f-73c6-4e6c-a2d8-3f1db2565b4c",
+        "chatSessionId": "sess_b1678361-f864-4788-b2ad-9c607b2dd691",
+        "timestamp": 1785077205551
+      },
+      {
+        "executionId": "c9ae9b10-e95d-447a-ab36-9478f635950c",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785077323192
+      },
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136234067
+      }
+    ],
+    "14. R13 — Extraction-source and fallback statistics": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785091279068
+      }
+    ],
+    "15. R14 — Retrieval-layer evaluation": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785092614459
+      }
+    ],
+    "16. R12 — Run-detail API parameters in the SQL repository": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785093794142
+      }
+    ],
+    "17. R15 + R32.7 — Pre-comparison configuration-consistency gate": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095824717
+      }
+    ],
+    "18. R16 — Unified checksums for all artifacts": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095825521
+      }
+    ],
+    "19. R17 — Data-quality validation": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095826722
+      }
+    ],
+    "20. R18 — Artifact replay and deterministic recomputation": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095827845
+      }
+    ],
+    "23. R25 — Ranking score-breakdown persistence and top-k table": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785095828845
+      }
+    ],
+    "21. R19–R24 — Dedicated test suites": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785134420457
+      }
+    ],
+    "25. R27 — Structured JSON logging": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785134423259
+      }
+    ],
+    "24. R26 — Secret and configuration management": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136233366
+      }
+    ],
+    "26. R28 — Performance tests": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136234194
+      }
+    ],
+    "27. R29 — Continuous integration gate": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785136235703
+      }
+    ],
+    "28. R30 — Code and version freeze": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785137304172
+      }
+    ],
+    "29. Regression guard - keep the 68 existing tests green and ruff clean": [
+      {
+        "executionId": "1717ecb4-8c02-4629-9453-2e9325d30745",
+        "chatSessionId": "sess_6ab55531-d2d6-4899-b213-745e37b2f8a2",
+        "timestamp": 1785140170811
       }
     ]
   }

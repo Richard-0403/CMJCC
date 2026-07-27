@@ -7,15 +7,23 @@ from pathlib import Path
 
 import typer
 
-from ..app_service import build_default_service
+from ..app_service import build_default_service, validate_startup
 from ..config import load_config
+from ..utils.observability import configure_logging
 
 app = typer.Typer(add_completion=False, help="CMJCC conversational job recommendation prototype")
 
 
 def _load(config_path: str):
+    """Resolve the config, install the JSON log handler (R27.1), validate it (R26.3).
+
+    Validation happens at startup, before any work is done, so a missing required
+    setting or a missing API key for a hybrid run fails fast and explicitly (R26.4).
+    """
     base = str(Path(config_path).parent) or "configs"
-    return load_config(config_path, base_dir=base)
+    config = load_config(config_path, base_dir=base)
+    configure_logging(config)
+    return validate_startup(config)
 
 
 @app.command("prepare-catalog")

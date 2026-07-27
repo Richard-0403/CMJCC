@@ -4,15 +4,20 @@ A single code path supports the full system, baselines and ablations. Behaviour
 is toggled through these flags (derived from the experiment variant and config),
 never by forking the implementation.
 
-See landing-plan section 8.4:
+See landing-plan section 8.4. The resolved matrix (``from_config`` below is
+authoritative):
 
-| variant       | profile | current turn | prior dialogue | persistent memory | explicit ctx |
-|---------------|---------|--------------|----------------|-------------------|--------------|
-| full          | yes     | yes          | yes            | yes               | yes          |
-| profile_only  | yes     | no           | no             | yes               | yes (basic)  |
-| one_shot      | base    | yes          | no             | no                | yes          |
-| no_memory     | snapshot| yes          | no             | no                | yes          |
-| no_context    | yes     | yes          | yes            | yes               | no           |
+| variant       | profile | current turn | multi-turn | prior dialogue | persistent memory | explicit ctx |
+|---------------|---------|--------------|------------|----------------|-------------------|--------------|
+| full          | yes     | yes          | yes        | yes            | yes               | yes          |
+| profile_only  | yes     | no           | yes        | no             | yes               | yes (basic)  |
+| one_shot      | yes     | yes          | no         | no             | no                | yes          |
+| no_memory     | yes     | yes          | yes        | no             | no                | yes          |
+| no_context    | yes     | yes          | yes        | yes            | yes               | no           |
+
+``one_shot`` and ``no_memory`` are distinct conditions: they differ on exactly
+``use_multi_turn_continuation``, so ``one_shot`` is a genuine single-turn condition while
+``no_memory`` keeps the multi-turn workflow without memory (R5.3/R5.6).
 """
 
 from __future__ import annotations

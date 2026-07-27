@@ -14,6 +14,7 @@ import yaml
 
 from ..config import AppConfig
 from ..orchestration.orchestrator import TurnResult
+from ..utils.observability import write_log_trace
 from .manifest import build_run_manifest
 
 # Metadata keys that describe how a call was issued (request side). These are
@@ -90,6 +91,59 @@ def _model_call_row(call: Any) -> dict[str, Any]:
         "latency_ms": call.latency_ms,
         "request_params": request_params,
         "response_metadata": response_metadata,
+    }
+
+
+def _retrieved_job_row(retrieved: Any) -> dict[str, Any]:
+    """One recalled job with its retrieval score and score components (R14.1)."""
+    return {
+        "job_id": getattr(retrieved, "job_id", None),
+        "score": getattr(retrieved, "score", None),
+        "components": dict(getattr(retrieved, "components", None) or {}),
+    }
+
+
+def _retrieval_results(result: TurnResult, config: AppConfig) -> dict[str, Any]:
+    """Retrieval-layer artifact for one run (R14.1).
+
+    Captures the retrieval layer's own output, kept separate from the ranking
+    artifacts so retrieval quality can be assessed independently:
+
+    - ``initial_pool`` / ``initial_pool_size`` — the recalled jobs (with their
+      retrieval scores) and how many jobs the retriever matched BEFORE the pool
+      was truncated to ``retrieval_pool_size``.
+    - ``pool_job_ids`` / ``pool_size`` — the pool actually handed to the
+      constraint/ranking layers. This differs from ``retrieved_job_ids`` when the
+      empty-recall fallback replaced an empty recall with the full catalog.
+    - ``expanded`` / ``expansion_reason`` / ``full_catalog_fallback_count`` — the
+      fallback-to-full-catalog signal.
+    - ``retrieval_latency_ms`` — the retrieval stage's own latency.
+
+    ``executed`` is False when the turn never reached retrieval (clarification
+    short-circuit or a failure before the retrieval stage); the remaining fields
+    are then ``None``/empty rather than a misleading zero.
+    """
+    outcome = result.retrieval_outcome
+    decision = result.decision
+    latency = (result.run_record.component_latency_ms or {}).get("retrieval")
+    retrieved = list(getattr(outcome, "retrieved", None) or []) if outcome else []
+    retrieved_ids = [r.job_id for r in retrieved]
+    # The pool the downstream layers saw: one eligibility result per pooled job.
+    pool_ids = ([e.job_id for e in decision.eligibility_results]
+                if decision is not None else retrieved_ids)
+    expanded = bool(getattr(outcome, "expanded", False)) if outcome else None
+    return {
+        "executed": outcome is not None,
+        "retrieved_job_ids": retrieved_ids,
+        "initial_pool": [_retrieved_job_row(r) for r in retrieved],
+        "initial_pool_size": getattr(outcome, "initial_pool_size", None) if outcome else None,
+        "pool_job_ids": pool_ids,
+        "pool_size": len(pool_ids) if outcome is not None else None,
+        "requested_pool_size": config.experiment.retrieval_pool_size,
+        "expanded": expanded,
+        "expansion_reason": getattr(outcome, "expansion_reason", None) if outcome else None,
+        "full_catalog_fallback_count": (1 if expanded else 0) if outcome else 0,
+        "retrieval_latency_ms": latency,
     }
 
 
@@ -175,6 +229,7 @@ def write_run_bundle(
     out_dir: str | Path,
     config: AppConfig,
     dialogue_trace: list[dict] | None = None,
+    log_trace: list[dict] | None = None,
 ) -> Path:
     """Write all per-run artifacts into ``out_dir`` and return the directory.
 
@@ -182,6 +237,10 @@ def write_run_bundle(
     ``dialogue_trace.jsonl`` (one record per turn, R7.3). Callers that do not thread
     a trace (the non-clarification single-pass path) get a single-record trace
     derived from the final turn result so every bundle carries a consistent trace.
+
+    ``log_trace`` follows the same pattern for the structured log records (R27.3):
+    multi-turn callers thread the records of every turn, single-pass callers fall
+    back to the final turn result's own ``log_trace``.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -198,8 +257,7 @@ def write_run_bundle(
     _write_json(out / "extracted_preferences.json", _dump(result.extracted_preferences))
     _write_json(out / "active_search_state.json", _dump(result.active_search_state))
     _write_json(out / "job_context_state.json", _dump(result.job_context_state))
-    _write_json(out / "retrieval_results.json",
-                {"retrieved_job_ids": decision.retrieved_job_ids} if decision else {})
+    _write_json(out / "retrieval_results.json", _retrieval_results(result, config))
     _write_json(out / "eligibility_results.json",
                 [_dump(e) for e in decision.eligibility_results] if decision else [])
     _write_json(out / "recommendation_decision.json", _dump(decision))
@@ -234,6 +292,11 @@ def write_run_bundle(
             )
         ]
     _write_jsonl(out / "dialogue_trace.jsonl", dialogue_trace)
+
+    # Per-run structured log trace (R27.3): one JSON record per logged event.
+    if log_trace is None:
+        log_trace = list(getattr(result, "log_trace", None) or [])
+    write_log_trace(out, log_trace)
 
     (out / "resolved_config.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
     return out

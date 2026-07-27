@@ -4,15 +4,23 @@ Two implementations share one Protocol:
 - ``SqlRepository``     : PostgreSQL-backed (production/default store).
 - ``InMemoryRepository``: no database required (tests, offline demos). Selecting
   it is always explicit; the system never silently loses persistence.
+
+Both implement the run-detail levels of ``GET /v1/runs/{run_id}`` (R12): a run
+bundle carries the run record, response and decision, while handoffs, evidence,
+state versions and raw model outputs are attached only when requested. Raw model
+outputs and state payloads are redacted on the way out (R12.3) via
+``utils.redaction``, honouring ``config.logging.redact_candidate_text``.
 """
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
+from ..config import AppConfig
 from ..domain.candidate import CandidateState
 from ..domain.dialogue import DialogueState
 from ..orchestration.orchestrator import TurnResult
+from ..utils.redaction import redact, redact_payload
 from ..utils.time import utcnow
 
 
@@ -30,7 +38,8 @@ class Repository(Protocol):
 class InMemoryRepository:
     """A dict-backed repository for tests and offline runs."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: AppConfig | None = None) -> None:
+        self.config = config
         self.candidates: dict[tuple[str, int], CandidateState] = {}
         self.sessions: dict[str, dict] = {}
         self.dialogues: dict[tuple[str, int], DialogueState] = {}
@@ -66,16 +75,41 @@ class InMemoryRepository:
         self.dialogues[(turn.dialogue_state.session_id, turn.dialogue_state.version)] = turn.dialogue_state
         self.runs[turn.run_record.run_id] = _bundle(turn, evidence_items, model_calls)
 
-    def get_run(self, run_id: str, **flags: bool) -> dict | None:
-        return self.runs.get(run_id)
+    def get_run(self, run_id: str, include_states: bool = False, include_evidence: bool = False,
+                include_handoffs: bool = False, include_raw_model_outputs: bool = False) -> dict | None:
+        bundle = self.runs.get(run_id)
+        if bundle is None:
+            return None
+        redact_text = _redact_candidate_text(self.config)
+        out: dict[str, Any] = {
+            "run_record": bundle["run_record"],
+            "response": bundle["response"],
+            "decision": bundle["decision"],
+        }
+        if include_handoffs:
+            out["handoffs"] = bundle["handoffs"]
+        if include_evidence:
+            out["evidence_log"] = bundle["evidence_log"]
+            out["evidence_items"] = bundle["evidence_items"]
+        if include_states:
+            out["states"] = redact_payload(bundle["states"], redact_candidate_text=redact_text)
+        if include_raw_model_outputs:
+            out["raw_model_outputs"] = [
+                _model_call_view(call, redact_candidate_text=redact_text)
+                for call in bundle["model_calls"]
+            ]
+        return out
 
 
 # --------------------------------------------------------------------------- sql
 class SqlRepository:
     """PostgreSQL-backed repository."""
 
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory, config: AppConfig | None = None) -> None:
         self._sf = session_factory
+        #: Resolved config, used for redaction (R12.3) and raw-response retention.
+        #: ``AppService`` injects it when the repository was built without one.
+        self.config = config
 
     def versions(self) -> dict:
         """Return the server DB version and the current schema/migration version.
@@ -216,7 +250,7 @@ class SqlRepository:
             for call in model_calls:
                 s.merge(ModelCallRow(call_id=call.call_id, run_id=rr.run_id, purpose=call.purpose,
                         provider=call.provider, model=call.model,
-                        payload={"purpose": call.purpose, "latency_ms": call.latency_ms}))
+                        payload=self._model_call_payload(call)))
             s.merge(RunRecordRow(
                 run_id=rr.run_id, scenario_id=rr.scenario_id, session_id=rr.session_id,
                 candidate_id=rr.candidate_id, experiment_variant=rr.experiment_variant,
@@ -225,6 +259,34 @@ class SqlRepository:
                 payload=rr.model_dump(mode="json")))
             s.commit()
 
+    def _model_call_payload(self, call) -> dict[str, Any]:
+        """The stored payload for one model call.
+
+        Prompts are never persisted. The raw response is stored only while
+        ``config.llm.save_raw_responses`` is on, and is redacted on the way in so
+        the database never holds credentials, PII or (when
+        ``config.logging.redact_candidate_text`` is on) candidate free text.
+        """
+        payload: dict[str, Any] = {
+            "call_id": call.call_id,
+            "purpose": call.purpose,
+            "provider": call.provider,
+            "model": call.model,
+            "parsed_ok": getattr(call, "parsed_ok", None),
+            "latency_ms": call.latency_ms,
+        }
+        if self._save_raw_responses:
+            payload["raw_response"] = redact(
+                getattr(call, "raw_response", "") or "",
+                redact_candidate_text=_redact_candidate_text(self.config),
+            )
+        return payload
+
+    @property
+    def _save_raw_responses(self) -> bool:
+        """Whether raw model responses are retained (``config.llm.save_raw_responses``)."""
+        return bool(self.config.llm.save_raw_responses) if self.config is not None else True
+
     def get_run(self, run_id: str, include_states: bool = False, include_evidence: bool = False,
                 include_handoffs: bool = False, include_raw_model_outputs: bool = False) -> dict | None:
         from sqlalchemy import select
@@ -232,11 +294,13 @@ class SqlRepository:
         from .models import (
             AgentHandoffRow,
             EvidenceLogRow,
+            ModelCallRow,
             RecommendationDecisionRow,
             ResponseRow,
             RunRecordRow,
         )
 
+        redact_text = _redact_candidate_text(self.config)
         with self._sf() as s:
             rr = s.get(RunRecordRow, run_id)
             if rr is None:
@@ -255,7 +319,56 @@ class SqlRepository:
             if include_evidence:
                 out["evidence_log"] = [e.payload for e in s.execute(
                     select(EvidenceLogRow).where(EvidenceLogRow.run_id == run_id)).scalars()]
+            if include_states:
+                out["states"] = redact_payload(
+                    self._load_states(s, rr), redact_candidate_text=redact_text)
+            if include_raw_model_outputs:
+                out["raw_model_outputs"] = [
+                    _model_call_view(_model_call_row_fields(m), redact_candidate_text=redact_text)
+                    for m in s.execute(
+                        select(ModelCallRow).where(ModelCallRow.run_id == run_id)).scalars()
+                ]
             return out
+
+    def _load_states(self, s, rr) -> dict[str, Any]:
+        """Load the CandidateState/DialogueState versions this run was produced from (R12.1).
+
+        ``RunRecord.state_object_ids`` pins the exact versions (``"<id>:v<N>"``);
+        when that pin is missing or its row was never written, the latest version
+        for the run's candidate/session is used instead.
+        """
+        from .models import CandidateStateVersion, DialogueStateVersion
+
+        state_ids = rr.payload.get("state_object_ids") or {} if isinstance(rr.payload, dict) else {}
+        candidate = self._state_row(
+            s, CandidateStateVersion, CandidateStateVersion.candidate_id, rr.candidate_id,
+            _state_version(state_ids.get("candidate_state")))
+        dialogue = self._state_row(
+            s, DialogueStateVersion, DialogueStateVersion.session_id, rr.session_id,
+            _state_version(state_ids.get("dialogue_state")))
+        states: dict[str, Any] = {
+            "candidate_state": candidate.payload if candidate is not None else None,
+            "dialogue_state": dialogue.payload if dialogue is not None else None,
+        }
+        active_search_id = state_ids.get("active_search_state")
+        if active_search_id:
+            # ActiveSearchState is per-search and re-derived; only its identity persists.
+            states["active_search_id"] = active_search_id
+        return states
+
+    @staticmethod
+    def _state_row(s, model, key_column, key_value: str, version: int | None):
+        """Fetch one state-version row: the pinned version, else the latest one."""
+        from sqlalchemy import desc, select
+
+        if version is not None:
+            row = s.get(model, (key_value, version))
+            if row is not None:
+                return row
+        return s.execute(
+            select(model).where(key_column == key_value)
+            .order_by(desc(model.version)).limit(1)
+        ).scalars().first()
 
 
 def _bundle(turn: TurnResult, evidence_items: list, model_calls: list) -> dict:
@@ -266,5 +379,43 @@ def _bundle(turn: TurnResult, evidence_items: list, model_calls: list) -> dict:
         "handoffs": [h.model_dump(mode="json") for h in turn.handoffs],
         "evidence_log": [e.model_dump(mode="json") for e in turn.evidence_log],
         "evidence_items": [e.model_dump(mode="json") for e in evidence_items],
+        "states": {
+            "candidate_state": turn.candidate_state.model_dump(mode="json"),
+            "dialogue_state": turn.dialogue_state.model_dump(mode="json"),
+        },
         "model_calls": [c.__dict__ for c in model_calls],
     }
+
+
+def _redact_candidate_text(config: AppConfig | None) -> bool:
+    """Resolve ``config.logging.redact_candidate_text`` (defaults to off)."""
+    return bool(config.logging.redact_candidate_text) if config is not None else False
+
+
+def _model_call_row_fields(row) -> dict:
+    """Flatten a ``ModelCallRow`` into its payload overlaid with its columns."""
+    payload = row.payload if isinstance(row.payload, dict) else {}
+    fields = dict(payload)
+    fields.update({"call_id": row.call_id, "purpose": row.purpose,
+                   "provider": row.provider, "model": row.model})
+    return fields
+
+
+def _model_call_view(call: dict, *, redact_candidate_text: bool) -> dict:
+    """Build the redacted raw-model-output row returned by ``get_run`` (R12.2, R12.3).
+
+    Keeps the identifying/structural fields plus the model's raw response, and
+    NEVER returns the prompt (prompts are excluded from every export path).
+    """
+    view = {key: value for key, value in call.items() if key != "prompt"}
+    return redact_payload(view, redact_candidate_text=redact_candidate_text)
+
+
+def _state_version(state_object_id: str | None) -> int | None:
+    """Parse the version out of a ``"<id>:v<N>"`` state object id."""
+    if not state_object_id or ":v" not in state_object_id:
+        return None
+    try:
+        return int(state_object_id.rsplit(":v", 1)[1])
+    except ValueError:
+        return None

@@ -1,6 +1,33 @@
+# Hybrid run template (R26.2).
+#
+# Layers over configs/base.yaml (see load_config). Hybrid mode is the LLM-assisted
+# path: extraction/phrasing may come from a model, while filtering and ranking stay
+# deterministic. This template keeps `provider: mock`, so it exercises the hybrid
+# code path offline and needs no secret; configs/hybrid_vectorengine.yaml is the
+# same mode pointed at a real OpenAI-compatible endpoint (`provider: remote`).
+#
+# Secrets: API keys are NEVER read from configuration. With `provider: remote` the
+# key must be exported in the environment (see .env.example):
+#   JOBREC_LLM_API_KEY, optionally JOBREC_LLM_BASE_URL and JOBREC_LLM_MODEL.
+# Startup validation (app_service.validate_startup) fails fast when a remote hybrid
+# run is requested without JOBREC_LLM_API_KEY.
+#
+#   python -m jobrec.cli.main run-scenarios --config configs/hybrid.yaml
+project:
+  environment: local
+
+experiment:
+  variant: full
+  random_seed: 42
+
 llm:
   mode: hybrid
   provider: mock
   extraction_temperature: 0.0
   response_temperature: 0.2
   save_raw_responses: true
+
+logging:
+  level: INFO
+  format: json
+  redact_candidate_text: false

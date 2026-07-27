@@ -33,6 +33,7 @@ from ..ranking.scoring import SCORER_VERSION, RankingAgent
 from ..retrieval.base import QuerySpec
 from ..retrieval.hybrid import make_retriever
 from ..utils.hashing import content_id
+from ..utils.observability import RunTrace, run_trace
 from ..utils.time import utcnow
 from .cmjcc import CMJCC, CMJCCInput
 from .feature_flags import FeatureFlags
@@ -43,6 +44,16 @@ logger = logging.getLogger(__name__)
 # How a preference's value was produced, recorded on ExtractedPreference.metadata.
 _METHOD_RULE = "rule"
 _METHOD_LLM = "llm"
+
+# Which rung of the validation ladder produced the value, mirroring
+# ``FieldResult.source`` and recorded on ExtractedPreference.metadata so the
+# evaluation pipeline can report schema-failure and fallback rates (R8.12/R13.1).
+# ``unresolved`` is the fourth, orchestrator-only state: a stated value that no
+# rung could normalize and that is preserved as an UNCONFIRMED constraint (R8.9).
+_SOURCE_NORMALIZED = "normalized"
+_SOURCE_REPAIRED = "repaired"
+_SOURCE_RULE_FALLBACK = "rule_fallback"
+_SOURCE_UNRESOLVED = "unresolved"
 
 
 @dataclass
@@ -58,6 +69,9 @@ class TurnResult:
     dropped_claims: list = field(default_factory=list)
     clarification: object | None = None
     model_calls: list = field(default_factory=list)
+    #: Structured log records emitted while processing this turn (R27.1-27.3);
+    #: exported as ``log_trace.jsonl`` in the run bundle.
+    log_trace: list[dict] = field(default_factory=list)
     # extra artifacts for run-bundle export (optional)
     extracted_preferences: object | None = None
     candidate_state_before: object | None = None
@@ -104,6 +118,15 @@ class ConversationOrchestrator:
         versions: dict | None = None,
     ) -> TurnResult:
         run_id = content_id("run", dialogue_state.session_id, dialogue_state.version, text)
+        # Structured trace for this turn (R27): every record carries the run,
+        # session, scenario and variant so logs are filterable, and the collected
+        # records are exported as ``log_trace.jsonl`` in the run bundle.
+        trace = run_trace(
+            self.config,
+            run_id=run_id,
+            session_id=dialogue_state.session_id,
+            scenario_id=scenario_id,
+        )
         sm = StateMachine()
         handoffs: list[AgentHandoff] = []
         evidence_log: list[EvidenceLogEntry] = []
@@ -130,10 +153,12 @@ class ConversationOrchestrator:
             return out
 
         try:
+            trace.info(self.name, "turn_started", turn_index=len(dialogue_state.turns) + 1)
             # 1) UNDERSTANDING: append turn + extract intent.
             sm.to(S.UNDERSTANDING)
             dialogue_state = self.memory.append_turn(dialogue_state, "candidate", text)
-            extraction, calls = timed("intent_extraction", lambda: self._extract(text))
+            extraction, calls = timed(
+                "intent_extraction", lambda: self._extract(text, trace=trace))
             model_calls.extend(calls)
             # Fold in prior-turn dialogue evidence when the variant permits memory.
             # The continuation gate keeps this on the SAME shared code path: under
@@ -159,6 +184,12 @@ class ConversationOrchestrator:
             # 2b) Clarification short-circuit.
             if cmjcc_out.clarification_action is not None:
                 sm.to(S.CLARIFICATION_REQUIRED)
+                clar_action = cmjcc_out.clarification_action
+                trace.info(
+                    cmjcc.name, "clarification_requested",
+                    target_fields=list(getattr(clar_action, "target_fields", []) or []),
+                    reason_code=getattr(clar_action, "reason_code", None),
+                )
                 response = self._clarification_response(dialogue_state, cmjcc_out.clarification_action)
                 sm.to(S.EXPLAINED)
                 sm.to(S.COMPLETED)
@@ -166,6 +197,7 @@ class ConversationOrchestrator:
                     run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                     model_calls, candidate_state, dialogue_state, active, None, response,
                     [], cmjcc_out.clarification_action, success=True, versions=versions,
+                    trace=trace,
                 )
                 result.extracted_preferences = extraction
                 result.candidate_state_before = candidate_before
@@ -189,6 +221,12 @@ class ConversationOrchestrator:
                 pool = list(self.jobs)
                 outcome.expanded = True
                 outcome.expansion_reason = "empty_recall_fallback"
+                trace.warning(
+                    self.retriever.name, "empty_recall_fallback",
+                    "lexical recall was empty; falling back to the full catalog",
+                    catalog_size=len(pool),
+                    requested_pool_size=self.config.experiment.retrieval_pool_size,
+                )
             handoff(self.retriever.name, self.job_context.name, "RetrievalOutcome", True)
 
             # 5) FILTERED (eligibility). In no_context, skip explicit hard filtering.
@@ -209,6 +247,11 @@ class ConversationOrchestrator:
             if no_match:
                 diag = diagnose_no_match(eligibility, context) if context else {"blocking_constraints": []}
                 no_match_codes = [b["field"] for b in diag.get("blocking_constraints", [])]
+                trace.warning(
+                    self.job_context.name, "no_match",
+                    "no job survived the constraint and ranking layers",
+                    pool_size=len(pool), reason_codes=no_match_codes,
+                )
 
             decision = RecommendationDecision(
                 decision_id=content_id("dec", run_id),
@@ -242,7 +285,7 @@ class ConversationOrchestrator:
             result = self._finish(
                 run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                 model_calls, candidate_state, dialogue_state, active, decision, response,
-                dropped, None, success=True, versions=versions,
+                dropped, None, success=True, versions=versions, trace=trace,
             )
             result.extracted_preferences = extraction
             result.candidate_state_before = candidate_before
@@ -253,6 +296,12 @@ class ConversationOrchestrator:
         except Exception as exc:  # noqa: BLE001 - convert to explicit failed run
             sm.fail()
             handoff(self.name, self.name, "run", False, err=ErrorCode.INTERNAL_ERROR.value)
+            trace.system_failure(
+                self.name, "run_failed", f"{type(exc).__name__}: {exc}",
+                failure_code=ErrorCode.INTERNAL_ERROR.value,
+                error_type=type(exc).__name__,
+                workflow_state=sm.as_str_list()[-1] if sm.as_str_list() else None,
+            )
             response = Response(
                 response_id=content_id("resp", run_id),
                 session_id=dialogue_state.session_id,
@@ -264,11 +313,13 @@ class ConversationOrchestrator:
                 run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
                 model_calls, candidate_state, dialogue_state, None, None, response,
                 [], None, success=False, failure_code=ErrorCode.INTERNAL_ERROR.value,
-                versions=versions,
+                versions=versions, trace=trace,
             )
 
     # ------------------------------------------------------------ helpers
-    def _extract(self, text: str) -> tuple[ExtractedPreferenceSet, list]:
+    def _extract(
+        self, text: str, trace: RunTrace | None = None
+    ) -> tuple[ExtractedPreferenceSet, list]:
         """Extract intent according to the run mode, with field validation and
         a bounded repair -> retry -> rule-fallback recovery ladder (R8.8/8.9).
 
@@ -279,7 +330,16 @@ class ConversationOrchestrator:
         attempts schema repair, then a single bounded model retry, then a rule-based
         fallback, logging at each step. A stated constraint is never dropped: an
         unrecoverable value is preserved as ``UNCONFIRMED`` with a warning.
+
+        Every returned preference carries ``extraction_method`` (``rule``|``llm``)
+        and ``extraction_source`` (the ladder rung that produced the value) on its
+        metadata, so ``extracted_preferences.json`` is self-describing (R13.1).
         """
+        # Structured emission (R27) happens alongside the existing human-readable
+        # logging on this module's logger; a detached trace keeps direct unit-level
+        # calls into ``_extract`` working unchanged.
+        trace = trace if trace is not None else RunTrace()
+        component = self.rule_extractor.name
         mode = self.config.llm.mode
         if mode == RunMode.DETERMINISTIC or self.provider is None:
             return self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE), []
@@ -305,11 +365,18 @@ class ConversationOrchestrator:
         except LLMError:
             # Explicit fallback to the deterministic rule extractor (no fabrication).
             logger.warning("extraction: model call failed; falling back to rule extractor")
-            return self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE), calls
+            trace.warning(
+                component, "extraction_model_call_failed",
+                "model call failed; falling back to the rule extractor",
+                max_retries=self.config.llm.max_retries,
+            )
+            return self._tag_all(
+                self.rule_extractor.extract(text), _METHOD_RULE, _SOURCE_RULE_FALLBACK
+            ), calls
 
         # ---- 1) field validation right after lenient parse (R8.8) ------------
         pref_set, results = validate_extraction(pref_set)
-        pref_set = self._tag_all(pref_set, _METHOD_LLM)
+        pref_set = self._tag_llm(pref_set, results)
         if all(r.ok for r in results):
             return pref_set, calls
 
@@ -318,22 +385,36 @@ class ConversationOrchestrator:
         logger.warning(
             "extraction: %d field(s) failed validation; attempting schema repair", failed
         )
-        pref_set, results = self._repair_fields(pref_set, results)
+        trace.validation_error(
+            component, "extraction_field_validation_failed",
+            "field validation failed; attempting schema repair",
+            failed_fields=failed,
+            fields=[p.field_name for p, r in zip(pref_set.preferences, results, strict=False)
+                    if not r.ok],
+        )
+        pref_set, results = self._repair_fields(pref_set, results, trace=trace)
         if all(r.ok for r in results):
             return pref_set, calls
 
         # ---- 2b) single bounded model retry (HYBRID only) --------------------
         logger.warning("extraction: repair incomplete; attempting one bounded model retry")
+        trace.warning(
+            component, "extraction_bounded_retry",
+            "schema repair incomplete; attempting one bounded model retry",
+        )
         try:
             retried = once()
             retried, retried_results = validate_extraction(retried)
-            retried = self._tag_all(retried, _METHOD_LLM)
-            retried, retried_results = self._repair_fields(retried, retried_results)
+            retried = self._tag_llm(retried, retried_results)
+            retried, retried_results = self._repair_fields(
+                retried, retried_results, trace=trace)
             # Prefer the retry only if it recovers at least as many fields.
             if sum(1 for r in retried_results if r.ok) >= sum(1 for r in results if r.ok):
                 pref_set, results = retried, retried_results
         except LLMError:
             logger.warning("extraction: bounded model retry failed")
+            trace.warning(component, "extraction_bounded_retry_failed",
+                          "the bounded model retry failed")
         if all(r.ok for r in results):
             return pref_set, calls
 
@@ -343,21 +424,50 @@ class ConversationOrchestrator:
             "extraction: %d field(s) unresolved after repair/retry; applying rule fallback",
             unresolved,
         )
-        pref_set = self._rule_fallback(pref_set, results, text)
+        trace.validation_error(
+            component, "extraction_unresolved_fields",
+            "fields unresolved after repair and retry; applying the rule fallback",
+            unresolved_fields=unresolved,
+        )
+        pref_set = self._rule_fallback(pref_set, results, text, trace=trace)
         return pref_set, calls
 
     # -- extraction-method tagging & recovery helpers ----------------------
     @staticmethod
-    def _tag_all(pref_set: ExtractedPreferenceSet, method: str) -> ExtractedPreferenceSet:
-        """Return a copy whose every preference records ``extraction_method``."""
+    def _tag_all(
+        pref_set: ExtractedPreferenceSet,
+        method: str,
+        source: str = _SOURCE_NORMALIZED,
+    ) -> ExtractedPreferenceSet:
+        """Return a copy tagging every preference with method + source provenance."""
         tagged = [
-            p.model_copy(update={"metadata": {**p.metadata, "extraction_method": method}})
+            p.model_copy(update={"metadata": {
+                **p.metadata, "extraction_method": method, "extraction_source": source,
+            }})
             for p in pref_set.preferences
         ]
         return pref_set.model_copy(update={"preferences": tagged})
 
+    @staticmethod
+    def _tag_llm(pref_set: ExtractedPreferenceSet, results: list) -> ExtractedPreferenceSet:
+        """Tag model-derived preferences with their per-field ``FieldResult.source``.
+
+        A field that validated cleanly carries that result's source; a field that
+        failed validation is provisionally ``unresolved`` and is overwritten by the
+        rung that eventually resolves it (repair or rule fallback).
+        """
+        by_index = {i: r for i, r in enumerate(results)}
+        tagged = []
+        for i, p in enumerate(pref_set.preferences):
+            res = by_index.get(i)
+            source = res.source if (res is not None and res.ok) else _SOURCE_UNRESOLVED
+            tagged.append(p.model_copy(update={"metadata": {
+                **p.metadata, "extraction_method": _METHOD_LLM, "extraction_source": source,
+            }}))
+        return pref_set.model_copy(update={"preferences": tagged})
+
     def _repair_fields(
-        self, pref_set: ExtractedPreferenceSet, results: list
+        self, pref_set: ExtractedPreferenceSet, results: list, trace: RunTrace | None = None
     ) -> tuple[ExtractedPreferenceSet, list]:
         """Attempt to coerce obviously-wrong shapes for each failing field and
         re-validate. Repaired values keep ``extraction_method="llm"`` (still
@@ -376,12 +486,20 @@ class ConversationOrchestrator:
                 continue
             new_res = validate_field(pref.field_name, repaired_raw)
             if new_res.ok:
-                new_res.source = "repaired"
-                new_prefs[i] = pref.model_copy(update={"normalized_value": new_res.value})
+                new_res.source = _SOURCE_REPAIRED
+                new_prefs[i] = pref.model_copy(update={
+                    "normalized_value": new_res.value,
+                    "metadata": {**pref.metadata, "extraction_source": _SOURCE_REPAIRED},
+                })
                 new_results[i] = new_res
                 msg = f"{pref.field_name}: repaired via schema coercion"
                 extra_warnings.append(msg)
                 logger.warning("extraction: %s", msg)
+                if trace is not None:
+                    trace.warning(
+                        self.rule_extractor.name, "extraction_field_repaired", msg,
+                        field=pref.field_name,
+                    )
         new_set = pref_set.model_copy(update={
             "preferences": new_prefs,
             "extraction_warnings": [*pref_set.extraction_warnings, *extra_warnings],
@@ -389,7 +507,11 @@ class ConversationOrchestrator:
         return new_set, new_results
 
     def _rule_fallback(
-        self, pref_set: ExtractedPreferenceSet, results: list, text: str
+        self,
+        pref_set: ExtractedPreferenceSet,
+        results: list,
+        text: str,
+        trace: RunTrace | None = None,
     ) -> ExtractedPreferenceSet:
         """For each still-failing field, substitute the rule-extracted value when
         available (tagged ``extraction_method="rule"``); otherwise preserve the
@@ -412,19 +534,34 @@ class ConversationOrchestrator:
                 new_prefs[i] = pref.model_copy(update={
                     "normalized_value": rule_pref.normalized_value,
                     "confirmation_status": ConfirmationStatus.UNCONFIRMED,
-                    "metadata": {**pref.metadata, "extraction_method": _METHOD_RULE},
+                    "metadata": {
+                        **pref.metadata,
+                        "extraction_method": _METHOD_RULE,
+                        "extraction_source": _SOURCE_RULE_FALLBACK,
+                    },
                 })
                 msg = (f"{pref.field_name}: LLM value unrecoverable; used rule-based "
                        "fallback (unconfirmed)")
                 logger.error("extraction: %s", msg)
+                if trace is not None:
+                    trace.validation_error(
+                        self.rule_extractor.name, "extraction_field_rule_fallback", msg,
+                        field=pref.field_name,
+                    )
             else:
                 # Never drop the stated constraint: keep the raw value, mark unconfirmed.
                 new_prefs[i] = pref.model_copy(update={
                     "confirmation_status": ConfirmationStatus.UNCONFIRMED,
+                    "metadata": {**pref.metadata, "extraction_source": _SOURCE_UNRESOLVED},
                 })
                 msg = (f"{pref.field_name}: value could not be normalized; preserved as "
                        "unconfirmed constraint")
                 logger.warning("extraction: %s", msg)
+                if trace is not None:
+                    trace.warning(
+                        self.rule_extractor.name, "extraction_field_unconfirmed", msg,
+                        field=pref.field_name,
+                    )
             extra_warnings.append(msg)
         return pref_set.model_copy(update={
             "preferences": new_prefs,
@@ -445,7 +582,8 @@ class ConversationOrchestrator:
             return current
         prior_prefs = []
         for text in prior_texts:
-            prior_prefs.extend(self.rule_extractor.extract(text).preferences)
+            tagged = self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE)
+            prior_prefs.extend(tagged.preferences)
         return current.model_copy(update={"preferences": prior_prefs + list(current.preferences)})
 
     def _passthrough_eligibility(self, job: JobPosting):
@@ -476,7 +614,7 @@ class ConversationOrchestrator:
     def _finish(
         self, run_id, scenario_id, sm, started, latencies, handoffs, evidence_log,
         model_calls, candidate_state, dialogue_state, active, decision, response,
-        dropped, clarification, success, failure_code=None, versions=None,
+        dropped, clarification, success, failure_code=None, versions=None, trace=None,
     ) -> TurnResult:
         completed = utcnow()
         total = round((completed - started).total_seconds() * 1000, 3)
@@ -511,11 +649,21 @@ class ConversationOrchestrator:
             db_version=(versions or {}).get("db_version"),
             migration_version=(versions or {}).get("migration_version"),
         )
+        if trace is not None:
+            # Closing lifecycle record, emitted before the trace is snapshotted so
+            # every bundle's ``log_trace.jsonl`` ends on the turn's outcome (R27.3).
+            trace.info(
+                self.name, "turn_completed",
+                success=success, failure_code=failure_code,
+                response_type=getattr(response, "response_type", None),
+                total_latency_ms=total,
+            )
         return TurnResult(
             run_record=run_record, response=response, decision=decision,
             candidate_state=candidate_state, dialogue_state=dialogue_state,
             active_search_state=active, handoffs=handoffs, evidence_log=evidence_log,
             dropped_claims=dropped, clarification=clarification, model_calls=model_calls,
+            log_trace=(trace.records if trace is not None else []),
         )
 
 

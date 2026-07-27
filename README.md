@@ -61,13 +61,17 @@ python -m jobrec.cli.main recommend \
 
 ## Experiment variants (one code path)
 
-| variant        | profile | current turn | prior dialogue | persistent memory | explicit hard/soft |
-|----------------|:------:|:------------:|:--------------:|:-----------------:|:------------------:|
-| `full`         | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `profile_only` | ✓ | ✗ | ✗ | ✓ | ✓ |
-| `one_shot`     | ✓ | ✓ | ✗ | ✗ | ✓ |
-| `no_memory`    | ✓ | ✓ | ✗ | ✗ | ✓ |
-| `no_context`   | ✓ | ✓ | ✓ | ✓ | ✗ (no hard filter) |
+| variant        | profile | current turn | multi-turn continuation | prior dialogue | persistent memory | explicit hard/soft |
+|----------------|:------:|:------------:|:-----------------------:|:--------------:|:-----------------:|:------------------:|
+| `full`         | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `profile_only` | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ |
+| `one_shot`     | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ |
+| `no_memory`    | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ |
+| `no_context`   | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ (no hard filter) |
+
+`one_shot` and `no_memory` are not the same condition: they differ on exactly
+`use_multi_turn_continuation`, so `one_shot` is a genuine single-turn baseline while
+`no_memory` keeps the multi-turn workflow with memory switched off.
 
 Run the whole scenario suite across all variants and export artifacts:
 
@@ -119,9 +123,17 @@ tests and offline experiments, so results never depend on the database.
 ## Testing
 
 ```bash
-pytest -m "not postgres"     # deterministic unit/contract/integration/e2e/golden
-pytest -m postgres           # requires a reachable DATABASE_URL
+pytest -m "not postgres and not perf"   # deterministic unit/contract/integration/e2e/golden
+pytest -m postgres                      # requires a reachable DATABASE_URL
+pytest tests/perf -q                    # latency measurements (make test-perf)
 ```
+
+`tests/perf` (marker `perf`) measures end-to-end and per-component latency
+(median, IQR, P95) for catalog sizes 100/200/300 in `deterministic` and `hybrid`
+mode, reporting LLM latency separately from rule latency. It asserts structure,
+not wall-clock thresholds, prints the table and writes
+`artifacts/reports/perf_latency.json`. It is excluded from `make test` because it
+measures rather than gates.
 
 Golden scenarios and property tests assert the key invariants: no hard-violating
 job is ever selected by `full`; `total_score == Σ(feature contributions)`; every

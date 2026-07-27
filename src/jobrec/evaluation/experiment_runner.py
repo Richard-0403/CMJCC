@@ -8,7 +8,6 @@ bundle per run plus a batch manifest, index, failures list and checksums.
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -22,6 +21,7 @@ from ..domain.enums import ResponseType
 from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
 from ..utils.time import to_iso, utcnow
+from .checksums import write_checksums
 from .exporters import (
     _extracted_value_view,
     _system_clarification_slot,
@@ -169,9 +169,12 @@ class ExperimentRunner:
         last_result = None
         response_turns = 0
         trace: list[dict] = []
+        # Structured log records of every turn, exported as log_trace.jsonl (R27.3).
+        log_trace: list[dict] = []
         for text in scenario.get("turns", []):
             last_result = svc.process_turn(session_id, text, scenario_id=scenario["scenario_id"])
             response_turns += 1
+            log_trace.extend(last_result.log_trace)
             trace.append(trace_record(
                 last_result,
                 user_utterance=text,
@@ -187,7 +190,8 @@ class ExperimentRunner:
         termination_reason = self._terminal_reason(last_result)
         if last_result is not None and self._is_clarification_dependent(scenario):
             last_result, extra_turns, termination_reason, loop_trace = (
-                self._run_clarification_loop(svc, session_id, scenario, last_result)
+                self._run_clarification_loop(
+                    svc, session_id, scenario, last_result, log_sink=log_trace)
             )
             response_turns += extra_turns
             trace.extend(loop_trace)
@@ -198,7 +202,7 @@ class ExperimentRunner:
             trace[-1]["termination_reason"] = termination_reason
 
         run_dir = exp_dir / variant / scenario["scenario_id"] / str(run_index)
-        write_run_bundle(last_result, run_dir, cfg, dialogue_trace=trace)
+        write_run_bundle(last_result, run_dir, cfg, dialogue_trace=trace, log_trace=log_trace)
 
         rr = last_result.run_record
         decision = last_result.decision
@@ -258,7 +262,9 @@ class ExperimentRunner:
             return None
         return "error"
 
-    def _run_clarification_loop(self, svc, session_id, scenario, last_result):
+    def _run_clarification_loop(
+        self, svc, session_id, scenario, last_result, log_sink: list[dict] | None = None
+    ):
         """Answer system clarifications until the dialogue reaches a terminal state.
 
         Repeatedly feeds a :class:`SimulatedUser` answer back as the next turn on the
@@ -269,6 +275,10 @@ class ExperimentRunner:
         * the ``config.experiment.max_dialogue_turns`` hard cap, OR
         * failure / the SimulatedUser cannot answer (returns ``None``), OR
         * the repeated-slot guard (a slot would be re-asked with no progress).
+
+        When ``log_sink`` is given, each answer turn's structured log records are
+        appended to it so the run bundle's ``log_trace.jsonl`` covers the whole
+        dialogue rather than only the final turn (R27.3).
 
         Returns ``(last_result, extra_turns, termination_reason, trace)`` where
         ``extra_turns`` counts the simulated answer turns fed into the session and
@@ -309,6 +319,9 @@ class ExperimentRunner:
 
             last_result = svc.process_turn(session_id, utterance, scenario_id=scenario_id)
             extra_turns += 1
+            if log_sink is not None:
+                # Accumulate each answer turn's structured records (R27.3).
+                log_sink.extend(last_result.log_trace)
             # extracted_value reflects what the system extracted from the simulated
             # answer (keyed by field); the answered slot is recorded separately.
             trace.append(trace_record(
@@ -334,8 +347,9 @@ class ExperimentRunner:
             writer.writerows(failures)
 
     def _write_checksums(self, exp_dir: Path) -> None:
-        lines = []
-        for path in sorted(exp_dir.rglob("*.json")):
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            lines.append(f"{digest}  {path.relative_to(exp_dir)}")
-        (exp_dir / "checksums.sha256").write_text("\n".join(lines) + "\n")
+        """Write the unified ``checksums.json`` over every artifact (R16.1).
+
+        Delegates to :mod:`jobrec.evaluation.checksums`, which supersedes the
+        earlier ``checksums.sha256`` that covered only ``*.json`` files.
+        """
+        write_checksums(exp_dir)
