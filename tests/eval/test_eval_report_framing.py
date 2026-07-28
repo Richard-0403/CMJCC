@@ -200,3 +200,64 @@ def test_superiority_detector_flags_an_actual_claim():
     assert len(flagged) == 1
     assert claim in flagged[0]
     assert _superiority_claims("We do not claim superiority over external frameworks.") == []
+
+
+# ---------------------------------------------------------------------------
+# The backend the run actually used must not be misdescribed. Three passages were
+# hardcoded to the deterministic mock, so the hybrid report asserted that the run "does
+# not exercise a real model" and asked for "a real LLM backend" as future work -- while
+# it had just spent hundreds of real model calls. A false limitation is as much a
+# reporting error as a false result.
+# ---------------------------------------------------------------------------
+
+def _hybrid_data() -> dict:
+    data = _report_data()
+    data["llm_mode"] = "hybrid"
+    data["llm_provider"] = "remote"
+    data["model_call_identities"] = [
+        {"provider": "remote", "model": "some-model-v1", "calls": 128, "failed_calls": 2}
+    ]
+    return data
+
+
+def test_deterministic_report_keeps_the_deterministic_framing():
+    md = generate_markdown(_report_data())
+    squeezed = " ".join(md.split())
+    assert "deterministic mock provider removes LLM stochasticity" in squeezed
+    assert "Within this controlled, deterministic setup" in squeezed
+    assert "a real LLM backend are the natural next steps" in squeezed
+    assert "no model calls recorded" in squeezed
+
+
+def test_hybrid_report_does_not_claim_the_model_was_never_exercised():
+    md = generate_markdown(_hybrid_data())
+    squeezed = " ".join(md.split())
+
+    # §12 internal validity: the real limitation is stochasticity, not absence of a model.
+    assert "does not exercise a real model" not in squeezed
+    assert "deterministic mock provider" not in squeezed
+    assert "a real model backend (hybrid" in squeezed
+    assert "responses are stochastic" in squeezed
+
+    # §13 conclusion: neither "deterministic setup" nor "a real LLM backend" as future work.
+    assert "Within this controlled, deterministic setup" not in squeezed
+    assert "a real LLM backend are the natural next steps" not in squeezed
+    assert "real-model backend having already been exercised here" in squeezed
+
+    # §1: the MODEL is named from the recorded calls, and the provider is not passed off
+    # as the model.
+    assert "`some-model-v1` via `remote`" in squeezed
+    assert "128 calls, 2 failed" in squeezed
+
+
+def test_report_never_prints_a_raw_python_mapping():
+    """Counts are prose, not ``repr(dict)``.
+
+    Two lines interpolated mappings directly, so the document carried
+    ``{'multi_turn': 2}`` -- braces and quotes included.
+    """
+    for data in (_report_data(), _hybrid_data()):
+        md = generate_markdown(data)
+        assert "{'" not in md, md[md.index("{'") - 120:md.index("{'") + 80]
+        assert "': " not in md
+        assert "multi_turn 2" in md

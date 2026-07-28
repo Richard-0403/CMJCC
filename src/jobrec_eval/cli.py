@@ -495,10 +495,14 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     # ---- error summary --------------------------------------------------
     failures = run_metrics[~run_metrics["success_run"]]
     task_fail = run_metrics[run_metrics["task_success"] == 0]
+    # Rendered as prose, not as a Python dict: interpolating the mapping directly put
+    # ``{'no_context': 35, ...}`` -- braces and quotes included -- into the report.
+    by_variant = task_fail.groupby("variant").size().to_dict()
+    by_variant_text = (", ".join(f"{v} {n}" for v, n in sorted(by_variant.items()))
+                       or "none")
     error_summary = (f"Runs: {len(run_metrics)}; system failures: {len(failures)}; "
                      f"task-unsuccessful runs: {len(task_fail)}. "
-                     f"Task failures by variant: "
-                     f"{task_fail.groupby('variant').size().to_dict()}.")
+                     f"Task failures by variant: {by_variant_text}.")
 
     # ---- assemble report data ------------------------------------------
     scenario_type_counts = {t: int((pd.Series([s.scenario_type for s in scenarios.values()]) == t).sum())

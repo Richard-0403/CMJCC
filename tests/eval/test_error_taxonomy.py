@@ -115,6 +115,18 @@ def test_truncation_of_an_unexpected_ask_is_still_a_continuation_failure():
                                        clarification_expected=False)) == TRUNCATED
 
 
+def test_a_dialogue_that_answered_an_earlier_ask_and_ended_on_another_is_truncated():
+    """Answering ask #1 and ending on ask #2 is still a truncation.
+
+    The observed SC-D-11 / SC-D-12 shape. ``clarification_answered`` is a whole-dialogue
+    flag, so requiring it to be false asked "was ANY question ever answered?" when the
+    question at hand is "is the FINAL one still open?" -- and sent these two runs to the
+    memory category instead.
+    """
+    row = _truncated_row(clarification_answered=True, clarification_expected=False)
+    assert _category_of(row) == TRUNCATED
+
+
 def test_truncation_without_a_recorded_reason_still_classified_by_expectation():
     """Frames predating ``termination_reason`` fall back to the scenario expectation.
 

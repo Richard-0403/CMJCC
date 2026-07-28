@@ -56,6 +56,19 @@ def _fmt(x, nd=3):
     return str(x)
 
 
+def _counts_phrase(counts) -> str:
+    """A ``{name: count}`` mapping as readable prose.
+
+    Two report lines interpolated the dict directly, so the document carried raw Python
+    repr -- ``{'ambiguous_role': 2, 'clarification': 5, ...}`` -- braces, quotes and all.
+    """
+    if not counts:
+        return "none"
+    if not isinstance(counts, dict):
+        return str(counts)
+    return ", ".join(f"{name} {value}" for name, value in sorted(counts.items()))
+
+
 #: Below this, a p-value is printed in scientific notation instead of being rounded.
 #: Fixed 3-decimal rounding printed ``0.000`` for everything smaller, which reads as
 #: exactly zero -- a p-value that cannot exist. Real values here reached 4.66e-10, and
@@ -548,7 +561,7 @@ def _data_quality_section(dq: dict | None) -> str:
                      + "; ".join(f"{k} ({v})" for k, v in sorted(skipped.items())) + ".")
     counts = dq.get("counts_by_violation_type") or {}
     if counts:
-        lines.append(f"- Findings by type: {counts}.")
+        lines.append(f"- Findings by type: {_counts_phrase(counts)}.")
     lines.append("- Full report: `data_quality_report.json` (covered by `checksums.json`).")
     return "\n".join(lines)
 
@@ -850,14 +863,58 @@ def _construct_threat_bullet(data: dict) -> str:
     return bullet
 
 
+def _is_deterministic(data: dict) -> bool:
+    """Whether this analysis describes the deterministic (model-free) backend."""
+    return str(data.get("llm_mode") or "deterministic").lower() == "deterministic"
+
+
+def _internal_threat_bullet(data: dict) -> str:
+    """The §12 internal-validity bullet, phrased for the backend that actually ran.
+
+    It used to assert a "deterministic mock provider" unconditionally, so the hybrid
+    report claimed the run "does not exercise a real model" while it had just spent
+    hundreds of real model calls -- a false limitation, and one that would have made the
+    hybrid experiment look pointless.
+    """
+    if _is_deterministic(data):
+        return ("- **Internal:** the deterministic mock provider removes LLM stochasticity\n"
+                "  but also does not exercise a real model; variant behaviour is controlled\n"
+                "  by feature flags on one code path.")
+    identities = list(data.get("model_call_identities") or [])
+    models = ", ".join(f"`{r.get('model')}`" for r in identities) or "the configured model"
+    return (f"- **Internal:** a real model backend ({data.get('llm_mode')}, {models}) is\n"
+            "  exercised, so responses are stochastic: repeats measure that variance rather\n"
+            "  than adding independent samples, and a single repeat cannot be read as the\n"
+            "  system's behaviour. Variant behaviour is controlled by feature flags on one\n"
+            "  code path, and every model call is recorded so the run is replayable.")
+
+
+def _conclusion_opening(data: dict) -> str:
+    """The §13 opening clause, which must not call a real-model run deterministic."""
+    if _is_deterministic(data):
+        return "Within this controlled, deterministic setup"
+    return (f"Within this controlled setup on a real model backend "
+            f"({data.get('llm_mode')})")
+
+
 def _next_steps_sentence(data: dict) -> str:
     """The conclusion's next-steps sentence, which must not ask for what was already done."""
-    if _uses_human_relevance(data):
+    human = _uses_human_relevance(data)
+    deterministic = _is_deterministic(data)
+    if human and deterministic:
         return ("Claims are limited to this configuration; a real LLM backend and a larger "
                 "human-judged label pool (the current judgements cover the returned pairs "
                 "only) are the natural next steps.")
-    return ("Claims are limited to this configuration; human-annotated relevance and a real "
-            "LLM backend are the natural next steps.")
+    if human:
+        return ("Claims are limited to this configuration; a larger human-judged label pool "
+                "(the current judgements cover the returned pairs only) is the natural next "
+                "step.")
+    if deterministic:
+        return ("Claims are limited to this configuration; human-annotated relevance and a "
+                "real LLM backend are the natural next steps.")
+    # Real backend already exercised: asking for it again would deny what this run did.
+    return ("Claims are limited to this configuration; human-annotated relevance is the "
+            "natural next step, the real-model backend having already been exercised here.")
 
 
 def _relevance_label_appendix(data: dict) -> str:
@@ -1106,7 +1163,7 @@ over repeats before pairing.
 ## 3. Dataset and Scenario Set
 
 - Catalog snapshot `{exp['catalog_snapshot_id']}`, hash `{exp['catalog_hash'][:12]}`.
-- Scenario counts by type: {data['scenario_type_counts']}.
+- Scenario counts by type: {_counts_phrase(data['scenario_type_counts'])}.
 - Memory-dependent (>=medium) scenarios: {data['n_memory_dependent']};
   context-dependent (high) scenarios: {data['n_context_dependent']}.
 
@@ -1462,9 +1519,7 @@ failure-containing set both `grounding_rate` and `handoff_success_rate` are stri
 ## 12. Threats to Validity
 
 {_construct_threat_bullet(data)}
-- **Internal:** deterministic mock provider removes LLM stochasticity but also
-  does not exercise a real model; variant behaviour is controlled by feature
-  flags on one code path.
+{_internal_threat_bullet(data)}
 - **External:** small synthetic catalog and synthetic candidates; a modest
   scenario count; results do not extrapolate to real hiring outcomes.
 - **Conclusion:** small n limits statistical power; emphasis is on effect sizes,
@@ -1472,7 +1527,7 @@ failure-containing set both `grounding_rate` and `handoff_success_rate` are stri
 
 ## 13. Conclusion
 
-Within this controlled, deterministic setup, the full architecture meets the
+{_conclusion_opening(data)}, the full architecture meets the
 engineering-quality indicators and the ablations show the expected directional
 contributions of candidate memory and job-context orchestration. These results
 attribute observed differences to specific framework mechanisms under the

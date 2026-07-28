@@ -304,13 +304,19 @@ def _is_unresolved_clarification(row) -> bool:
     """The run ended with the question it asked still open and nothing delivered.
 
     Read purely from the recorded columns (``response_type``, ``returned_count``,
-    ``clarification_asked``, ``clarification_answered``), so the state is recognised for
-    whichever variant produced it.
+    ``clarification_asked``), so the state is recognised for whichever variant produced it.
+
+    ``clarification_answered`` is deliberately NOT consulted. It is a WHOLE-DIALOGUE flag
+    ("some ask was answered at some point"), so using it to decide whether the FINAL ask
+    is still open misclassifies any dialogue that asked twice: two observed one_shot runs
+    answered their first question, ended on a second one, and were therefore reported as
+    memory failures rather than as the truncations they are. Ending on a clarification
+    response with nothing returned already establishes that the run stopped on an open
+    question; whether an EARLIER question was answered says nothing about that.
     """
     return (_text(row.get("response_type")) == "clarification"
             and _returned(row) == 0
-            and _flag(row.get("clarification_asked"))
-            and not _flag(row.get("clarification_answered")))
+            and _flag(row.get("clarification_asked")))
 
 
 def _dialogue_was_not_continued(row) -> bool:
