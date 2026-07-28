@@ -306,6 +306,12 @@ def _turn_record_row(turn_index: int, turn: TurnResult) -> dict[str, Any]:
     return {
         "turn_index": turn_index,
         "run_id": rr.run_id,
+        # Which session the turn ran in. A scenario may cross a session boundary
+        # (``session_breaks``), and then this is the only per-turn record of where the
+        # boundary fell -- i.e. of which turns could only have known something through
+        # long-term candidate memory.
+        "session_id": getattr(turn.dialogue_state, "session_id", None),
+        "candidate_state_version": getattr(turn.candidate_state, "version", None),
         "response_type": turn.response.response_type,
         "success": rr.success,
         "failure_code": rr.failure_code,

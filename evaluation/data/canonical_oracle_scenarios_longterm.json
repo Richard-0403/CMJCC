@@ -1,0 +1,705 @@
+{
+  "canonical_oracle_version": "2.0.0",
+  "inputs_fingerprint": "c34758de02dac89ae607b6afb7ccb0d5c4d6b02e71e1d5c64a7a5c956f39b5f4",
+  "provenance": {
+    "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+    "catalog_path": "data/processed/jobs.jsonl",
+    "derivation": "canonical_pass",
+    "llm_mode": "deterministic",
+    "referenced_scenario_count": 5,
+    "repeats": 1,
+    "scenario_count": 5,
+    "scenarios_path": "evaluation/data/scenarios_longterm.jsonl",
+    "scenarios_sha256": "bbda7b04a320f760e870f0dc5986437155ff377d8152768773aab293ef8998cb",
+    "scenarios_without_reference": [],
+    "variant": "full"
+  },
+  "reference_fingerprint": "1828a69b189853c68590bb403b0e52bd4bca0f56e7acb6158223ceb5a0373f72",
+  "references": {
+    "SC-LT-01": {
+      "active_search": {
+        "active_search_id": "as-16853c2d2c735008",
+        "candidate_id": "SC-LT-01-cand",
+        "candidate_state_version": 2,
+        "clarification_required_fields": [],
+        "dialogue_state_version": 2,
+        "employment_types": [],
+        "exclusions": {},
+        "experience_level": null,
+        "field_evidence_map": {
+          "preferred_locations": [
+            "ev-af29cfd9f59b64fb"
+          ],
+          "salary_currency": [
+            "ev-0bc272b9da453d54"
+          ],
+          "salary_min": [
+            "ev-31ea43381f78dc10"
+          ],
+          "skills_have": [
+            "ev-3abcb39b25929dbd",
+            "ev-2cd9efd35e8bfedd"
+          ],
+          "target_roles": [
+            "ev-79b55f180f1bac87",
+            "ev-ee76d001ac10da2b"
+          ],
+          "work_modes": [
+            "ev-9ce7a90b3429ea5a"
+          ],
+          "years_experience": [
+            "ev-48be6b87ebef88b2"
+          ]
+        },
+        "generated_at": "2026-07-28T16:02:26.746214Z",
+        "hard_constraint_fields": [
+          "salary_min"
+        ],
+        "preferred_locations": [
+          "Kuala Lumpur"
+        ],
+        "salary_currency": "MYR",
+        "salary_min": 4000.0,
+        "session_id": "sess-05002c78031d",
+        "skills_have": [
+          "python",
+          "sql"
+        ],
+        "soft_preference_fields": [
+          "preferred_locations",
+          "salary_currency",
+          "skills_have",
+          "target_roles",
+          "work_modes",
+          "years_experience"
+        ],
+        "target_roles": [
+          "data analyst"
+        ],
+        "unknown_fields": [
+          "employment_types",
+          "experience_level",
+          "work_authorizations"
+        ],
+        "work_authorizations": [],
+        "work_modes": [
+          "hybrid"
+        ],
+        "years_experience": 2.0
+      },
+      "job_context": {
+        "active_search_id": "as-16853c2d2c735008",
+        "catalog_snapshot_id": "catalog-2026-01-v1",
+        "constraints": [
+          {
+            "constraint_id": "con-1e42616d489ee19c",
+            "evidence_ids": [],
+            "expected_value": "2026-01-01",
+            "field_name": "not_expired",
+            "operator": "not_expired",
+            "rule_id": "rule.not_expired",
+            "strength": "hard",
+            "unknown_policy": "pass",
+            "weight": 0.0
+          },
+          {
+            "constraint_id": "con-029ef4930f698db4",
+            "evidence_ids": [
+              "ev-af29cfd9f59b64fb"
+            ],
+            "expected_value": [
+              "Kuala Lumpur"
+            ],
+            "field_name": "preferred_locations",
+            "operator": "in",
+            "rule_id": "rule.preferred_locations",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-c7ad9dba516f6e98",
+            "evidence_ids": [
+              "ev-9ce7a90b3429ea5a"
+            ],
+            "expected_value": [
+              "hybrid"
+            ],
+            "field_name": "work_modes",
+            "operator": "in",
+            "rule_id": "rule.work_modes",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-aef34edc554359e4",
+            "evidence_ids": [
+              "ev-31ea43381f78dc10"
+            ],
+            "expected_value": 4000.0,
+            "field_name": "salary_min",
+            "operator": "gte",
+            "rule_id": "rule.salary_min",
+            "strength": "hard",
+            "unknown_policy": "fail",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-79a1c28280255e67",
+            "evidence_ids": [],
+            "expected_value": {
+              "level": null,
+              "years": 2.0
+            },
+            "field_name": "experience",
+            "operator": "lte",
+            "rule_id": "rule.experience",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.07
+          }
+        ],
+        "context_id": "ctx-93542736c0aef8cb",
+        "normalization_warnings": [],
+        "normalized_at": "2026-07-28T16:02:26.746588Z"
+      }
+    },
+    "SC-LT-02": {
+      "active_search": {
+        "active_search_id": "as-9653ee0e8f15cdc6",
+        "candidate_id": "SC-LT-02-cand",
+        "candidate_state_version": 1,
+        "clarification_required_fields": [],
+        "dialogue_state_version": 2,
+        "employment_types": [],
+        "exclusions": {},
+        "experience_level": null,
+        "field_evidence_map": {
+          "preferred_locations": [
+            "ev-2994186cf361b047"
+          ],
+          "salary_currency": [
+            "ev-97d1234851048ec2"
+          ],
+          "salary_min": [
+            "ev-14d28109f0536a40"
+          ],
+          "skills_have": [
+            "ev-968ef89159e04898",
+            "ev-f9adac148cf7b5c6"
+          ],
+          "target_roles": [
+            "ev-8db9aa6d476a1d3b",
+            "ev-19fc232b829d7b0d"
+          ],
+          "years_experience": [
+            "ev-2df37849a6466e8e"
+          ]
+        },
+        "generated_at": "2026-07-28T16:02:26.893044Z",
+        "hard_constraint_fields": [
+          "salary_min"
+        ],
+        "preferred_locations": [
+          "Kuala Lumpur"
+        ],
+        "salary_currency": "MYR",
+        "salary_min": 4000.0,
+        "session_id": "sess-6f8b265938ae",
+        "skills_have": [
+          "python",
+          "sql"
+        ],
+        "soft_preference_fields": [
+          "preferred_locations",
+          "salary_currency",
+          "skills_have",
+          "target_roles",
+          "years_experience"
+        ],
+        "target_roles": [
+          "data analyst"
+        ],
+        "unknown_fields": [
+          "employment_types",
+          "experience_level",
+          "work_authorizations",
+          "work_modes"
+        ],
+        "work_authorizations": [],
+        "work_modes": [],
+        "years_experience": 2.0
+      },
+      "job_context": {
+        "active_search_id": "as-9653ee0e8f15cdc6",
+        "catalog_snapshot_id": "catalog-2026-01-v1",
+        "constraints": [
+          {
+            "constraint_id": "con-09a088a0be2216e9",
+            "evidence_ids": [],
+            "expected_value": "2026-01-01",
+            "field_name": "not_expired",
+            "operator": "not_expired",
+            "rule_id": "rule.not_expired",
+            "strength": "hard",
+            "unknown_policy": "pass",
+            "weight": 0.0
+          },
+          {
+            "constraint_id": "con-189eb9d40e3279bb",
+            "evidence_ids": [
+              "ev-2994186cf361b047"
+            ],
+            "expected_value": [
+              "Kuala Lumpur"
+            ],
+            "field_name": "preferred_locations",
+            "operator": "in",
+            "rule_id": "rule.preferred_locations",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-b2f6daab43aeda1d",
+            "evidence_ids": [
+              "ev-14d28109f0536a40"
+            ],
+            "expected_value": 4000.0,
+            "field_name": "salary_min",
+            "operator": "gte",
+            "rule_id": "rule.salary_min",
+            "strength": "hard",
+            "unknown_policy": "fail",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-ba822ef65a733666",
+            "evidence_ids": [],
+            "expected_value": {
+              "level": null,
+              "years": 2.0
+            },
+            "field_name": "experience",
+            "operator": "lte",
+            "rule_id": "rule.experience",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.07
+          }
+        ],
+        "context_id": "ctx-75bd8a18bd7ad758",
+        "normalization_warnings": [],
+        "normalized_at": "2026-07-28T16:02:26.893564Z"
+      }
+    },
+    "SC-LT-03": {
+      "active_search": {
+        "active_search_id": "as-44000f1f21d319e9",
+        "candidate_id": "SC-LT-03-cand",
+        "candidate_state_version": 3,
+        "clarification_required_fields": [],
+        "dialogue_state_version": 2,
+        "employment_types": [],
+        "exclusions": {},
+        "experience_level": null,
+        "field_evidence_map": {
+          "preferred_locations": [
+            "ev-44cdb5f251a16fd8"
+          ],
+          "salary_currency": [
+            "ev-baf9cfa55a7c1083"
+          ],
+          "salary_min": [
+            "ev-8b08d945f6e5388d"
+          ],
+          "skills_have": [
+            "ev-29e44fa2dcc8488a",
+            "ev-6d5f7f07546b7a3a"
+          ],
+          "target_roles": [
+            "ev-6b15859ad2bb1ae4",
+            "ev-d317f7001a161194"
+          ],
+          "work_modes": [
+            "ev-35eb0e30a546fbec"
+          ],
+          "years_experience": [
+            "ev-3e756fd062e82879"
+          ]
+        },
+        "generated_at": "2026-07-28T16:02:27.089749Z",
+        "hard_constraint_fields": [
+          "salary_min"
+        ],
+        "preferred_locations": [
+          "Kuala Lumpur"
+        ],
+        "salary_currency": "MYR",
+        "salary_min": 4000.0,
+        "session_id": "sess-02bea0b69503",
+        "skills_have": [
+          "python",
+          "sql"
+        ],
+        "soft_preference_fields": [
+          "preferred_locations",
+          "salary_currency",
+          "skills_have",
+          "target_roles",
+          "work_modes",
+          "years_experience"
+        ],
+        "target_roles": [
+          "data analyst"
+        ],
+        "unknown_fields": [
+          "employment_types",
+          "experience_level",
+          "work_authorizations"
+        ],
+        "work_authorizations": [],
+        "work_modes": [
+          "hybrid"
+        ],
+        "years_experience": 2.0
+      },
+      "job_context": {
+        "active_search_id": "as-44000f1f21d319e9",
+        "catalog_snapshot_id": "catalog-2026-01-v1",
+        "constraints": [
+          {
+            "constraint_id": "con-f7795900329ddfef",
+            "evidence_ids": [],
+            "expected_value": "2026-01-01",
+            "field_name": "not_expired",
+            "operator": "not_expired",
+            "rule_id": "rule.not_expired",
+            "strength": "hard",
+            "unknown_policy": "pass",
+            "weight": 0.0
+          },
+          {
+            "constraint_id": "con-3810f0ffa215b81f",
+            "evidence_ids": [
+              "ev-44cdb5f251a16fd8"
+            ],
+            "expected_value": [
+              "Kuala Lumpur"
+            ],
+            "field_name": "preferred_locations",
+            "operator": "in",
+            "rule_id": "rule.preferred_locations",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-74b6f10dd7e8b3c6",
+            "evidence_ids": [
+              "ev-35eb0e30a546fbec"
+            ],
+            "expected_value": [
+              "hybrid"
+            ],
+            "field_name": "work_modes",
+            "operator": "in",
+            "rule_id": "rule.work_modes",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-15583bebe6bb7d64",
+            "evidence_ids": [
+              "ev-8b08d945f6e5388d"
+            ],
+            "expected_value": 4000.0,
+            "field_name": "salary_min",
+            "operator": "gte",
+            "rule_id": "rule.salary_min",
+            "strength": "hard",
+            "unknown_policy": "fail",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-53a5f7f512292d61",
+            "evidence_ids": [],
+            "expected_value": {
+              "level": null,
+              "years": 2.0
+            },
+            "field_name": "experience",
+            "operator": "lte",
+            "rule_id": "rule.experience",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.07
+          }
+        ],
+        "context_id": "ctx-91d82b7321e548e6",
+        "normalization_warnings": [],
+        "normalized_at": "2026-07-28T16:02:27.090104Z"
+      }
+    },
+    "SC-LT-04": {
+      "active_search": {
+        "active_search_id": "as-7caa47691361fc14",
+        "candidate_id": "SC-LT-04-cand",
+        "candidate_state_version": 1,
+        "clarification_required_fields": [],
+        "dialogue_state_version": 2,
+        "employment_types": [],
+        "exclusions": {},
+        "experience_level": null,
+        "field_evidence_map": {
+          "preferred_locations": [
+            "ev-3bd68702dfcabcb6"
+          ],
+          "salary_currency": [
+            "ev-2ccfc2270ba699f2"
+          ],
+          "salary_min": [
+            "ev-68fa8dac0b90dcf5"
+          ],
+          "skills_have": [
+            "ev-4037bca6ea5522f5",
+            "ev-30686514c7e03f15"
+          ],
+          "target_roles": [
+            "ev-f7585afa16c0884e",
+            "ev-7c28fd1b5cc1bdbd"
+          ],
+          "years_experience": [
+            "ev-537b9b3424f5a411"
+          ]
+        },
+        "generated_at": "2026-07-28T16:02:27.257212Z",
+        "hard_constraint_fields": [
+          "salary_min"
+        ],
+        "preferred_locations": [
+          "Penang"
+        ],
+        "salary_currency": "MYR",
+        "salary_min": 4000.0,
+        "session_id": "sess-5e16c2b25e4a",
+        "skills_have": [
+          "python",
+          "sql"
+        ],
+        "soft_preference_fields": [
+          "preferred_locations",
+          "salary_currency",
+          "skills_have",
+          "target_roles",
+          "years_experience"
+        ],
+        "target_roles": [
+          "data analyst"
+        ],
+        "unknown_fields": [
+          "employment_types",
+          "experience_level",
+          "work_authorizations",
+          "work_modes"
+        ],
+        "work_authorizations": [],
+        "work_modes": [],
+        "years_experience": 3.0
+      },
+      "job_context": {
+        "active_search_id": "as-7caa47691361fc14",
+        "catalog_snapshot_id": "catalog-2026-01-v1",
+        "constraints": [
+          {
+            "constraint_id": "con-49160fbacac47883",
+            "evidence_ids": [],
+            "expected_value": "2026-01-01",
+            "field_name": "not_expired",
+            "operator": "not_expired",
+            "rule_id": "rule.not_expired",
+            "strength": "hard",
+            "unknown_policy": "pass",
+            "weight": 0.0
+          },
+          {
+            "constraint_id": "con-8ed4ef9c0dec8266",
+            "evidence_ids": [
+              "ev-3bd68702dfcabcb6"
+            ],
+            "expected_value": [
+              "Penang"
+            ],
+            "field_name": "preferred_locations",
+            "operator": "in",
+            "rule_id": "rule.preferred_locations",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-9eb649a0fc7b0fb5",
+            "evidence_ids": [
+              "ev-68fa8dac0b90dcf5"
+            ],
+            "expected_value": 4000.0,
+            "field_name": "salary_min",
+            "operator": "gte",
+            "rule_id": "rule.salary_min",
+            "strength": "hard",
+            "unknown_policy": "fail",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-e46a7b8478677417",
+            "evidence_ids": [],
+            "expected_value": {
+              "level": null,
+              "years": 3.0
+            },
+            "field_name": "experience",
+            "operator": "lte",
+            "rule_id": "rule.experience",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.07
+          }
+        ],
+        "context_id": "ctx-ea7e3c2165acd1a8",
+        "normalization_warnings": [],
+        "normalized_at": "2026-07-28T16:02:27.257529Z"
+      }
+    },
+    "SC-LT-05": {
+      "active_search": {
+        "active_search_id": "as-37b56d82929019af",
+        "candidate_id": "SC-LT-05-cand",
+        "candidate_state_version": 1,
+        "clarification_required_fields": [],
+        "dialogue_state_version": 2,
+        "employment_types": [],
+        "exclusions": {},
+        "experience_level": null,
+        "field_evidence_map": {
+          "preferred_locations": [
+            "ev-82dbbb88d7bca672"
+          ],
+          "salary_currency": [
+            "ev-457ffd0142ac85d7"
+          ],
+          "salary_min": [
+            "ev-7a21b3365dbefca5"
+          ],
+          "skills_have": [
+            "ev-ab26d00728e1e601",
+            "ev-dc0c5924a74a1ed2"
+          ],
+          "target_roles": [
+            "ev-d2d0bf2486fc2c79",
+            "ev-37eafe6f34f69434"
+          ],
+          "years_experience": [
+            "ev-db1414adcc9dff10"
+          ]
+        },
+        "generated_at": "2026-07-28T16:02:27.423553Z",
+        "hard_constraint_fields": [
+          "salary_min"
+        ],
+        "preferred_locations": [
+          "Kuala Lumpur"
+        ],
+        "salary_currency": "MYR",
+        "salary_min": 4000.0,
+        "session_id": "sess-5746f71649f6",
+        "skills_have": [
+          "python",
+          "sql"
+        ],
+        "soft_preference_fields": [
+          "preferred_locations",
+          "salary_currency",
+          "skills_have",
+          "target_roles",
+          "years_experience"
+        ],
+        "target_roles": [
+          "data analyst"
+        ],
+        "unknown_fields": [
+          "employment_types",
+          "experience_level",
+          "work_authorizations",
+          "work_modes"
+        ],
+        "work_authorizations": [],
+        "work_modes": [],
+        "years_experience": 2.0
+      },
+      "job_context": {
+        "active_search_id": "as-37b56d82929019af",
+        "catalog_snapshot_id": "catalog-2026-01-v1",
+        "constraints": [
+          {
+            "constraint_id": "con-976989bfa42a215d",
+            "evidence_ids": [],
+            "expected_value": "2026-01-01",
+            "field_name": "not_expired",
+            "operator": "not_expired",
+            "rule_id": "rule.not_expired",
+            "strength": "hard",
+            "unknown_policy": "pass",
+            "weight": 0.0
+          },
+          {
+            "constraint_id": "con-e89e7e96bb4dab12",
+            "evidence_ids": [
+              "ev-82dbbb88d7bca672"
+            ],
+            "expected_value": [
+              "Kuala Lumpur"
+            ],
+            "field_name": "preferred_locations",
+            "operator": "in",
+            "rule_id": "rule.preferred_locations",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-261718ca98541ba1",
+            "evidence_ids": [
+              "ev-7a21b3365dbefca5"
+            ],
+            "expected_value": 4000.0,
+            "field_name": "salary_min",
+            "operator": "gte",
+            "rule_id": "rule.salary_min",
+            "strength": "hard",
+            "unknown_policy": "fail",
+            "weight": 0.1
+          },
+          {
+            "constraint_id": "con-605de53b08db9352",
+            "evidence_ids": [],
+            "expected_value": {
+              "level": null,
+              "years": 2.0
+            },
+            "field_name": "experience",
+            "operator": "lte",
+            "rule_id": "rule.experience",
+            "strength": "soft",
+            "unknown_policy": "pass",
+            "weight": 0.07
+          }
+        ],
+        "context_id": "ctx-c2bc0c88eb45c3f2",
+        "normalization_warnings": [],
+        "normalized_at": "2026-07-28T16:02:27.424083Z"
+      }
+    }
+  }
+}

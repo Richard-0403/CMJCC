@@ -223,7 +223,19 @@ class ExperimentRunner:
         # absent from the archive entirely; threading the results lets the exporter
         # write whole-run call accounting and per-turn records (R7.3/R11.1).
         turn_results: list[TurnResult] = []
-        for text in scenario.get("turns", []):
+        # Turn indices at which a NEW session starts for the SAME candidate on the SAME
+        # service. Empty for every scenario that does not declare it, so the 42-scenario
+        # set is byte-identical -- see :meth:`_session_breaks`.
+        session_breaks = self._session_breaks(scenario)
+        session_ids = [session_id]
+        for index, text in enumerate(scenario.get("turns", [])):
+            if index in session_breaks:
+                # A new session: fresh dialogue state, same candidate. Anything this turn
+                # knows about earlier turns can now ONLY have come through long-term
+                # candidate memory, which is what makes cross-session inheritance
+                # observable in an archived run instead of only in a unit test.
+                session_id = svc.create_session(cand.candidate_id, variant)
+                session_ids.append(session_id)
             last_result = svc.process_turn(session_id, text, scenario_id=scenario["scenario_id"])
             response_turns += 1
             turn_results.append(last_result)
@@ -293,6 +305,12 @@ class ExperimentRunner:
             "claims": len(last_result.response.claims),
             "dropped_claims": len(last_result.dropped_claims),
             "response_turns": response_turns,
+            # How many sessions the run spanned (1 unless the scenario declares
+            # ``session_breaks``) and the candidate-state version it ended on. A version
+            # above 1 is exactly the signature of a long-term write-back having fired,
+            # which no run-level artifact used to report.
+            "session_count": len(session_ids),
+            "candidate_state_version": last_result.candidate_state.version,
             "termination_reason": termination_reason,
             "total_latency_ms": rr.total_latency_ms,
             "run_dir": str(run_dir),
@@ -301,6 +319,27 @@ class ExperimentRunner:
                                            "scenario_id": scenario["scenario_id"],
                                            "failure_code": rr.failure_code}
         return row, failure
+
+    # --------------------------------------------------------- session boundaries
+    @staticmethod
+    def _session_breaks(scenario: dict) -> frozenset[int]:
+        """Turn indices at which the scenario asks for a NEW session (R19.1).
+
+        Declared as ``"session_breaks": [i, ...]`` on the scenario, meaning "turn ``i``
+        starts a fresh session for the same candidate". Index 0 is ignored: the run
+        already begins on a new session, so breaking there would only create an unused
+        one.
+
+        Why the runner needs this at all: every run builds its own ``AppService``, so a
+        scenario could never span two sessions and the experiment could not observe
+        long-term memory INHERITANCE -- only within-session threading. The 210-run
+        deterministic experiment consequently recorded zero long-term-eligible
+        preferences, and the write-back mechanism had no archived evidence at all. A
+        scenario that declares no breaks behaves exactly as before, so this cannot move
+        any existing result.
+        """
+        raw = scenario.get("session_breaks") or []
+        return frozenset(int(i) for i in raw if int(i) > 0)
 
     # ------------------------------------------------------- clarification loop
     @staticmethod

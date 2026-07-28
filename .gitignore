@@ -42,6 +42,12 @@ artifacts/*.log
 # keep report/metrics/plots/statistics/manifests/audit deliverables
 evaluation/outputs/_runs/
 evaluation/outputs/*/normalized/
+# Long-term-memory validation set (evaluation/data/scenarios_longterm.jsonl). Same rule
+# as the main experiment: the run bundles and regenerable tables stay on disk, the frozen
+# INPUTS (the scenario file and its canonical oracle) are in version control, so the
+# archive is reproducible from what is tracked.
+evaluation/outputs_longterm/_runs/
+evaluation/outputs_longterm/*/normalized/
 
 
 # Hybrid (real-LLM) run outputs; curated copies live under test_results/hybrid/
