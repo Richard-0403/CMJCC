@@ -68,7 +68,28 @@ from jobrec.utils.hashing import sha256_of_bytes, stable_hash
 #: scenario or the catalog changes -- those move the input fingerprint instead). A
 #: frozen artifact carrying a different version is rejected rather than reused, so a
 #: derivation change can never be masked by a stale file.
-CANONICAL_ORACLE_VERSION = "2.0.0"
+CANONICAL_ORACLE_VERSION = "3.0.0"
+
+#: Scenario field carrying the AUTHORITATIVE reference for that scenario: what the
+#: candidate is taken to have asked for, and which of those statements are hard. When it is
+#: present the oracle is built from it alone and the extractor is never consulted, which is
+#: what makes the reference independent of the system under evaluation.
+DECLARATION_KEY = "reference"
+
+#: Declaration keys that map straight onto :class:`ActiveSearchState` fields.
+_DECLARED_SEARCH_FIELDS = (
+    "target_roles", "skills_have", "preferred_locations", "work_modes", "salary_min",
+    "salary_currency", "experience_level", "years_experience", "employment_types",
+    "work_authorizations", "exclusions",
+)
+
+#: Constraint fields whose strength the declaration decides. ``not_expired`` is excluded:
+#: it is a system constraint (a job past its deadline is never eligible), not a candidate
+#: statement, and :class:`~jobrec.agents.job_context_agent.JobContextAgent` always adds it.
+_DECLARABLE_STRENGTH_FIELDS = (
+    "preferred_locations", "work_modes", "salary_min", "experience", "employment_types",
+    "work_authorizations", "required_skills", "exclusions",
+)
 
 #: Name under which the artifact is republished into an analysis directory.
 CANONICAL_ORACLE_FILENAME = "canonical_oracle.json"
@@ -167,6 +188,60 @@ def grading_projection(references: dict[str, dict]) -> dict[str, Any]:
     return out
 
 
+#: How a scenario's reference was obtained, recorded per scenario in the artifact.
+DERIVATION_DECLARED = "declared"
+DERIVATION_SYSTEM_PASS = "system_derived_pass"
+
+
+def reference_from_declaration(
+    scenario: dict, config: AppConfig, catalog_snapshot_id: str
+) -> tuple[dict, dict]:
+    """Build ``(job_context, active_search)`` from a scenario's declared reference.
+
+    The declaration supplies the field VALUES and, decisively, which fields are HARD.
+    Everything after that is mechanism, not judgement:
+    :meth:`~jobrec.agents.job_context_agent.JobContextAgent.build_context` maps each
+    declared field to an operator, an unknown policy and a ranking weight, and the
+    eligibility check is arithmetic against the catalog. So the semantic content of the
+    ground truth is exactly what a reader can inspect in the scenario file.
+
+    This is the whole point of the declaration: with the system-derived pass, the hard/soft
+    call came from ``ActiveSearchState.hard_constraint_fields`` -- an extractor decision.
+    The deterministic and hybrid extractors disagreed about it on three scenarios, and a
+    hard violation forces grade 0, so that decision moved a large part of the label
+    universe. It has to be declared, not inferred by the thing being measured.
+    """
+    from jobrec.agents.job_context_agent import JobContextAgent
+    from jobrec.domain.job import ActiveSearchState
+    from jobrec.utils.hashing import content_id
+    from jobrec.utils.time import utcnow
+
+    declaration = scenario.get(DECLARATION_KEY) or {}
+    scenario_id = scenario["scenario_id"]
+    hard = [f for f in declaration.get("hard") or [] if f in _DECLARABLE_STRENGTH_FIELDS]
+    soft = [f for f in _DECLARABLE_STRENGTH_FIELDS if f not in hard]
+
+    values = {key: declaration[key] for key in _DECLARED_SEARCH_FIELDS if key in declaration}
+    active = ActiveSearchState(
+        # Content-addressed over the SCENARIO, not over a session: the reference is an
+        # input artifact, so its ids must not carry run-specific provenance.
+        active_search_id=content_id("oracle-search", scenario_id,
+                                    CANONICAL_ORACLE_VERSION),
+        session_id=f"oracle:{scenario_id}",
+        candidate_id=str(scenario.get("profile", {}).get("candidate_id")
+                         or f"{scenario_id}-cand"),
+        candidate_state_version=0,
+        dialogue_state_version=0,
+        hard_constraint_fields=hard,
+        soft_preference_fields=soft,
+        field_evidence_map={},
+        generated_at=utcnow(),
+        **values,
+    )
+    context = JobContextAgent(config).build_context(active, catalog_snapshot_id)
+    return context.model_dump(mode="json"), active.model_dump(mode="json")
+
+
 def frozen_artifact_path(scenarios_path: str | Path) -> Path:
     """Where ``scenarios_path``'s frozen reference lives: beside it, keyed by its stem."""
     p = Path(scenarios_path)
@@ -215,16 +290,21 @@ def build_canonical_references(
     *,
     work_dir: str | Path | None = None,
 ) -> CanonicalReferences:
-    """Derive the canonical reference for every scenario in ``scenarios_path``.
+    """Build the canonical reference for every scenario in ``scenarios_path``.
 
-    Each scenario is driven once through the real pipeline under
-    :func:`canonical_config`, including the clarification loop -- a clarification
-    scenario states no role until the loop answers for one, and a reference without a
-    role grades the entire catalog 0, which would make that scenario's ranking metrics
-    undefined rather than merely different.
+    A scenario carrying a :data:`DECLARATION_KEY` block is built from that declaration
+    alone (:func:`reference_from_declaration`) and never touches the extractor -- this is
+    the path that makes the reference independent of the system under evaluation.
 
-    The pass writes into a throwaway directory: the durable output is the reference
-    artifact, not another copy of the run bundles.
+    A scenario WITHOUT a declaration falls back to driving the deterministic ``full``
+    pipeline once and reading its constraint bundle. That fallback is a documented
+    weakness, not an equivalent: the hard/soft strength then comes from the extractor
+    (see the module docstring). It is retained so a scenario set that has not been
+    declared yet still produces labels, and every such scenario is named in the artifact's
+    provenance so a mixed reference can never be mistaken for a declared one.
+
+    The fallback pass writes into a throwaway directory: the durable output is the
+    reference artifact, not another copy of the run bundles.
     """
     # Imported here: this is the only place jobrec_eval drives the runner directly, and
     # a module-level import would make every metrics import pull in the whole pipeline.
@@ -232,37 +312,63 @@ def build_canonical_references(
 
     pinned = canonical_config(config)
     scenarios = _read_scenario_records(scenarios_path)
+    catalog_snapshot_id = catalog_hash(load_catalog(catalog_path))
 
     references: dict[str, dict] = {}
     missing: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="cmjcc-canonical-oracle-") as tmp:
-        root = Path(work_dir) if work_dir is not None else Path(tmp)
-        root.mkdir(parents=True, exist_ok=True)
-        runner = ExperimentRunner(
-            pinned, str(catalog_path), str(scenarios_path), out_dir=str(root / "_runs"))
-        for scenario in scenarios:
-            row, _failure = runner._run_one(
-                CANONICAL_VARIANT, scenario, 0, root / "canonical")
-            run_dir = Path(row["run_dir"])
-            job_context = _read_json(run_dir / "job_context_state.json")
-            active_search = _read_json(run_dir / "active_search_state.json")
-            if not job_context or not active_search:
-                # Recorded, not silently skipped: a scenario with no reference gets no
-                # labels, so its ranking metrics vanish -- that has to be visible.
-                missing.append(scenario["scenario_id"])
-                continue
-            references[scenario["scenario_id"]] = {
-                "job_context": job_context, "active_search": active_search}
+    declared: list[str] = []
+    derived: list[str] = []
+
+    undeclared = [s for s in scenarios if not (s.get(DECLARATION_KEY) or {}).get("hard")
+                  and DECLARATION_KEY not in s]
+    for scenario in scenarios:
+        if DECLARATION_KEY not in scenario:
+            continue
+        scenario_id = scenario["scenario_id"]
+        job_context, active_search = reference_from_declaration(
+            scenario, pinned, catalog_snapshot_id)
+        references[scenario_id] = {"job_context": job_context,
+                                   "active_search": active_search}
+        declared.append(scenario_id)
+
+    if undeclared:
+        with tempfile.TemporaryDirectory(prefix="cmjcc-canonical-oracle-") as tmp:
+            root = Path(work_dir) if work_dir is not None else Path(tmp)
+            root.mkdir(parents=True, exist_ok=True)
+            runner = ExperimentRunner(
+                pinned, str(catalog_path), str(scenarios_path),
+                out_dir=str(root / "_runs"))
+            for scenario in undeclared:
+                row, _failure = runner._run_one(
+                    CANONICAL_VARIANT, scenario, 0, root / "canonical")
+                run_dir = Path(row["run_dir"])
+                job_context = _read_json(run_dir / "job_context_state.json")
+                active_search = _read_json(run_dir / "active_search_state.json")
+                if not job_context or not active_search:
+                    # Recorded, not silently skipped: a scenario with no reference gets no
+                    # labels, so its ranking metrics vanish -- that has to be visible.
+                    missing.append(scenario["scenario_id"])
+                    continue
+                references[scenario["scenario_id"]] = {
+                    "job_context": job_context, "active_search": active_search}
+                derived.append(scenario["scenario_id"])
 
     provenance = {
-        "derivation": "canonical_pass",
+        # The headline fact about this artifact: how much of it is declared ground truth
+        # and how much is still the system reading its own inputs.
+        "derivation": (DERIVATION_DECLARED if not derived
+                       else DERIVATION_SYSTEM_PASS if not declared else "mixed"),
+        "declared_scenario_count": len(declared),
+        "declared_scenarios": sorted(declared),
+        "system_derived_scenario_count": len(derived),
+        "system_derived_scenarios": sorted(derived),
         "variant": CANONICAL_VARIANT,
         "repeats": CANONICAL_REPEATS,
         "llm_mode": RunMode.DETERMINISTIC.value,
         "scenarios_path": str(scenarios_path),
         "scenarios_sha256": _file_fingerprint(scenarios_path),
         "catalog_path": str(catalog_path),
-        "catalog_hash": catalog_hash(load_catalog(catalog_path)),
+        "catalog_hash": catalog_snapshot_id,
         "scenario_count": len(scenarios),
         "referenced_scenario_count": len(references),
         "scenarios_without_reference": sorted(missing),
