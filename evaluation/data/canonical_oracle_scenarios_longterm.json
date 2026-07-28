@@ -1,10 +1,12 @@
 {
-  "canonical_oracle_version": "2.0.0",
-  "inputs_fingerprint": "c34758de02dac89ae607b6afb7ccb0d5c4d6b02e71e1d5c64a7a5c956f39b5f4",
+  "canonical_oracle_version": "3.0.0",
+  "inputs_fingerprint": "fe9960ef3e0bd4b1407caebadf7706feb2aa5a3656e6733a1442c1b39a80954a",
   "provenance": {
     "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
     "catalog_path": "data/processed/jobs.jsonl",
-    "derivation": "canonical_pass",
+    "declared_scenario_count": 0,
+    "declared_scenarios": [],
+    "derivation": "system_derived_pass",
     "llm_mode": "deterministic",
     "referenced_scenario_count": 5,
     "repeats": 1,
@@ -12,13 +14,21 @@
     "scenarios_path": "evaluation/data/scenarios_longterm.jsonl",
     "scenarios_sha256": "bbda7b04a320f760e870f0dc5986437155ff377d8152768773aab293ef8998cb",
     "scenarios_without_reference": [],
+    "system_derived_scenario_count": 5,
+    "system_derived_scenarios": [
+      "SC-LT-01",
+      "SC-LT-02",
+      "SC-LT-03",
+      "SC-LT-04",
+      "SC-LT-05"
+    ],
     "variant": "full"
   },
   "reference_fingerprint": "1828a69b189853c68590bb403b0e52bd4bca0f56e7acb6158223ceb5a0373f72",
   "references": {
     "SC-LT-01": {
       "active_search": {
-        "active_search_id": "as-16853c2d2c735008",
+        "active_search_id": "as-c52e6a8d973199cc",
         "candidate_id": "SC-LT-01-cand",
         "candidate_state_version": 2,
         "clarification_required_fields": [],
@@ -28,13 +38,13 @@
         "experience_level": null,
         "field_evidence_map": {
           "preferred_locations": [
-            "ev-af29cfd9f59b64fb"
+            "ev-75370cdf330c0e4d"
           ],
           "salary_currency": [
-            "ev-0bc272b9da453d54"
+            "ev-64169a0008df9a14"
           ],
           "salary_min": [
-            "ev-31ea43381f78dc10"
+            "ev-c0c455582b0e4d42"
           ],
           "skills_have": [
             "ev-3abcb39b25929dbd",
@@ -42,7 +52,7 @@
           ],
           "target_roles": [
             "ev-79b55f180f1bac87",
-            "ev-ee76d001ac10da2b"
+            "ev-a8c548934805917c"
           ],
           "work_modes": [
             "ev-9ce7a90b3429ea5a"
@@ -51,7 +61,7 @@
             "ev-48be6b87ebef88b2"
           ]
         },
-        "generated_at": "2026-07-28T16:02:26.746214Z",
+        "generated_at": "2026-07-28T20:26:27.972297Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -60,7 +70,7 @@
         ],
         "salary_currency": "MYR",
         "salary_min": 4000.0,
-        "session_id": "sess-05002c78031d",
+        "session_id": "sess-9f0792d80812",
         "skills_have": [
           "python",
           "sql"
@@ -88,11 +98,11 @@
         "years_experience": 2.0
       },
       "job_context": {
-        "active_search_id": "as-16853c2d2c735008",
+        "active_search_id": "as-c52e6a8d973199cc",
         "catalog_snapshot_id": "catalog-2026-01-v1",
         "constraints": [
           {
-            "constraint_id": "con-1e42616d489ee19c",
+            "constraint_id": "con-ef7f43995c4d38e9",
             "evidence_ids": [],
             "expected_value": "2026-01-01",
             "field_name": "not_expired",
@@ -103,9 +113,9 @@
             "weight": 0.0
           },
           {
-            "constraint_id": "con-029ef4930f698db4",
+            "constraint_id": "con-a61eb413214b240d",
             "evidence_ids": [
-              "ev-af29cfd9f59b64fb"
+              "ev-75370cdf330c0e4d"
             ],
             "expected_value": [
               "Kuala Lumpur"
@@ -118,7 +128,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-c7ad9dba516f6e98",
+            "constraint_id": "con-d4d43c7815dd5f69",
             "evidence_ids": [
               "ev-9ce7a90b3429ea5a"
             ],
@@ -133,9 +143,9 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-aef34edc554359e4",
+            "constraint_id": "con-c136f10ed9f04c84",
             "evidence_ids": [
-              "ev-31ea43381f78dc10"
+              "ev-c0c455582b0e4d42"
             ],
             "expected_value": 4000.0,
             "field_name": "salary_min",
@@ -146,7 +156,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-79a1c28280255e67",
+            "constraint_id": "con-abadfa0251b6d8ac",
             "evidence_ids": [],
             "expected_value": {
               "level": null,
@@ -160,14 +170,14 @@
             "weight": 0.07
           }
         ],
-        "context_id": "ctx-93542736c0aef8cb",
+        "context_id": "ctx-3a4c4c78e4f417cc",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-28T16:02:26.746588Z"
+        "normalized_at": "2026-07-28T20:26:27.972825Z"
       }
     },
     "SC-LT-02": {
       "active_search": {
-        "active_search_id": "as-9653ee0e8f15cdc6",
+        "active_search_id": "as-3954e2f5c5d477e4",
         "candidate_id": "SC-LT-02-cand",
         "candidate_state_version": 1,
         "clarification_required_fields": [],
@@ -177,13 +187,13 @@
         "experience_level": null,
         "field_evidence_map": {
           "preferred_locations": [
-            "ev-2994186cf361b047"
+            "ev-f902cb63fdb2608d"
           ],
           "salary_currency": [
-            "ev-97d1234851048ec2"
+            "ev-aa72a83011544d6b"
           ],
           "salary_min": [
-            "ev-14d28109f0536a40"
+            "ev-d5af94efc93f7123"
           ],
           "skills_have": [
             "ev-968ef89159e04898",
@@ -191,13 +201,13 @@
           ],
           "target_roles": [
             "ev-8db9aa6d476a1d3b",
-            "ev-19fc232b829d7b0d"
+            "ev-6c98b9fc05c83b59"
           ],
           "years_experience": [
             "ev-2df37849a6466e8e"
           ]
         },
-        "generated_at": "2026-07-28T16:02:26.893044Z",
+        "generated_at": "2026-07-28T20:26:28.747996Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -206,7 +216,7 @@
         ],
         "salary_currency": "MYR",
         "salary_min": 4000.0,
-        "session_id": "sess-6f8b265938ae",
+        "session_id": "sess-cb9b7a52b3d4",
         "skills_have": [
           "python",
           "sql"
@@ -232,11 +242,11 @@
         "years_experience": 2.0
       },
       "job_context": {
-        "active_search_id": "as-9653ee0e8f15cdc6",
+        "active_search_id": "as-3954e2f5c5d477e4",
         "catalog_snapshot_id": "catalog-2026-01-v1",
         "constraints": [
           {
-            "constraint_id": "con-09a088a0be2216e9",
+            "constraint_id": "con-1cebc71deca8c917",
             "evidence_ids": [],
             "expected_value": "2026-01-01",
             "field_name": "not_expired",
@@ -247,9 +257,9 @@
             "weight": 0.0
           },
           {
-            "constraint_id": "con-189eb9d40e3279bb",
+            "constraint_id": "con-cb4c2f0d03f65706",
             "evidence_ids": [
-              "ev-2994186cf361b047"
+              "ev-f902cb63fdb2608d"
             ],
             "expected_value": [
               "Kuala Lumpur"
@@ -262,9 +272,9 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-b2f6daab43aeda1d",
+            "constraint_id": "con-5ae9caa83a842b39",
             "evidence_ids": [
-              "ev-14d28109f0536a40"
+              "ev-d5af94efc93f7123"
             ],
             "expected_value": 4000.0,
             "field_name": "salary_min",
@@ -275,7 +285,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-ba822ef65a733666",
+            "constraint_id": "con-1e89ffe6a97d04da",
             "evidence_ids": [],
             "expected_value": {
               "level": null,
@@ -289,14 +299,14 @@
             "weight": 0.07
           }
         ],
-        "context_id": "ctx-75bd8a18bd7ad758",
+        "context_id": "ctx-730e4ca4e49613fe",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-28T16:02:26.893564Z"
+        "normalized_at": "2026-07-28T20:26:28.748540Z"
       }
     },
     "SC-LT-03": {
       "active_search": {
-        "active_search_id": "as-44000f1f21d319e9",
+        "active_search_id": "as-4637d79752b0485e",
         "candidate_id": "SC-LT-03-cand",
         "candidate_state_version": 3,
         "clarification_required_fields": [],
@@ -309,10 +319,10 @@
             "ev-44cdb5f251a16fd8"
           ],
           "salary_currency": [
-            "ev-baf9cfa55a7c1083"
+            "ev-4604fee828dac998"
           ],
           "salary_min": [
-            "ev-8b08d945f6e5388d"
+            "ev-0e7d3ee9dbaa8a6d"
           ],
           "skills_have": [
             "ev-29e44fa2dcc8488a",
@@ -320,7 +330,7 @@
           ],
           "target_roles": [
             "ev-6b15859ad2bb1ae4",
-            "ev-d317f7001a161194"
+            "ev-59a7b223ed19d252"
           ],
           "work_modes": [
             "ev-35eb0e30a546fbec"
@@ -329,7 +339,7 @@
             "ev-3e756fd062e82879"
           ]
         },
-        "generated_at": "2026-07-28T16:02:27.089749Z",
+        "generated_at": "2026-07-28T20:26:28.980658Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -338,7 +348,7 @@
         ],
         "salary_currency": "MYR",
         "salary_min": 4000.0,
-        "session_id": "sess-02bea0b69503",
+        "session_id": "sess-1efeb301531f",
         "skills_have": [
           "python",
           "sql"
@@ -366,11 +376,11 @@
         "years_experience": 2.0
       },
       "job_context": {
-        "active_search_id": "as-44000f1f21d319e9",
+        "active_search_id": "as-4637d79752b0485e",
         "catalog_snapshot_id": "catalog-2026-01-v1",
         "constraints": [
           {
-            "constraint_id": "con-f7795900329ddfef",
+            "constraint_id": "con-6e55a25d97832d47",
             "evidence_ids": [],
             "expected_value": "2026-01-01",
             "field_name": "not_expired",
@@ -381,7 +391,7 @@
             "weight": 0.0
           },
           {
-            "constraint_id": "con-3810f0ffa215b81f",
+            "constraint_id": "con-b04965808b248756",
             "evidence_ids": [
               "ev-44cdb5f251a16fd8"
             ],
@@ -396,7 +406,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-74b6f10dd7e8b3c6",
+            "constraint_id": "con-36aceea24c80b915",
             "evidence_ids": [
               "ev-35eb0e30a546fbec"
             ],
@@ -411,9 +421,9 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-15583bebe6bb7d64",
+            "constraint_id": "con-c7af9d0879900d5b",
             "evidence_ids": [
-              "ev-8b08d945f6e5388d"
+              "ev-0e7d3ee9dbaa8a6d"
             ],
             "expected_value": 4000.0,
             "field_name": "salary_min",
@@ -424,7 +434,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-53a5f7f512292d61",
+            "constraint_id": "con-56934c9dd83c5e79",
             "evidence_ids": [],
             "expected_value": {
               "level": null,
@@ -438,14 +448,14 @@
             "weight": 0.07
           }
         ],
-        "context_id": "ctx-91d82b7321e548e6",
+        "context_id": "ctx-921f875115c998f7",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-28T16:02:27.090104Z"
+        "normalized_at": "2026-07-28T20:26:28.981043Z"
       }
     },
     "SC-LT-04": {
       "active_search": {
-        "active_search_id": "as-7caa47691361fc14",
+        "active_search_id": "as-c8032bfa4027d41a",
         "candidate_id": "SC-LT-04-cand",
         "candidate_state_version": 1,
         "clarification_required_fields": [],
@@ -458,10 +468,10 @@
             "ev-3bd68702dfcabcb6"
           ],
           "salary_currency": [
-            "ev-2ccfc2270ba699f2"
+            "ev-34150a594a41c864"
           ],
           "salary_min": [
-            "ev-68fa8dac0b90dcf5"
+            "ev-739b88788421bb85"
           ],
           "skills_have": [
             "ev-4037bca6ea5522f5",
@@ -469,13 +479,13 @@
           ],
           "target_roles": [
             "ev-f7585afa16c0884e",
-            "ev-7c28fd1b5cc1bdbd"
+            "ev-8e61d48704b21b02"
           ],
           "years_experience": [
             "ev-537b9b3424f5a411"
           ]
         },
-        "generated_at": "2026-07-28T16:02:27.257212Z",
+        "generated_at": "2026-07-28T20:26:29.185600Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -484,7 +494,7 @@
         ],
         "salary_currency": "MYR",
         "salary_min": 4000.0,
-        "session_id": "sess-5e16c2b25e4a",
+        "session_id": "sess-4b74fc3a5739",
         "skills_have": [
           "python",
           "sql"
@@ -510,11 +520,11 @@
         "years_experience": 3.0
       },
       "job_context": {
-        "active_search_id": "as-7caa47691361fc14",
+        "active_search_id": "as-c8032bfa4027d41a",
         "catalog_snapshot_id": "catalog-2026-01-v1",
         "constraints": [
           {
-            "constraint_id": "con-49160fbacac47883",
+            "constraint_id": "con-f13b7c5e00711dd2",
             "evidence_ids": [],
             "expected_value": "2026-01-01",
             "field_name": "not_expired",
@@ -525,7 +535,7 @@
             "weight": 0.0
           },
           {
-            "constraint_id": "con-8ed4ef9c0dec8266",
+            "constraint_id": "con-e352faeed25cc945",
             "evidence_ids": [
               "ev-3bd68702dfcabcb6"
             ],
@@ -540,9 +550,9 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-9eb649a0fc7b0fb5",
+            "constraint_id": "con-cbfe1b3f60dc2b0a",
             "evidence_ids": [
-              "ev-68fa8dac0b90dcf5"
+              "ev-739b88788421bb85"
             ],
             "expected_value": 4000.0,
             "field_name": "salary_min",
@@ -553,7 +563,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-e46a7b8478677417",
+            "constraint_id": "con-f36e670fda40a977",
             "evidence_ids": [],
             "expected_value": {
               "level": null,
@@ -567,14 +577,14 @@
             "weight": 0.07
           }
         ],
-        "context_id": "ctx-ea7e3c2165acd1a8",
+        "context_id": "ctx-a7835d2264d18a90",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-28T16:02:27.257529Z"
+        "normalized_at": "2026-07-28T20:26:29.186094Z"
       }
     },
     "SC-LT-05": {
       "active_search": {
-        "active_search_id": "as-37b56d82929019af",
+        "active_search_id": "as-671642f8d165d0e7",
         "candidate_id": "SC-LT-05-cand",
         "candidate_state_version": 1,
         "clarification_required_fields": [],
@@ -584,13 +594,13 @@
         "experience_level": null,
         "field_evidence_map": {
           "preferred_locations": [
-            "ev-82dbbb88d7bca672"
+            "ev-59b0e1babf3d1a4c"
           ],
           "salary_currency": [
-            "ev-457ffd0142ac85d7"
+            "ev-fb457ac8e4fc2130"
           ],
           "salary_min": [
-            "ev-7a21b3365dbefca5"
+            "ev-5eda59b482f26f43"
           ],
           "skills_have": [
             "ev-ab26d00728e1e601",
@@ -598,13 +608,13 @@
           ],
           "target_roles": [
             "ev-d2d0bf2486fc2c79",
-            "ev-37eafe6f34f69434"
+            "ev-aa7748f95c9360ca"
           ],
           "years_experience": [
             "ev-db1414adcc9dff10"
           ]
         },
-        "generated_at": "2026-07-28T16:02:27.423553Z",
+        "generated_at": "2026-07-28T20:26:29.370188Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -613,7 +623,7 @@
         ],
         "salary_currency": "MYR",
         "salary_min": 4000.0,
-        "session_id": "sess-5746f71649f6",
+        "session_id": "sess-25d45403c87f",
         "skills_have": [
           "python",
           "sql"
@@ -639,11 +649,11 @@
         "years_experience": 2.0
       },
       "job_context": {
-        "active_search_id": "as-37b56d82929019af",
+        "active_search_id": "as-671642f8d165d0e7",
         "catalog_snapshot_id": "catalog-2026-01-v1",
         "constraints": [
           {
-            "constraint_id": "con-976989bfa42a215d",
+            "constraint_id": "con-468080891da101ae",
             "evidence_ids": [],
             "expected_value": "2026-01-01",
             "field_name": "not_expired",
@@ -654,9 +664,9 @@
             "weight": 0.0
           },
           {
-            "constraint_id": "con-e89e7e96bb4dab12",
+            "constraint_id": "con-8306c96065f8b6a5",
             "evidence_ids": [
-              "ev-82dbbb88d7bca672"
+              "ev-59b0e1babf3d1a4c"
             ],
             "expected_value": [
               "Kuala Lumpur"
@@ -669,9 +679,9 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-261718ca98541ba1",
+            "constraint_id": "con-688171218efeb550",
             "evidence_ids": [
-              "ev-7a21b3365dbefca5"
+              "ev-5eda59b482f26f43"
             ],
             "expected_value": 4000.0,
             "field_name": "salary_min",
@@ -682,7 +692,7 @@
             "weight": 0.1
           },
           {
-            "constraint_id": "con-605de53b08db9352",
+            "constraint_id": "con-c8db8187e692be75",
             "evidence_ids": [],
             "expected_value": {
               "level": null,
@@ -696,9 +706,9 @@
             "weight": 0.07
           }
         ],
-        "context_id": "ctx-c2bc0c88eb45c3f2",
+        "context_id": "ctx-6dbafbc5b90e6591",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-28T16:02:27.424083Z"
+        "normalized_at": "2026-07-28T20:26:29.370825Z"
       }
     }
   }
