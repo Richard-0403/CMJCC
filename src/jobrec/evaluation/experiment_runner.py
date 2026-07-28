@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -18,16 +18,39 @@ from ..app_service import AppService
 from ..catalog import catalog_hash, load_catalog
 from ..config import AppConfig
 from ..domain.enums import ResponseType
+from ..orchestration.feature_flags import FeatureFlags
 from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
 from ..utils.time import to_iso, utcnow
 from .checksums import write_checksums
+from .experiment_identity import (
+    CODE_IDENTITY_FIELDS,
+    EXPERIMENT_MANIFEST_FILENAME,
+    code_identity,
+    experiment_id,
+    guard_output_dir,
+)
 from .exporters import (
     _extracted_value_view,
     _system_clarification_slot,
     trace_record,
     write_run_bundle,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..orchestration.orchestrator import TurnResult
+
+#: Termination reason recorded when the resolved variant is not allowed to continue the
+#: dialogue: ``FeatureFlags.use_multi_turn_continuation`` is off (``one_shot``), so a
+#: pending clarification is never answered and the run ends on the turn that asked it.
+#:
+#: Deliberately distinct from the loop's own exits, which describe entirely different
+#: causes: ``cannot_answer`` (the simulated user had no answer for the asked slot),
+#: ``max_turns`` (the dialogue budget was spent) and ``repeated_slot`` (the system would
+#: have re-asked an answered slot). Those three can only be reached by a variant that IS
+#: allowed to continue; this one records that continuation was never permitted, which is
+#: a property of the experiment condition rather than of the user or of the dialogue.
+TERMINATION_CONTINUATION_DISABLED = "continuation_disabled"
 
 
 def load_scenarios(path: str | Path) -> list[dict]:
@@ -56,12 +79,27 @@ class ExperimentRunner:
         self.scenarios = load_scenarios(scenarios_path)
         self.out_dir = Path(out_dir)
 
-    def run(self, variants: list[str]) -> dict[str, Any]:
-        experiment_id = "exp-" + stable_hash({
-            "variants": variants, "scenarios": [s["scenario_id"] for s in self.scenarios],
-            "config": self.config.config_hash(),
-        })[:12]
-        exp_dir = self.out_dir / experiment_id
+    def run(self, variants: list[str], allow_overwrite: bool = False) -> dict[str, Any]:
+        """Run every variant x scenario x repeat and write the experiment bundle.
+
+        The experiment id is content-addressed over the experiment inputs AND the code
+        identity (see :mod:`jobrec.evaluation.experiment_identity`), so a run of different
+        source code can never land in an older run's directory. ``allow_overwrite`` is the
+        explicit opt-in for reusing a directory that already holds a complete experiment,
+        which is how an intentional idempotent re-run is expressed; without it such a
+        write raises
+        :class:`~jobrec.evaluation.experiment_identity.ExperimentOverwriteError`.
+        """
+        identity = code_identity()
+        exp_id = experiment_id(
+            variants=variants,
+            scenario_ids=[s["scenario_id"] for s in self.scenarios],
+            config_hash=self.config.config_hash(),
+            identity=identity,
+        )
+        exp_dir = self.out_dir / exp_id
+        # Never silently replace a complete experiment (R16/R17 reproducibility freeze).
+        guard_output_dir(exp_dir, identity=identity, allow_overwrite=allow_overwrite)
         exp_dir.mkdir(parents=True, exist_ok=True)
 
         index_rows: list[dict] = []
@@ -91,7 +129,7 @@ class ExperimentRunner:
             for row in index_rows
         ]
         manifest = {
-            "experiment_id": experiment_id,
+            "experiment_id": exp_id,
             "experiment_dir": str(exp_dir),
             "variants": variants,
             "scenario_count": len(self.scenarios),
@@ -102,10 +140,14 @@ class ExperimentRunner:
             "scenarios_hash": snapshot["scenarios_hash"],
             "prompt_hash": prompt_hash(),
             "created_at": to_iso(utcnow()),
+            # Code identity of the run (commit_hash / code_version / git_dirty /
+            # source_fingerprint): what makes two experiment artifacts distinguishable
+            # offline, and what the experiment id is partly derived from.
+            **{key: identity[key] for key in CODE_IDENTITY_FIELDS},
             "artifacts": snapshot["artifacts"],
             "run_manifests": run_manifests,
         }
-        (exp_dir / "experiment_manifest.json").write_text(json.dumps(manifest, indent=2))
+        (exp_dir / EXPERIMENT_MANIFEST_FILENAME).write_text(json.dumps(manifest, indent=2))
         self._write_checksums(exp_dir)
         return manifest
 
@@ -154,6 +196,11 @@ class ExperimentRunner:
         from ..domain.enums import ExperimentVariant
 
         cfg.experiment.variant = ExperimentVariant(variant)
+        # The variant's behaviour switches, resolved through the SAME
+        # ``FeatureFlags.from_config`` the orchestrator uses on this very config, so the
+        # runner and the orchestrator can never disagree about what a variant is (never a
+        # string comparison on the variant name).
+        flags = FeatureFlags.from_config(cfg)
         # Deterministic in-memory run (no external DB dependency for experiments).
         svc = AppService(cfg, self.catalog_path)
         profile = dict(scenario["profile"])
@@ -171,9 +218,15 @@ class ExperimentRunner:
         trace: list[dict] = []
         # Structured log records of every turn, exported as log_trace.jsonl (R27.3).
         log_trace: list[dict] = []
+        # EVERY turn's result, in order. The bundle used to export only the final
+        # turn's model calls / run record, so earlier turns of a multi-turn run were
+        # absent from the archive entirely; threading the results lets the exporter
+        # write whole-run call accounting and per-turn records (R7.3/R11.1).
+        turn_results: list[TurnResult] = []
         for text in scenario.get("turns", []):
             last_result = svc.process_turn(session_id, text, scenario_id=scenario["scenario_id"])
             response_turns += 1
+            turn_results.append(last_result)
             log_trace.extend(last_result.log_trace)
             trace.append(trace_record(
                 last_result,
@@ -187,14 +240,24 @@ class ExperimentRunner:
         # as the next turn on the same session until a terminal outcome, the
         # max-turn guard, the repeated-slot guard, or an unanswerable clarification.
         # Non-clarification scenarios keep the existing single-pass behaviour.
+        #
+        # A variant whose resolved flags disable multi-turn continuation never enters the
+        # loop: the system may still ASK, but nothing is fed back, so the run ends on the
+        # asking turn. This is a gate on the shared path, not a second pipeline.
         termination_reason = self._terminal_reason(last_result)
         if last_result is not None and self._is_clarification_dependent(scenario):
-            last_result, extra_turns, termination_reason, loop_trace = (
-                self._run_clarification_loop(
-                    svc, session_id, scenario, last_result, log_sink=log_trace)
-            )
-            response_turns += extra_turns
-            trace.extend(loop_trace)
+            if self._continues_dialogue(flags):
+                last_result, extra_turns, termination_reason, loop_trace = (
+                    self._run_clarification_loop(
+                        svc, session_id, scenario, last_result,
+                        log_sink=log_trace, result_sink=turn_results)
+                )
+                response_turns += extra_turns
+                trace.extend(loop_trace)
+            elif termination_reason is None:
+                # Non-terminal (the system asked a clarification) and the condition
+                # cannot continue: record WHY the dialogue stopped here.
+                termination_reason = TERMINATION_CONTINUATION_DISABLED
 
         # Stamp the loop's termination reason onto the final record so run-level
         # metrics can read the terminal outcome from the last trace row (R7.8).
@@ -202,7 +265,8 @@ class ExperimentRunner:
             trace[-1]["termination_reason"] = termination_reason
 
         run_dir = exp_dir / variant / scenario["scenario_id"] / str(run_index)
-        write_run_bundle(last_result, run_dir, cfg, dialogue_trace=trace, log_trace=log_trace)
+        write_run_bundle(last_result, run_dir, cfg, dialogue_trace=trace,
+                         log_trace=log_trace, turn_results=turn_results)
 
         rr = last_result.run_record
         decision = last_result.decision
@@ -231,13 +295,28 @@ class ExperimentRunner:
     # ------------------------------------------------------- clarification loop
     @staticmethod
     def _is_clarification_dependent(scenario: dict) -> bool:
-        """A scenario drives the dialogue loop when it expects clarification.
+        """A scenario NEEDS clarification when its reference expects one.
 
         Determined from the scenario's ``clarification_expected`` flag (the
         ``Scenario`` reference carries the same field); every other scenario keeps
         the existing single-pass behaviour.
+
+        This is the scenario half of the loop condition only. Whether the dialogue may
+        actually continue is the variant's half -- see :meth:`_continues_dialogue`.
         """
         return bool(scenario.get("clarification_expected", False))
+
+    @staticmethod
+    def _continues_dialogue(flags: FeatureFlags) -> bool:
+        """Whether the resolved variant may continue a dialogue past a clarification.
+
+        ``use_multi_turn_continuation`` is exactly this capability, so a condition that
+        has it switched off (``one_shot``, or any variant under
+        ``memory.use_multi_turn_continuation: false``) is a genuine single-turn condition:
+        the runner never feeds a simulated answer back and the run terminates on the turn
+        that asked, with :data:`TERMINATION_CONTINUATION_DISABLED`.
+        """
+        return bool(flags.use_multi_turn_continuation)
 
     @staticmethod
     def _has_results(result) -> bool:
@@ -263,7 +342,8 @@ class ExperimentRunner:
         return "error"
 
     def _run_clarification_loop(
-        self, svc, session_id, scenario, last_result, log_sink: list[dict] | None = None
+        self, svc, session_id, scenario, last_result, log_sink: list[dict] | None = None,
+        result_sink: list | None = None,
     ):
         """Answer system clarifications until the dialogue reaches a terminal state.
 
@@ -278,7 +358,9 @@ class ExperimentRunner:
 
         When ``log_sink`` is given, each answer turn's structured log records are
         appended to it so the run bundle's ``log_trace.jsonl`` covers the whole
-        dialogue rather than only the final turn (R27.3).
+        dialogue rather than only the final turn (R27.3). ``result_sink`` does the
+        same for the turn results themselves, so the exporter can attribute model
+        calls and latency to the answer turns instead of dropping them.
 
         Returns ``(last_result, extra_turns, termination_reason, trace)`` where
         ``extra_turns`` counts the simulated answer turns fed into the session and
@@ -319,6 +401,8 @@ class ExperimentRunner:
 
             last_result = svc.process_turn(session_id, utterance, scenario_id=scenario_id)
             extra_turns += 1
+            if result_sink is not None:
+                result_sink.append(last_result)
             if log_sink is not None:
                 # Accumulate each answer turn's structured records (R27.3).
                 log_sink.extend(last_result.log_trace)

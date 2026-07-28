@@ -71,19 +71,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,eval]"
 
-      # `--python-version 3.12` is required because the installed numpy stubs use
-      # PEP 695 `type` statements, which mypy only parses for 3.12+; without it
-      # mypy aborts before checking any project file.
+      # `python_version = "3.12"` lives in [tool.mypy] in pyproject.toml (required
+      # because the installed numpy stubs use PEP 695 `type` statements, which mypy
+      # only parses for 3.12+; without it mypy aborts before checking any project
+      # file). It used to be repeated as `--python-version 3.12` here; the flag was
+      # dropped so there is a single source of truth and `mypy src` locally is
+      # byte-for-byte the command CI runs.
       #
-      # src currently carries 20 pre-existing annotation errors, so the gate is a
-      # ratchet: it fails when mypy cannot run at all and when the error count
-      # rises above the ceiling. Lower MYPY_MAX_ERRORS as errors are fixed.
+      # mypy is pinned to an exact version in the `dev` extra so this gate is
+      # reproducible: an unpinned checker changes the verdict on unchanged code
+      # whenever a new release infers more precisely.
+      #
+      # src currently carries 14 pre-existing annotation errors (identical on Linux
+      # and Windows), so the gate is a ratchet: it fails when mypy cannot run at all
+      # and when the error count rises above the ceiling. Lower MYPY_MAX_ERRORS as
+      # errors are fixed.
       - name: Type check (mypy)
         env:
-          MYPY_MAX_ERRORS: "20"
+          MYPY_MAX_ERRORS: "14"
         run: |
           set +e
-          mypy src --python-version 3.12 2>&1 | tee mypy.log
+          mypy src 2>&1 | tee mypy.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ge 2 ]; then

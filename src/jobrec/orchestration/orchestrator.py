@@ -52,6 +52,34 @@ _METHOD_LLM = "llm"
 # rung could normalize and that is preserved as an UNCONFIRMED constraint (R8.9).
 _SOURCE_NORMALIZED = "normalized"
 _SOURCE_REPAIRED = "repaired"
+
+
+def _failed_call_record(purpose: str, prompt: str, exc: BaseException,
+                        provider: object, attempt: int):
+    """A call record for a model attempt that raised (R11.1).
+
+    Carries the exception's CLASS NAME only. A transport error message can quote the
+    request -- and therefore the credential -- so the message is never recorded.
+
+    The ``call_id`` is deliberately suffixed with the attempt number so a failed
+    attempt can never occupy the replay key of the successful call that shares its
+    (purpose, prompt): :class:`~jobrec.llm.replay.ReplayProvider` indexes records by
+    ``call_id``, and a body-less failure row must not shadow a real recording.
+    """
+    from ..llm.provider import LLMCallRecord
+    from ..utils.hashing import content_id
+
+    return LLMCallRecord(
+        call_id=f"{content_id('call', purpose, prompt)}#failed{attempt}",
+        purpose=purpose,
+        prompt=prompt,
+        raw_response="",
+        parsed_ok=False,
+        latency_ms=0.0,
+        provider=getattr(provider, "name", "unknown"),
+        model=getattr(provider, "model", "unknown"),
+        metadata={"failed": True, "error": type(exc).__name__, "attempts": attempt},
+    )
 _SOURCE_RULE_FALLBACK = "rule_fallback"
 _SOURCE_UNRESOLVED = "unresolved"
 
@@ -72,6 +100,16 @@ class TurnResult:
     #: Structured log records emitted while processing this turn (R27.1-27.3);
     #: exported as ``log_trace.jsonl`` in the run bundle.
     log_trace: list[dict] = field(default_factory=list)
+    #: Every :class:`~jobrec.domain.evidence.EvidenceItem` registered in this
+    #: session's ``EvidenceStore`` as of the end of this turn; exported as
+    #: ``evidence_items.jsonl`` in the run bundle so a claim's ``evidence_ids``
+    #: can be resolved to "field X of object Y = value Z" offline.
+    #:
+    #: The store is SESSION-scoped and accumulates across turns, which is what a
+    #: claim needs: a claim made on the final turn may legitimately cite evidence
+    #: registered several turns earlier, so the dump covers the whole session
+    #: rather than only the turn that produced it.
+    evidence_items: list = field(default_factory=list)
     # extra artifacts for run-bundle export (optional)
     extracted_preferences: object | None = None
     candidate_state_before: object | None = None
@@ -161,9 +199,16 @@ class ConversationOrchestrator:
                 "intent_extraction", lambda: self._extract(text, trace=trace))
             model_calls.extend(calls)
             # Fold in prior-turn dialogue evidence when the variant permits memory.
-            # The continuation gate keeps this on the SAME shared code path: under
-            # one_shot (use_multi_turn_continuation=False) the multi-turn continuation
-            # is explicitly disabled rather than forking a separate pipeline.
+            # The continuation gate keeps this on the SAME shared code path rather than
+            # forking a pipeline. Both conjuncts are load-bearing and neither is
+            # redundant: within the five-variant matrix no variant has
+            # use_prior_dialogue=True while use_multi_turn_continuation=False, but
+            # ``memory.use_multi_turn_continuation: false`` in config resolves exactly
+            # that combination for any variant (see FeatureFlags.from_config), and this
+            # is where it takes effect -- turning continuation off then stops prior-turn
+            # evidence from being carried forward even under ``full``. The other half of
+            # the flag (never continuing a dialogue past a clarification at all) is
+            # enforced in ExperimentRunner._continues_dialogue.
             if self.flags.use_prior_dialogue and self.flags.use_multi_turn_continuation:
                 extraction = self._merge_prior_dialogue(dialogue_state, extraction)
             handoff(self.rule_extractor.name, self.memory.name, "ExtractedPreferenceSet", True)
@@ -190,7 +235,8 @@ class ConversationOrchestrator:
                     target_fields=list(getattr(clar_action, "target_fields", []) or []),
                     reason_code=getattr(clar_action, "reason_code", None),
                 )
-                response = self._clarification_response(dialogue_state, cmjcc_out.clarification_action)
+                response = self._clarification_response(
+                    dialogue_state, cmjcc_out.clarification_action, model_calls)
                 sm.to(S.EXPLAINED)
                 sm.to(S.COMPLETED)
                 result = self._finish(
@@ -353,7 +399,18 @@ class ConversationOrchestrator:
         calls: list = []
 
         def once() -> ExtractedPreferenceSet:
-            payload, record = self.provider.complete_json(prompt, purpose="intent_extraction")
+            try:
+                payload, record = self.provider.complete_json(
+                    prompt, purpose="intent_extraction")
+            except Exception as exc:
+                # A raising attempt used to leave NO record at all, because the append
+                # below only ran on success. An empty ``model_calls.jsonl`` therefore
+                # could not be distinguished from "the call died" -- two real runs were
+                # silently in that state. Record the attempt, then re-raise so the
+                # bounded retry and the rule fallback behave exactly as before.
+                calls.append(_failed_call_record(
+                    "intent_extraction", prompt, exc, self.provider, len(calls) + 1))
+                raise
             calls.append(record)
             # Lenient parse: model reliably emits field/value/strength/polarity;
             # provenance fields are defaulted so a valid response is actually used.
@@ -594,8 +651,15 @@ class ConversationOrchestrator:
             unknown_hard_constraint_count=0, filtered_reason_codes=[],
         )
 
-    def _clarification_response(self, dialogue_state, clar) -> Response:
-        # Optionally rephrase via provider (hybrid); otherwise use policy text.
+    def _clarification_response(self, dialogue_state, clar, model_calls=None) -> Response:
+        """Build the clarification response, optionally rephrased by the provider.
+
+        ``model_calls`` receives the phrasing call's record. Threading it is not
+        cosmetic: this call is a real, billed model call in hybrid mode (it fired 21+
+        times in a single experiment) and its record used to be discarded at the call
+        site, so it appeared in no artifact -- breaking call accounting, token/cost
+        totals and replay completeness for every clarification turn.
+        """
         text = clar.question_text
         if self.provider is not None and self.config.llm.mode != RunMode.DETERMINISTIC:
             from ..prompts import prompt_templates
@@ -603,7 +667,10 @@ class ConversationOrchestrator:
             prompt = (tmpl.replace("{field}", ",".join(clar.target_fields))
                           .replace("{reason}", clar.reason_code)
                           .replace("{options}", ", ".join(clar.options)))
-            text, _ = self.provider.complete_text(prompt, purpose="clarification", fallback=clar.question_text)
+            text, record = self.provider.complete_text(
+                prompt, purpose="clarification", fallback=clar.question_text)
+            if model_calls is not None:
+                model_calls.append(record)
         return Response(
             response_id=content_id("resp", clar.clarification_id, dialogue_state.version),
             session_id=dialogue_state.session_id,
@@ -664,6 +731,9 @@ class ConversationOrchestrator:
             active_search_state=active, handoffs=handoffs, evidence_log=evidence_log,
             dropped_claims=dropped, clarification=clarification, model_calls=model_calls,
             log_trace=(trace.records if trace is not None else []),
+            # Snapshot of the session-scoped evidence registry: every id a claim
+            # of this run can cite resolves inside this list (R10, R11).
+            evidence_items=self.store.all(),
         )
 
 

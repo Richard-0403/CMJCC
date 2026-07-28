@@ -395,6 +395,70 @@ _NORMALIZERS = {
 
 _SALARY_FIELDS = {"salary", "salary_min", "salary_max", "salary_range"}
 
+#: Declared **arity** contract per field: how many values ONE preference may carry.
+#:
+#: This is deliberately separate from the value-domain checks above. A normalizer
+#: answers "is this a legal work mode / location / date"; the arity contract answers
+#: "is this the right SHAPE for one stated preference". Both are needed: a real model
+#: returns ``{"field_name": "target_roles", "normalized_value": ["software engineer"]}``
+#: -- a legal role wrapped in a list -- and without an arity check that passed
+#: validation untouched and crashed a downstream consumer that expected a string.
+#:
+#: ``"scalar"`` means one preference states exactly one value (the consumer appends it
+#: to a list-valued search field, so a list here is a shape error the repair ladder can
+#: unwrap). ``"list"`` means the normalizer itself legitimately fans one utterance out
+#: into several values (skills: ``"python, sql"`` -> ``["python", "sql"]``), so the
+#: consumer must EXTEND rather than append.
+_ARITY_SCALAR = "scalar"
+_ARITY_LIST = "list"
+
+_FIELD_ARITY: dict[str, str] = {
+    # One stated value per preference, even though the search field holds a list.
+    "target_roles": _ARITY_SCALAR,
+    "preferred_locations": _ARITY_SCALAR,
+    "location": _ARITY_SCALAR,
+    "excluded_locations": _ARITY_SCALAR,
+    "excluded_roles": _ARITY_SCALAR,
+    "work_modes": _ARITY_SCALAR,
+    "work_mode": _ARITY_SCALAR,
+    "employment_types": _ARITY_SCALAR,
+    "work_authorizations": _ARITY_SCALAR,
+    "experience_level": _ARITY_SCALAR,
+    "salary_currency": _ARITY_SCALAR,
+    "years_experience": _ARITY_SCALAR,
+    "deadline": _ARITY_SCALAR,
+    "application_deadline": _ARITY_SCALAR,
+    # The normalizer fans out to many values on purpose.
+    "skills_have": _ARITY_LIST,
+    "skills": _ARITY_LIST,
+}
+
+#: Shapes that carry more than one value and therefore violate a scalar contract.
+_MULTI_VALUE_TYPES = (list, tuple, set, frozenset, dict)
+
+
+def field_arity(field_name: str) -> str | None:
+    """The declared arity of ``field_name``, or ``None`` when the field is unknown."""
+    if field_name in _SALARY_FIELDS:
+        return _ARITY_SCALAR
+    return _FIELD_ARITY.get(field_name)
+
+
+def _arity_violation(field_name: str, raw: Any) -> str | None:
+    """Why ``raw`` violates ``field_name``'s arity contract, or ``None`` when it does not.
+
+    Only multi-value containers can violate a scalar contract; scalars satisfy both
+    contracts (a one-value list field is built by appending scalars). An empty
+    container states nothing, so it is left to the ordinary "absent value" handling
+    rather than reported as a shape error.
+    """
+    if _FIELD_ARITY.get(field_name) != _ARITY_SCALAR:
+        return None
+    if isinstance(raw, _MULTI_VALUE_TYPES) and len(raw) > 0:
+        return (f"{field_name}: expected a single value, got "
+                f"{type(raw).__name__} with {len(raw)} item(s)")
+    return None
+
 
 def validate_field(field_name: str, raw: Any) -> FieldResult:
     """Validate/normalize a single field value, never raising.
@@ -402,17 +466,37 @@ def validate_field(field_name: str, raw: Any) -> FieldResult:
     A present value that cannot be normalized produces ``ok=False`` with a
     structured warning (the caller preserves the stated constraint rather than
     dropping it silently).
+
+    Two independent checks run here. The **value domain** is checked by the field's
+    normalizer (legal work mode, resolvable location, parsable date, ...). The
+    **arity** is checked against :data:`_FIELD_ARITY`: a preference that states one
+    value must not arrive as a container. Reporting an arity violation as ``ok=False``
+    is what lets the orchestrator's existing repair rung unwrap a single-element list
+    before anything downstream sees it; previously such a value was returned
+    ``ok=True`` untouched and crashed the active-search builder.
     """
+    arity_warning = _arity_violation(field_name, raw)
+
     if field_name in _SALARY_FIELDS:
         value, warnings = normalize_salary(raw)
         recovered = value.get("min_salary") is not None or value.get("max_salary") is not None
         ok = recovered or raw is None
         return FieldResult(field_name, value, ok, warnings)
 
+    if arity_warning is not None:
+        # Shape is wrong for a single-valued preference: hand the raw value back so the
+        # repair rung can unwrap it, and say why rather than normalizing a container.
+        return FieldResult(field_name, raw, False, [arity_warning])
+
     normalizer = _NORMALIZERS.get(field_name)
     if normalizer is None:
-        # No dedicated normalizer: pass through unchanged (still total).
-        return FieldResult(field_name, raw, True, [])
+        # No dedicated normalizer: pass through unchanged (still total). An entirely
+        # unknown field name is passed through too -- it may be a model hallucination
+        # that the consumer will discard -- but it is reported so it cannot vanish
+        # without trace.
+        warnings = ([] if field_name in _FIELD_ARITY
+                    else [f"{field_name}: unknown field, passed through unvalidated"])
+        return FieldResult(field_name, raw, True, warnings)
 
     value, warnings = normalizer(raw)
     if normalizer is normalize_skills:

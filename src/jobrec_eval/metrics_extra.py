@@ -11,6 +11,23 @@ from jobrec.domain.enums import ConstraintOutcome, ConstraintStrength
 
 from .relevance import grade_lookup
 
+# --------------------------------------------------------------------- shared helpers
+_TRUTHY_STRINGS = {"true", "1", "yes", "y", "t"}
+
+
+def _as_bool(value) -> bool:
+    """Coerce a cell (bool / int / float / str / NaN) to a strict boolean.
+
+    Strings are matched case-insensitively against a small truthy set so a
+    ``run_metrics`` frame reloaded from CSV (where booleans round-trip as text)
+    behaves the same as one built in-memory. Missing values (NaN/None) are False.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUTHY_STRINGS
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    return bool(value)
+
 
 def per_constraint_compliance(computer, bundles) -> pd.DataFrame:
     """Compliance of recommended jobs per hard-constraint field, per variant.
@@ -74,80 +91,262 @@ def no_match_metrics(run_metrics: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def clarification_metrics(run_metrics: pd.DataFrame) -> pd.DataFrame:
-    """Clarification precision / recall per variant.
-
-    - Precision = clarifications on scenarios that expected clarification AND
-      targeting an acceptable slot / all clarification responses.
-    - Recall = scenarios expecting clarification that got a (useful) one /
-      scenarios expecting clarification.
-    """
-    rows = []
-    for variant, sub in run_metrics.groupby("variant"):
-        clar = sub[sub["response_type"] == "clarification"]
-        expected = sub[sub["clarification_expected"]]
-
-        def useful(row) -> bool:
-            if not row["clarification_expected"]:
-                return False
-            slots = set(str(row.get("acceptable_slots", "")).split(";")) - {""}
-            targets = set(str(row.get("clarification_target", "")).split(";")) - {""}
-            return (not slots) or bool(slots & targets)
-
-        useful_count = int(sub.apply(useful, axis=1).sum()) if len(sub) else 0
-        precision = (useful_count / len(clar)) if len(clar) else None
-        recall = (useful_count / len(expected)) if len(expected) else None
-        rows.append({
-            "variant": variant, "clarifications": len(clar),
-            "expected_clarification": len(expected), "useful": useful_count,
-            "precision": precision, "recall": recall,
-        })
-    return pd.DataFrame(rows)
-
-
-
-# A penalty large enough to dominate any turn/unnecessary-ask contribution for
-# realistic runs (turns are bounded by ExperimentConfig.max_dialogue_turns, and
-# the number of asked slots is small). This guarantees the R7.5 monotonicity
-# invariant: a run that SKIPS a necessary clarification can never receive a
-# higher efficiency score than one that asked it, regardless of turn counts.
+# ------------------------------------------------- R7 clarification (dialogue-level)
+# Three penalty tiers, each an order of magnitude apart so the tier ALWAYS decides the
+# ranking before turn counts can (turns are bounded by ExperimentConfig.max_dialogue_turns
+# and the number of asked slots is small, so the wasted-ask/turn term of one run stays in
+# the single digits):
+#
+#   _UNNECESSARY_PENALTY (1e0)  -- one wasted ask, comparable to one extra turn.
+#   _UNRESOLVED_PENALTY  (1e3)  -- the dialogue never reached a terminal answer.
+#   _SKIP_PENALTY        (1e6)  -- a necessary clarification was never asked.
+#
+# Together they give the per-run ordering
+#
+#   asked & resolved  >  asked & abandoned  >  necessary clarification skipped
+#
+# regardless of turn counts. The first inequality is why _UNRESOLVED_PENALTY exists: a
+# variant that asks the right question and then abandons the dialogue (the dialogue loop
+# terminating on ``continuation_disabled``, ``max_turns``, ``cannot_answer`` or
+# ``repeated_slot``) used to look MORE efficient than one that asked and answered, simply
+# because its dialogue was one turn shorter. Abandoning a dialogue is not efficiency, so it
+# can no longer be rewarded. The second inequality is the R7.5 monotonicity invariant: a run
+# that SKIPS a necessary clarification can never receive a higher efficiency score than one
+# that asked it, regardless of turn counts.
 _SKIP_PENALTY = 1_000_000.0
+_UNRESOLVED_PENALTY = 1_000.0
 _UNNECESSARY_PENALTY = 1.0
+
+#: Per-run columns naming the slots a run asked about. ``clarification_asked_slots`` is
+#: the trace-derived set of ALL asks across the dialogue (added by ``metrics._one``);
+#: ``clarification_target`` is the final pending ask, kept for backward compatibility.
+#: Their union is what the dialogue asked about, so a frame carrying either column (or a
+#: frame reloaded from an older CSV) is scored the same way.
+_ASKED_SLOT_COLUMNS = ("clarification_asked_slots", "clarification_target")
+
+#: Per-run boolean columns describing the dialogue, all optional so pre-trace frames
+#: still work: whether the system asked, whether the user answered, whether a slot was
+#: re-asked.
+_ASKED_COLUMN = "clarification_asked"
+_ANSWERED_COLUMN = "clarification_answered"
+_REPEATED_COLUMN = "clarification_repeated_slot"
+
+#: Per-run column carrying the FINAL response of the dialogue, and the value that means the
+#: run ended while still asking. ``jobrec.evaluation.experiment_runner`` only leaves a
+#: clarification as the final response when the dialogue never reached a terminal answer, so
+#: this one value covers every unresolved termination (``continuation_disabled``,
+#: ``max_turns``, ``cannot_answer``, ``repeated_slot``) without naming any of them.
+_RESPONSE_TYPE_COLUMN = "response_type"
+_CLARIFICATION_RESPONSE = "clarification"
+
+
+def _is_clarification_response(row) -> bool:
+    """Is the run's FINAL recorded response a clarification (a still-pending question)?
+
+    Compared case-insensitively on the text so a frame reloaded from CSV behaves like one
+    built in memory; a missing column or value is False (no evidence either way).
+    """
+    value = row.get(_RESPONSE_TYPE_COLUMN)
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    return str(value).strip().lower() == _CLARIFICATION_RESPONSE
+
+_CLARIFICATION_COLUMNS = [
+    "variant", "runs", "clarifications", "expected_clarification", "useful",
+    "asked_clarifications", "necessary_asked", "unnecessary_asked", "answered", "repeated",
+    "precision", "recall", "necessary_recall", "useful_rate", "unnecessary_rate",
+    "repeated_question_rate", "answered_rate",
+]
 
 
 def _slot_set(value) -> set[str]:
-    """Parse a ``;``-joined slot string into a set (dropping empties)."""
-    return set(str(value or "").split(";")) - {""}
+    """Parse a ``;``-joined slot string into a set (dropping empties).
+
+    Missing values are empty sets: an empty slot column round-trips through CSV as
+    ``NaN``, which must never be read as a slot literally named ``nan``.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return set()
+    return set(str(value).split(";")) - {""}
 
 
-def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
-    """Necessary / unnecessary clarification classification and efficiency per variant.
+def _asked_slots(row) -> set[str]:
+    """Every slot the run asked about, from whichever slot columns the frame carries."""
+    slots: set[str] = set()
+    for column in _ASKED_SLOT_COLUMNS:
+        slots |= _slot_set(row.get(column))
+    return slots
 
-    Each asked clarification slot (``clarification_target``) is classified against
-    the scenario's ``acceptable_slots``:
 
-    - **Necessary** — the slot IS an acceptable slot (the reference says the
-      answer is required to reach the correct outcome).
-    - **Unnecessary** — the slot was asked but is NOT an acceptable slot (a wasted
-      turn).
+def _asked_clarification(row) -> bool:
+    """Did this run ask a clarification anywhere in its dialogue? (R7.3)
 
-    A run "misses" a necessary clarification when the scenario expected a
-    clarification (``clarification_expected``) over a non-empty ``acceptable_slots``
-    set, yet none of the asked slots was acceptable (including the case where the
-    run asked nothing and guessed instead).
+    Any recorded signal counts: the trace-derived ``clarification_asked`` flag, a
+    recorded asked slot, or a final response of ``clarification`` (the only signal older
+    frames carry).
+    """
+    return bool(_as_bool(row.get(_ASKED_COLUMN)) or _asked_slots(row)
+                or _is_clarification_response(row))
 
-    Efficiency (higher = more efficient) is computed per run as
-    ``-turns - _UNNECESSARY_PENALTY * unnecessary_asked``, so fewer turns and fewer
-    wasted asks score better. A run that missed a necessary clarification has
-    ``_SKIP_PENALTY`` subtracted, which — because turn counts and ask counts are
-    bounded well below ``_SKIP_PENALTY`` — guarantees the R7.5 monotonicity rule:
-    skipping a necessary clarification is NEVER scored as more efficient than
-    asking it. The per-variant ``efficiency_score`` is the mean of the per-run
-    scores.
 
-    ``turns`` is taken from ``response_turns`` when present (added by tasks
-    10.2/10.3); otherwise it falls back to ``turn_count`` and finally to ``1`` when
-    neither is available, so existing callers/columns are never broken.
+def _dialogue_unresolved(row) -> bool:
+    """Did this run's dialogue end without ever reaching a terminal answer? (R7.4/R7.5)
+
+    The signal is the FINAL response still being a clarification. The dialogue loop in
+    ``jobrec.evaluation.experiment_runner`` only stops on a terminal response
+    (recommendation / no-match / error) or on a guard firing while the pending question is
+    still open, so "the last thing the system produced is a question" is exactly the set of
+    unresolved dialogues -- ``continuation_disabled``, ``max_turns``, ``cannot_answer`` and
+    ``repeated_slot`` alike, plus any future guard, with no termination reason enumerated
+    here.
+
+    It is deliberately NOT ``clarification_answered``: the simulated user does answer in the
+    ``repeated_slot`` case, and the dialogue is unresolved all the same. It is also not
+    ``task_success``, which additionally folds in ranking/grounding quality and would
+    conflate "abandoned the dialogue" with "answered badly" (measured elsewhere).
+
+    It is likewise NOT ``casestudies.DIALOGUE_NOT_CONTINUED_REASONS``: that constant
+    deliberately names one reason (``continuation_disabled``) to attribute a case study to
+    the continuation mechanism, which is the opposite of what is needed here -- scoring must
+    treat every abandoned dialogue alike, so this predicate diverges from it on purpose
+    rather than reusing an enumeration that would special-case a single variant's reason.
+
+    A frame with no ``response_type`` column carries no evidence either way and is treated
+    as resolved, so pre-trace frames score exactly as before.
+    """
+    return _is_clarification_response(row)
+
+
+def _classify_asks(row) -> tuple[int, int, bool]:
+    """Classify one run's asks: ``(necessary, unnecessary, missed_necessary)`` (R7.4).
+
+    Each asked slot is Necessary when it IS one of the scenario's ``acceptable_slots``
+    (the reference says the answer is required to reach the correct outcome) and
+    Unnecessary otherwise (a wasted turn). A run *misses* a necessary clarification when
+    the scenario expected one over a non-empty ``acceptable_slots`` set yet no acceptable
+    slot was asked -- including the case where it asked nothing and guessed instead.
+    """
+    acceptable = _slot_set(row.get("acceptable_slots"))
+    asked = _asked_slots(row)
+    necessary = len(asked & acceptable)
+    unnecessary = len(asked - acceptable)
+    missed = (_as_bool(row.get("clarification_expected")) and bool(acceptable)
+              and necessary == 0)
+    return necessary, unnecessary, missed
+
+
+def _useful_ask(row) -> bool:
+    """Was this run's clarification useful? (R7.4)
+
+    Useful means the run actually asked, the scenario needed a clarification, and the
+    target was an acceptable slot (an empty ``acceptable_slots`` set leaves the target
+    unconstrained). A clarification asked where none was needed is never useful.
+    """
+    if not _asked_clarification(row) or not _as_bool(row.get("clarification_expected")):
+        return False
+    necessary, _unnecessary, missed = _classify_asks(row)
+    return bool(necessary) or not missed
+
+
+def clarification_metrics(run_metrics: pd.DataFrame) -> pd.DataFrame:
+    """Clarification precision / recall and dialogue-level rates per variant (R7.3/R7.4).
+
+    Everything is derived from the whole dialogue rather than the final response: the
+    per-run columns ``clarification_asked`` / ``clarification_asked_slots`` /
+    ``clarification_answered`` / ``clarification_repeated_slot`` come from
+    ``dialogue_trace.jsonl`` (see :func:`jobrec_eval.metrics.dialogue_view`), so a run that
+    asked the right question and then recommended is credited instead of scoring 0.
+    Frames that predate those columns fall back to the final response and
+    ``clarification_target``, so older CSVs still tabulate.
+
+    Run-level columns:
+
+    - ``clarifications`` — runs that asked a clarification at any point (the precision
+      denominator), ``expected_clarification`` — runs whose scenario expected one.
+    - ``useful`` — runs whose ask was necessary; ``precision`` = ``useful`` over runs that
+      asked; ``recall`` / ``necessary_recall`` — the same necessary-clarification recall
+      over the scenarios that expected one (``recall`` is the legacy column name).
+    - ``answered_rate`` — asking runs whose clarification the simulated user answered;
+      ``repeated_question_rate`` — asking runs that re-asked a slot (or tripped the
+      repeated-slot guard). ``repeated_question_rate`` is ``None`` when the frame carries
+      no repeat column at all, rather than an unfounded 0.0.
+
+    Ask-level columns count individual asked slots, so a run that asked two slots
+    contributes two: ``asked_clarifications``, ``necessary_asked``, ``unnecessary_asked``
+    and their shares ``useful_rate`` / ``unnecessary_rate``.
+
+    Every rate is ``None`` on an empty denominator, matching the convention of the other
+    metrics in this module (never a misleading 0.0 or 1.0).
+    """
+    has_repeated = _REPEATED_COLUMN in run_metrics.columns
+    rows = []
+    for variant, sub in run_metrics.groupby("variant"):
+        asked_runs = useful_runs = answered_runs = repeated_runs = 0
+        necessary = unnecessary = 0
+        expected = int(sub["clarification_expected"].map(_as_bool).sum())
+        for _, row in sub.iterrows():
+            n_necessary, n_unnecessary, _missed = _classify_asks(row)
+            if not _asked_clarification(row):
+                continue
+            asked_runs += 1
+            necessary += n_necessary
+            unnecessary += n_unnecessary
+            useful_runs += int(_useful_ask(row))
+            answered_runs += int(_as_bool(row.get(_ANSWERED_COLUMN)))
+            repeated_runs += int(_as_bool(row.get(_REPEATED_COLUMN)))
+
+        asks = necessary + unnecessary
+        recall = (useful_runs / expected) if expected else None
+        rows.append({
+            "variant": variant,
+            "runs": len(sub),
+            "clarifications": asked_runs,
+            "expected_clarification": expected,
+            "useful": useful_runs,
+            "asked_clarifications": asks,
+            "necessary_asked": necessary,
+            "unnecessary_asked": unnecessary,
+            "answered": answered_runs,
+            "repeated": repeated_runs if has_repeated else None,
+            "precision": (useful_runs / asked_runs) if asked_runs else None,
+            "recall": recall,
+            "necessary_recall": recall,
+            "useful_rate": (necessary / asks) if asks else None,
+            "unnecessary_rate": (unnecessary / asks) if asks else None,
+            "repeated_question_rate": ((repeated_runs / asked_runs)
+                                       if has_repeated and asked_runs else None),
+            "answered_rate": (answered_runs / asked_runs) if asked_runs else None,
+        })
+    return pd.DataFrame(rows, columns=_CLARIFICATION_COLUMNS)
+
+
+def clarification_efficiency_per_run(run_metrics: pd.DataFrame) -> pd.Series:
+    """Per-run clarification efficiency score (higher = more efficient) (R7.4/R7.5).
+
+    The single definition of the score, shared by :func:`clarification_efficiency` (which
+    averages it per variant) and by the ``clarification_efficiency`` column of
+    ``run_metrics``, so the two can never drift apart. One run scores
+
+    ``-turns - _UNNECESSARY_PENALTY * unnecessary_asked``
+
+    minus :data:`_UNRESOLVED_PENALTY` when the dialogue never reached a terminal answer
+    (:func:`_dialogue_unresolved`) and minus :data:`_SKIP_PENALTY` when the run missed a
+    necessary clarification. Because turn counts and ask counts are bounded far below both
+    penalties, and the two penalties are three orders of magnitude apart, the tier always
+    decides the ranking before turn counts can:
+
+    ``asked & resolved  >  asked & abandoned  >  necessary clarification skipped``
+
+    The right-hand inequality is the R7.5 monotonicity rule (skipping a necessary
+    clarification is NEVER scored as more efficient than asking it). The left-hand one says
+    a shorter dialogue cannot buy efficiency by abandoning the question it asked: a run that
+    asked the necessary slot but ended still asking (continuation disabled, turn cap,
+    unanswerable, repeated slot) never out-scores one that asked and then answered, however
+    many turns the answering run needed.
+
+    ``turns`` is taken from ``response_turns`` when present (the dialogue-trace turn
+    count), otherwise from ``turn_count``, and finally ``1`` when neither is available, so
+    frames written before the trace columns existed still score.
     """
     has_response_turns = "response_turns" in run_metrics.columns
     has_turn_count = "turn_count" in run_metrics.columns
@@ -159,38 +358,141 @@ def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
             return float(row["turn_count"])
         return 1.0
 
+    def _score(row) -> float:
+        _necessary, unnecessary, missed = _classify_asks(row)
+        score = -_turns(row) - _UNNECESSARY_PENALTY * unnecessary
+        if _dialogue_unresolved(row):
+            score -= _UNRESOLVED_PENALTY
+        return score - _SKIP_PENALTY if missed else score
+
+    if run_metrics.empty:
+        return pd.Series(dtype=float)
+    return pd.Series([_score(row) for _, row in run_metrics.iterrows()],
+                     index=run_metrics.index, dtype=float)
+
+
+#: Columns of the :func:`clarification_efficiency` table. The first five are the original
+#: classification/score columns plus ``asked_unresolved``, which sits next to
+#: ``efficiency_score`` so the score is always read beside the number of dialogues the
+#: variant abandoned; the ``*_response_turns`` block is the response-turn distribution the
+#: report reads for its median/IQR figures.
+_CLARIFICATION_EFFICIENCY_COLUMNS = [
+    "variant", "runs", "necessary_asked", "necessary_missed", "unnecessary_asked",
+    "asked_unresolved", "efficiency_score", "response_turns_n", "median_response_turns",
+    "q1_response_turns", "q3_response_turns", "iqr_response_turns",
+]
+
+#: Per-run dialogue turn count the response-turn distribution is computed from. Deliberately
+#: NOT falling back to ``turn_count``: the distribution describes how many turns the
+#: dialogue needed, which only the trace-derived column measures, and a bundle without a
+#: trace must read N/A rather than borrow another column's number.
+_RESPONSE_TURNS_COLUMN = "response_turns"
+
+
+def _quartiles(values: list[float]) -> tuple[float | None, float | None]:
+    """``(Q1, Q3)`` of ``values``, or ``(None, None)`` when empty.
+
+    Each hinge is the :func:`_median` of one half of the sorted sample, with the overall
+    median excluded from both halves for an odd sample size (the exclusive convention). A
+    single observation is its own Q1 and Q3, so the IQR of one run is 0.0 rather than
+    undefined.
+    """
+    if not values:
+        return None, None
+    ordered = sorted(float(v) for v in values)
+    n = len(ordered)
+    half = n // 2
+    lower = ordered[:half]
+    upper = ordered[half:] if n % 2 == 0 else ordered[half + 1:]
+    q1 = _median(lower) if lower else float(ordered[0])
+    q3 = _median(upper) if upper else float(ordered[-1])
+    return q1, q3
+
+
+def _response_turn_values(run_metrics: pd.DataFrame) -> list[float]:
+    """Every recorded ``response_turns`` value in ``run_metrics`` (missing ones dropped).
+
+    Bundles without a dialogue trace carry ``response_turns = None``, and a frame written
+    before the column existed carries no column at all; both yield an empty list, which the
+    callers turn into ``None`` rather than a fabricated 0.
+    """
+    if _RESPONSE_TURNS_COLUMN not in run_metrics.columns:
+        return []
+    return [float(v) for v in run_metrics[_RESPONSE_TURNS_COLUMN].dropna().tolist()]
+
+
+def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
+    """Necessary / unnecessary clarification classification and efficiency per variant.
+
+    Asks are classified by :func:`_classify_asks` over every slot the dialogue asked about
+    (``clarification_asked_slots`` when the trace-derived column is present, else the final
+    ``clarification_target``):
+
+    - **Necessary** — the slot IS an acceptable slot (the reference says the
+      answer is required to reach the correct outcome).
+    - **Unnecessary** — the slot was asked but is NOT an acceptable slot (a wasted
+      turn).
+
+    A run "misses" a necessary clarification when the scenario expected a
+    clarification (``clarification_expected``) over a non-empty ``acceptable_slots``
+    set, yet none of the asked slots was acceptable (including the case where the
+    run asked nothing and guessed instead).
+
+    The per-variant ``efficiency_score`` is the mean of the per-run scores produced by
+    :func:`clarification_efficiency_per_run` -- the single definition of the score, which
+    keeps the R7.5 monotonicity invariant (skipping a necessary clarification is never
+    scored more efficient than asking it) and the companion rule that abandoning a dialogue
+    after asking is never scored more efficient than asking and answering.
+    ``None`` when the variant has no runs.
+
+    ``asked_unresolved`` makes that second rule auditable: it counts the runs that asked a
+    clarification and then ended with the question still pending (:func:`_dialogue_unresolved`
+    -- continuation disabled, turn cap, unanswerable, repeated slot). It is reported NEXT TO
+    the score so a variant whose score is depressed by abandoned dialogues can be read as
+    such, and so a high score can never be mistaken for good behaviour while this count is
+    non-zero.
+
+    The ``*_response_turns`` columns carry the response-turn DISTRIBUTION of the variant,
+    which is what makes the score interpretable jointly with task success (R7.4): asking
+    fewer questions is only efficiency when the outcome is still correct, and the score
+    already encodes that through its skip penalty.
+
+    - ``response_turns_n`` — runs with a recorded ``response_turns`` value (the
+      denominator of the distribution; runs whose bundle has no dialogue trace are
+      excluded).
+    - ``median_response_turns`` / ``q1_response_turns`` / ``q3_response_turns`` /
+      ``iqr_response_turns`` — the median, the two hinges from :func:`_quartiles` and
+      ``Q3 − Q1``. All ``None`` when the variant recorded no turn counts, matching the
+      None-on-empty convention of this module.
+    """
     rows = []
     for variant, sub in run_metrics.groupby("variant"):
-        necessary_asked = necessary_missed = unnecessary_asked = 0
-        efficiencies: list[float] = []
+        necessary_asked = necessary_missed = unnecessary_asked = asked_unresolved = 0
         for _, row in sub.iterrows():
-            acceptable = _slot_set(row.get("acceptable_slots"))
-            asked = _slot_set(row.get("clarification_target"))
-            n_necessary = len(asked & acceptable)
-            n_unnecessary = len(asked - acceptable)
-            missed = bool(row.get("clarification_expected")) and bool(acceptable) \
-                and n_necessary == 0
-
+            n_necessary, n_unnecessary, missed = _classify_asks(row)
             necessary_asked += n_necessary
             unnecessary_asked += n_unnecessary
-            if missed:
-                necessary_missed += 1
+            necessary_missed += int(missed)
+            asked_unresolved += int(_asked_clarification(row) and _dialogue_unresolved(row))
 
-            eff = -_turns(row) - _UNNECESSARY_PENALTY * n_unnecessary
-            if missed:
-                eff -= _SKIP_PENALTY
-            efficiencies.append(eff)
-
+        efficiencies = clarification_efficiency_per_run(sub)
+        turns = _response_turn_values(sub)
+        q1, q3 = _quartiles(turns)
         rows.append({
             "variant": variant,
             "runs": len(sub),
             "necessary_asked": necessary_asked,
             "necessary_missed": necessary_missed,
             "unnecessary_asked": unnecessary_asked,
-            "efficiency_score": (sum(efficiencies) / len(efficiencies))
-            if efficiencies else None,
+            "asked_unresolved": asked_unresolved,
+            "efficiency_score": float(efficiencies.mean()) if len(efficiencies) else None,
+            "response_turns_n": len(turns),
+            "median_response_turns": _median(turns),
+            "q1_response_turns": q1,
+            "q3_response_turns": q3,
+            "iqr_response_turns": (q3 - q1) if (q1 is not None and q3 is not None) else None,
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=_CLARIFICATION_EFFICIENCY_COLUMNS)
 
 
 # --------------------------------------------------------------- R10 failure-path rates
@@ -201,28 +503,60 @@ def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
 # it has no data to average over, matching the None-on-empty convention used by
 # ``no_match_metrics`` / ``per_constraint_compliance`` above.
 
-_TRUTHY_STRINGS = {"true", "1", "yes", "y", "t"}
-
-
-def _as_bool(value) -> bool:
-    """Coerce a cell (bool / int / float / str / NaN) to a strict boolean.
-
-    Strings are matched case-insensitively against a small truthy set so a
-    ``run_metrics`` frame reloaded from CSV (where booleans round-trip as text)
-    behaves the same as one built in-memory. Missing values (NaN/None) are False.
-    """
-    if isinstance(value, str):
-        return value.strip().lower() in _TRUTHY_STRINGS
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return False
-    return bool(value)
-
-
 def _bool_mask(run_metrics: pd.DataFrame, column: str) -> pd.Series | None:
     """Return a boolean Series for ``column`` or ``None`` when it is absent."""
     if column not in run_metrics.columns:
         return None
     return run_metrics[column].map(_as_bool)
+
+
+def _flag_counts(run_metrics: pd.DataFrame, condition: str, outcome: str,
+                 ) -> tuple[int, int] | None:
+    """``(numerator, denominator)`` for ``outcome`` among rows where ``condition`` holds.
+
+    ``None`` when either column is absent, so a frame without the instrumentation reads
+    as N/A instead of reporting a rate over an assumed-false column. The numerator
+    requires BOTH flags, so an outcome recorded without its condition is never
+    over-counted.
+    """
+    cond = _bool_mask(run_metrics, condition)
+    out = _bool_mask(run_metrics, outcome)
+    if cond is None or out is None:
+        return None
+    return int((cond & out).sum()), int(cond.sum())
+
+
+def _claim_counts(bundles) -> tuple[int, int]:
+    """``(supported, factual)`` claim counts across ``bundles`` (the grounding fraction).
+
+    ``non_factual`` claims are excluded from the denominator and a claim counts as
+    supported only when its ``support_status`` is exactly ``"supported"``, mirroring the
+    per-run ``grounding`` definition in ``metrics.py``.
+    """
+    total = supported = 0
+    for b in bundles:
+        for c in b.claims:
+            if c.get("claim_type") == "non_factual":
+                continue
+            total += 1
+            if c.get("support_status") == "supported":
+                supported += 1
+    return supported, total
+
+
+def _handoff_counts(bundles) -> tuple[int, int]:
+    """``(valid_completed, attempted)`` handoff counts across ``bundles``.
+
+    A handoff succeeds only when it both passed validation and reached
+    ``status == "completed"``, the same rule as the per-run ``handoff_success`` metric.
+    """
+    total = valid = 0
+    for b in bundles:
+        for h in b.handoffs:
+            total += 1
+            if h.get("validation_passed") and h.get("status") == "completed":
+                valid += 1
+    return valid, total
 
 
 def failure_detection_rate(run_metrics: pd.DataFrame) -> float | None:
@@ -240,14 +574,10 @@ def failure_detection_rate(run_metrics: pd.DataFrame) -> float | None:
     ``None`` when the required columns are missing or no failures were injected
     (empty denominator), so a happy-path-only set reads as N/A rather than 1.000.
     """
-    injected = _bool_mask(run_metrics, "failure_injected")
-    detected = _bool_mask(run_metrics, "failure_detected")
-    if injected is None or detected is None:
+    counts = _flag_counts(run_metrics, "failure_injected", "failure_detected")
+    if counts is None or counts[1] == 0:
         return None
-    n_injected = int(injected.sum())
-    if n_injected == 0:
-        return None
-    return int((injected & detected).sum()) / n_injected
+    return counts[0] / counts[1]
 
 
 def recovery_success_rate(run_metrics: pd.DataFrame) -> float | None:
@@ -263,14 +593,10 @@ def recovery_success_rate(run_metrics: pd.DataFrame) -> float | None:
     ``None`` when the columns are missing or nothing recoverable occurred, so the
     rate is well-defined and never silently reported as a perfect 1.000.
     """
-    recoverable = _bool_mask(run_metrics, "recoverable")
-    recovered = _bool_mask(run_metrics, "recovered")
-    if recoverable is None or recovered is None:
+    counts = _flag_counts(run_metrics, "recoverable", "recovered")
+    if counts is None or counts[1] == 0:
         return None
-    n_recoverable = int(recoverable.sum())
-    if n_recoverable == 0:
-        return None
-    return int((recoverable & recovered).sum()) / n_recoverable
+    return counts[0] / counts[1]
 
 
 def grounding_rate(bundles) -> float | None:
@@ -283,14 +609,7 @@ def grounding_rate(bundles) -> float | None:
     or flagged, so the rate is strictly ``< 1.000`` (R10.9). Returns ``None`` when
     there are no factual claims to score.
     """
-    total = supported = 0
-    for b in bundles:
-        for c in b.claims:
-            if c.get("claim_type") == "non_factual":
-                continue
-            total += 1
-            if c.get("support_status") == "supported":
-                supported += 1
+    supported, total = _claim_counts(bundles)
     return (supported / total) if total else None
 
 
@@ -303,13 +622,69 @@ def handoff_success_rate(bundles) -> float | None:
     rate strictly below ``1.000`` over a failure-containing set (R10.9). Returns
     ``None`` when no handoffs were recorded.
     """
-    total = valid = 0
-    for b in bundles:
-        for h in b.handoffs:
-            total += 1
-            if h.get("validation_passed") and h.get("status") == "completed":
-                valid += 1
+    valid, total = _handoff_counts(bundles)
     return (valid / total) if total else None
+
+
+#: Tidy long-form shape of :func:`failure_metrics`: one row per rate, so the CSV stays
+#: readable as more failure-path rates are added and an absent rate is a blank ``value``
+#: cell rather than a missing column.
+_FAILURE_METRIC_COLUMNS = ["metric", "source", "numerator", "denominator", "value"]
+
+#: Row order and provenance of the four R10 rates, kept explicit so the CSV is stable.
+_FAILURE_METRIC_ROWS = (
+    ("failure_detection_rate", "run_metrics"),
+    ("recovery_success_rate", "run_metrics"),
+    ("grounding_rate", "run_bundles"),
+    ("handoff_success_rate", "run_bundles"),
+)
+
+
+def failure_metrics(run_metrics: pd.DataFrame, bundles) -> pd.DataFrame:
+    """The four R10 failure-path rates as one tidy table (R10.8/10.9).
+
+    One row per rate with columns ``metric``, ``source`` (``run_metrics`` for the
+    injection/recovery flags, ``run_bundles`` for the claim/handoff artifacts),
+    ``numerator``, ``denominator`` and ``value``:
+
+    - ``failure_detection_rate`` — detected over injected faults.
+    - ``recovery_success_rate`` — recovered over recoverable faults.
+    - ``grounding_rate`` — supported over factual claims.
+    - ``handoff_success_rate`` — validated-and-completed over attempted handoffs.
+
+    ``value`` comes from the four public rate functions above, so the published number
+    has exactly one definition; the numerator/denominator columns are what let the report
+    say *why* a rate is N/A. A ``denominator`` of 0 means the loaded runs contained
+    nothing to measure (no fault was injected, no claim was made), and ``value`` is then
+    ``None`` — never a misleading 0.0 or 1.000. A ``denominator`` of ``None`` means the
+    frame does not carry the instrumentation columns at all.
+    """
+    detection = _flag_counts(run_metrics, "failure_injected", "failure_detected")
+    recovery = _flag_counts(run_metrics, "recoverable", "recovered")
+    supported, factual = _claim_counts(bundles)
+    valid_handoffs, attempted_handoffs = _handoff_counts(bundles)
+
+    counts: dict[str, tuple[int | None, int | None]] = {
+        "failure_detection_rate": detection or (None, None),
+        "recovery_success_rate": recovery or (None, None),
+        "grounding_rate": (supported, factual),
+        "handoff_success_rate": (valid_handoffs, attempted_handoffs),
+    }
+    values: dict[str, float | None] = {
+        "failure_detection_rate": failure_detection_rate(run_metrics),
+        "recovery_success_rate": recovery_success_rate(run_metrics),
+        "grounding_rate": grounding_rate(bundles),
+        "handoff_success_rate": handoff_success_rate(bundles),
+    }
+    rows = []
+    for metric, source in _FAILURE_METRIC_ROWS:
+        numerator, denominator = counts[metric]
+        rows.append({
+            "metric": metric, "source": source,
+            "numerator": numerator, "denominator": denominator,
+            "value": values[metric],
+        })
+    return pd.DataFrame(rows, columns=_FAILURE_METRIC_COLUMNS)
 
 
 # --------------------------------------------------- R13 extraction-source statistics

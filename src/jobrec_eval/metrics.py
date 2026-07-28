@@ -10,11 +10,17 @@ Design choices per the evaluation guide:
 - Explicit policies: correct no-match => ranking metrics N/A (not 0); empty
   recommendation => HCSR N/A; unknown hard checks are NOT counted as pass.
 - Grounding uses the system's claim validator output (supported/total factual).
+- Clarification-dependent scenarios are scored over the WHOLE dialogue (the
+  per-turn ``dialogue_trace.jsonl``), not the final response: asking a necessary
+  clarification, having it answered and then recommending is the correct
+  behaviour, so that is what task success rewards (R7.3, R7.4, R7.8).
 """
 
 from __future__ import annotations
 
 import math
+from collections import Counter
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -25,6 +31,7 @@ from jobrec.domain.constraints import JobContextState
 from jobrec.domain.enums import ConstraintOutcome, ConstraintStrength
 from jobrec.domain.job import JobPosting
 
+from .metrics_extra import clarification_efficiency_per_run
 from .relevance import grade_lookup, ideal_grades
 from .scenarios import Scenario
 
@@ -55,7 +62,169 @@ def mean_graded_relevance(ranked_grades: list[int]) -> float | None:
     return float(np.mean(ranked_grades))
 
 
+# ------------------------------------------------------ dialogue trace (R7.3/R7.8)
+#: ``system_action`` values recorded per turn by
+#: :func:`jobrec.evaluation.exporters.trace_record` (the turn's response type).
+_ACTION_CLARIFICATION = "clarification"
+_ACTION_RECOMMENDATION = "recommendation"
+_ACTION_NO_MATCH = "no_match"
+
+#: Termination reason the clarification loop records when it stopped because a slot
+#: would have been re-asked (``experiment_runner._run_clarification_loop``).
+_REASON_REPEATED_SLOT = "repeated_slot"
+
+#: A slot legitimately occupies at most two trace records: the turn on which the system
+#: ASKED it, and the turn whose simulated answer the runner records against it. More
+#: occurrences than that mean the slot was asked again.
+_MAX_SLOT_RECORDS = 2
+
+
+@dataclass(frozen=True)
+class DialogueView:
+    """Dialogue-level facts about one run, derived from its per-turn trace (R7.3/R7.8)."""
+
+    #: The trace carries dialogue-level evidence (see :func:`dialogue_view`). When
+    #: False, callers fall back to scoring the final response alone.
+    scored: bool
+    #: The system asked at least one clarification somewhere in the dialogue.
+    asked: bool
+    #: Every slot the dialogue asked about, in first-asked order.
+    asked_slots: tuple[str, ...]
+    #: The user answered at least one ask (the dialogue continued past it).
+    answered: bool
+    #: A slot was asked again (or the repeated-slot guard fired).
+    repeated_slot: bool
+    #: Number of processed turns (one trace record per turn).
+    turns: int
+    #: Terminal outcome recorded on the final trace record.
+    termination_reason: str | None
+
+
+def dialogue_view(bundle) -> DialogueView:
+    """Summarize a run's whole dialogue from ``dialogue_trace.jsonl`` (R7.3/R7.8).
+
+    The trace holds one record per processed turn
+    (:func:`jobrec.evaluation.exporters.trace_record`): ``system_action`` is that turn's
+    response type and ``clarification_slot`` is the slot the turn is about -- the slot the
+    SYSTEM asked on a scripted turn, or the slot the simulated user ANSWERED on a loop
+    turn. Either way the recorded slot is one the system asked at some point, so the union
+    of the recorded slots plus the still-pending ask in ``clarification.json`` is the set
+    of slots the dialogue asked about.
+
+    ``scored`` reports whether the trace says anything about the dialogue: a multi-record
+    trace, or a single record stamped with the loop's termination reason. A lone record
+    with no termination reason is the fallback trace ``write_run_bundle`` derives from a
+    final turn result (non-loop callers, older bundles); it carries no dialogue-level
+    evidence, so callers score those runs by the final response instead.
+
+    A repeat is recorded either by the loop's ``repeated_slot`` termination reason or by a
+    slot occupying more than :data:`_MAX_SLOT_RECORDS` trace records.
+    """
+    trace = list(getattr(bundle, "dialogue_trace", None) or [])
+    pending = [str(f) for f in ((bundle.clarification or {}).get("target_fields") or [])]
+
+    slots: list[str] = []
+    asked = answered = False
+    for index, record in enumerate(trace):
+        if str(record.get("system_action") or "") == _ACTION_CLARIFICATION:
+            asked = True
+            # The dialogue continued past the ask, so the user supplied an answer.
+            answered = answered or index < len(trace) - 1
+        slot = record.get("clarification_slot")
+        if slot:
+            slots.append(str(slot))
+
+    ordered: list[str] = []
+    for slot in [*slots, *pending]:
+        if slot not in ordered:
+            ordered.append(slot)
+
+    termination = bundle.termination_reason
+    counts = Counter(slots)
+    return DialogueView(
+        scored=bool(trace) and (len(trace) > 1 or termination is not None),
+        asked=asked or bool(pending),
+        asked_slots=tuple(ordered),
+        answered=answered,
+        repeated_slot=(termination == _REASON_REPEATED_SLOT
+                       or any(n > _MAX_SLOT_RECORDS for n in counts.values())),
+        turns=bundle.response_turns,
+        termination_reason=termination,
+    )
+
+
+# ----------------------------------------------- fault injection / recovery (R10.8)
+#: Provider-manifest block that records an injected fault (written by the
+#: fault-injecting provider and mirrored onto ``RunRecord.model_manifest``). It is the
+#: only place the pipeline records that a fault was injected at all.
+_FAULT_INJECTION_KEY = "fault_injection"
+#: Status a handoff / evidence-log record carries when a fault was absorbed by a retry.
+_RECOVERED_STATUS = "recovered"
+#: Statuses that record a caught fault rather than a clean step.
+_FAILED_HANDOFF_STATUS = "failed"
+_FAILED_LOG_STATUS = "failure"
+
+
+def failure_flags(bundle) -> dict[str, bool]:
+    """Fault-injection / recovery booleans for one run (R10.8).
+
+    Read strictly from what the run artifacts RECORD; nothing is inferred about faults
+    that were never instrumented:
+
+    - ``failure_injected`` — the run's provider manifest carries a ``fault_injection``
+      block. The main deterministic experiment injects nothing, so the column is False
+      for every one of its runs and :func:`metrics_extra.failure_detection_rate` reports
+      N/A instead of a misleading 1.000.
+    - ``failure_detected`` — the run recorded a caught fault: a ``failure_code`` on the
+      run record, a handoff that failed validation or ended ``failed``, or an
+      evidence-log record with a ``failure`` / ``recovered`` status or an error code.
+      Reported independently of injection; the detection rate intersects the two, so a
+      detection without an injected fault is never counted as one.
+    - ``recoverable`` — a recovery was recorded at all: a handoff or evidence-log record
+      with ``recovered`` status, which is what the retry path writes when it absorbs a
+      fault.
+    - ``recovered`` — that recovery carried the run through: a recovery marker plus a run
+      record flagged successful.
+    """
+    run_record = bundle.run_record or {}
+    manifest = run_record.get("model_manifest") or {}
+    handoffs = bundle.handoffs or []
+    logs = bundle.evidence_log or []
+
+    detected = bool(run_record.get("failure_code"))
+    detected = detected or any(
+        (not h.get("validation_passed")) or h.get("status") == _FAILED_HANDOFF_STATUS
+        for h in handoffs)
+    detected = detected or any(
+        log.get("error_code") or log.get("status") in {_FAILED_LOG_STATUS, _RECOVERED_STATUS}
+        for log in logs)
+
+    recoverable = any(h.get("status") == _RECOVERED_STATUS for h in handoffs) or \
+        any(log.get("status") == _RECOVERED_STATUS for log in logs)
+
+    return {
+        "failure_injected": bool(manifest.get(_FAULT_INJECTION_KEY)),
+        "failure_detected": detected,
+        "recoverable": recoverable,
+        "recovered": recoverable and bool(run_record.get("success")),
+    }
+
+
 class MetricsComputer:
+    """Per-run metrics for one label universe.
+
+    ``relevance_labels`` is a relevance label table in the shape
+    :func:`~jobrec_eval.relevance.grade_lookup` / :func:`~jobrec_eval.relevance.ideal_grades`
+    consume (``scenario_id``, ``job_id``, ``relevance_grade``). It is deliberately
+    source-agnostic: the automatic oracle table from
+    :func:`~jobrec_eval.relevance.grade_catalog` and an adjudicated human table from
+    :func:`~jobrec_eval.annotation.load_adjudicated_relevance_labels` are interchangeable
+    here, and every grade-derived metric (NDCG@5, Precision@5, mean graded relevance) is
+    computed from whichever table it was given. Which one that is belongs to the pipeline
+    wiring (``cli.run_pipeline``), not to this class, so there is exactly one metric
+    implementation for both sources.
+    """
+
     def __init__(
         self,
         config: AppConfig,
@@ -96,7 +265,12 @@ class MetricsComputer:
         rows = []
         for b in bundles:
             rows.append(self._one(b))
-        return pd.DataFrame(rows)
+        frame = pd.DataFrame(rows)
+        # Per-run clarification efficiency, from the single definition shared with
+        # ``metrics_extra.clarification_efficiency`` so the per-run column and the
+        # per-variant score can never drift apart (R7.4/R7.5).
+        frame["clarification_efficiency"] = clarification_efficiency_per_run(frame)
+        return frame
 
     def _one(self, b) -> dict:
         scen = self.scenarios.get(b.scenario_id)
@@ -170,9 +344,11 @@ class MetricsComputer:
         turn_count = len([t for t in ((b.dialogue_state or {}).get("turns", []))
                           if t.get("speaker") == "candidate"]) or None
 
+        dialogue = dialogue_view(b)
         task = self._task_success(scen, response_type, returned, hcsr, grounded_claim_count,
-                                  d.get("no_match_reason_codes", []), b.clarification)
-        partial = self._partial(scen, response_type, returned, hcsr, grounded_claim_count, d, b.clarification)
+                                  d.get("no_match_reason_codes", []), b.clarification, dialogue)
+        partial = self._partial(scen, response_type, returned, hcsr, grounded_claim_count, d,
+                                b.clarification, dialogue)
 
         return {
             "run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
@@ -196,45 +372,126 @@ class MetricsComputer:
             "no_match_returned": bool(d.get("no_match", False)),
             "clarification_expected": scen.clarification_expected if scen else False,
             "clarification_target": ";".join((b.clarification or {}).get("target_fields", []) if b.clarification else []),
+            # Dialogue-level clarification view (R7.3/R7.8). ``clarification_target`` above
+            # stays the FINAL pending ask for backward compatibility; the columns below
+            # describe the whole dialogue.
+            "clarification_asked": dialogue.asked,
+            "clarification_asked_slots": ";".join(dialogue.asked_slots),
+            "clarification_answered": dialogue.answered,
+            "clarification_repeated_slot": dialogue.repeated_slot,
+            "clarification_reason_code": (b.clarification or {}).get("reason_code"),
+            # ``None`` rather than 0 when the bundle carries no trace, so turn-based
+            # metrics fall back to ``turn_count`` instead of reading a phantom zero.
+            "response_turns": dialogue.turns or None,
+            "termination_reason": dialogue.termination_reason,
             "acceptable_slots": ";".join(scen.acceptable_slots) if scen else "",
+            **failure_flags(b),
         }
 
-    def _task_success(self, scen, response_type, returned, hcsr, grounded, no_match_codes, clar) -> int:
+    # ------------------------------------------------------------ success rules
+    @staticmethod
+    def _slots_ok(scen, slots) -> bool:
+        """Did the run ask about an acceptable slot? (R7.4)
+
+        An empty ``acceptable_slots`` set means the reference does not constrain the
+        target, so any asked slot counts.
+        """
+        if not scen.acceptable_slots:
+            return True
+        return any(slot in scen.acceptable_slots for slot in slots)
+
+    @staticmethod
+    def _recommendation_ok(response_type, returned, hcsr, grounded) -> bool:
+        """The recommendation quality bar: returns, no hard violation, grounded rationale.
+
+        HCSR is recomputed against the authoritative constraints, so ``None`` (no
+        reference context) never passes; grounding requires at least one supported
+        factual claim.
+        """
+        return bool(response_type == _ACTION_RECOMMENDATION and returned > 0
+                    and hcsr is not None and hcsr >= 1.0 and grounded > 0)
+
+    @staticmethod
+    def _no_match_ok(response_type, no_match_codes) -> bool:
+        """A correct no-match: the no-match response plus at least one reason code."""
+        return bool(response_type == _ACTION_NO_MATCH and len(no_match_codes) > 0)
+
+    def _task_success(self, scen, response_type, returned, hcsr, grounded, no_match_codes,
+                      clar, dialogue: DialogueView | None = None) -> int:
+        """Binary task success for one run.
+
+        Clarification-dependent scenarios are scored over the WHOLE dialogue (R7.4): the
+        run succeeds only when the system asked a necessary clarification, the target was
+        an acceptable slot, the simulated user answered it, and the dialogue then reached
+        a correct terminal outcome that still clears the usual quality bars (HCSR 1.0 and
+        a grounded rationale for a recommendation; reason codes for a no-match). A run
+        that skipped the necessary question and guessed straight to a recommendation, or
+        one still sitting on a clarification when a guard fired (``max_turns``,
+        ``cannot_answer``, ``repeated_slot``), is never a success.
+
+        Bundles whose trace carries no dialogue-level evidence (see :func:`dialogue_view`)
+        keep the previous final-response rule, so older bundles and non-loop runs are
+        unaffected. Recommendation- and no-match-expected scenarios are unchanged.
+        """
         if scen is None:
             return 0
-        if scen.no_match_expected:
-            return 1 if (response_type == "no_match" and len(no_match_codes) > 0) else 0
         if scen.clarification_expected:
-            if response_type != "clarification":
+            if dialogue is None or not dialogue.scored:
+                # No dialogue evidence: score the final response, as before.
+                fields = (clar or {}).get("target_fields", []) if clar else []
+                return 1 if (response_type == _ACTION_CLARIFICATION
+                             and self._slots_ok(scen, fields)) else 0
+            if not (dialogue.asked and self._slots_ok(scen, dialogue.asked_slots)
+                    and dialogue.answered):
                 return 0
-            fields = (clar or {}).get("target_fields", []) if clar else []
-            if not scen.acceptable_slots:
-                return 1
-            return 1 if any(f in scen.acceptable_slots for f in fields) else 0
+            terminal_ok = (self._no_match_ok(response_type, no_match_codes)
+                           if scen.no_match_expected
+                           else self._recommendation_ok(response_type, returned, hcsr, grounded))
+            return 1 if terminal_ok else 0
+        if scen.no_match_expected:
+            return 1 if self._no_match_ok(response_type, no_match_codes) else 0
         # recommendation expected
-        if response_type != "recommendation" or returned == 0:
-            return 0
-        if hcsr is None or hcsr < 1.0:
-            return 0
-        return 1 if grounded > 0 else 0
+        return 1 if self._recommendation_ok(response_type, returned, hcsr, grounded) else 0
 
-    def _partial(self, scen, response_type, returned, hcsr, grounded, d, clar) -> float:
+    def _partial(self, scen, response_type, returned, hcsr, grounded, d, clar,
+                 dialogue: DialogueView | None = None) -> float:
+        """Partial credit over four components, on the same dialogue-level view as
+        :meth:`_task_success` (R7.4).
+
+        For a clarification-dependent run the components are: the necessary question was
+        asked on an acceptable slot, the answer was consumed and the dialogue moved on,
+        the terminal outcome is the expected one and clears the hard-constraint bar, and
+        the terminal outcome is grounded. Runs without dialogue evidence keep the previous
+        final-response components.
+        """
         if scen is None:
             return 0.0
         slot = correctness = grounding_ok = rec_ok = 0
-        if scen.no_match_expected:
+        no_match_codes = d.get("no_match_reason_codes", [])
+        if scen.clarification_expected:
+            if dialogue is None or not dialogue.scored:
+                asked_ok = 1 if response_type == _ACTION_CLARIFICATION else 0
+                slot = rec_ok = correctness = asked_ok
+                grounding_ok = 1
+            else:
+                slot = 1 if (dialogue.asked
+                             and self._slots_ok(scen, dialogue.asked_slots)) else 0
+                correctness = 1 if (slot and dialogue.answered) else 0
+                if scen.no_match_expected:
+                    rec_ok = 1 if self._no_match_ok(response_type, no_match_codes) else 0
+                    grounding_ok = rec_ok
+                else:
+                    rec_ok = 1 if (response_type == _ACTION_RECOMMENDATION and returned > 0
+                                   and hcsr is not None and hcsr >= 1.0) else 0
+                    grounding_ok = 1 if grounded > 0 else 0
+        elif scen.no_match_expected:
             slot = 1
-            rec_ok = 1 if response_type == "no_match" else 0
-            correctness = 1 if (response_type == "no_match" and d.get("no_match_reason_codes")) else 0
-            grounding_ok = 1 if grounded > 0 or response_type == "no_match" else 0
-        elif scen.clarification_expected:
-            rec_ok = 1 if response_type == "clarification" else 0
-            slot = 1 if response_type == "clarification" else 0
-            correctness = rec_ok
-            grounding_ok = 1
+            rec_ok = 1 if response_type == _ACTION_NO_MATCH else 0
+            correctness = 1 if self._no_match_ok(response_type, no_match_codes) else 0
+            grounding_ok = 1 if grounded > 0 or response_type == _ACTION_NO_MATCH else 0
         else:
-            slot = 1 if response_type == "recommendation" else 0
-            rec_ok = 1 if (response_type == "recommendation" and returned > 0) else 0
+            slot = 1 if response_type == _ACTION_RECOMMENDATION else 0
+            rec_ok = 1 if (response_type == _ACTION_RECOMMENDATION and returned > 0) else 0
             correctness = 1 if (hcsr is not None and hcsr >= 1.0) else 0
             grounding_ok = 1 if grounded > 0 else 0
         return (slot + correctness + rec_ok + grounding_ok) / 4.0
@@ -246,8 +503,9 @@ def aggregate_scenario_variant(run_metrics: pd.DataFrame) -> pd.DataFrame:
     metric_cols = ["ndcg_at_5", "precision_at_5", "mean_graded_relevance", "hcsr",
                    "mean_violation_count", "unknown_hard_rate", "expired_rate",
                    "trace_completeness", "grounding", "handoff_success",
-                   "decision_log_completeness", "turn_count", "total_latency_ms",
-                   "task_success", "partial_task_score", "grounded_claim_count"]
+                   "decision_log_completeness", "turn_count", "response_turns",
+                   "total_latency_ms", "task_success", "partial_task_score",
+                   "grounded_claim_count", "clarification_efficiency"]
     agg = (run_metrics.groupby(["scenario_id", "variant", "scenario_type", "difficulty",
                                 "memory_dependency", "context_dependency"], dropna=False)[metric_cols]
            .mean().reset_index())
@@ -258,7 +516,8 @@ def variant_summary(scenario_variant: pd.DataFrame) -> pd.DataFrame:
     metric_cols = ["ndcg_at_5", "precision_at_5", "mean_graded_relevance", "hcsr",
                    "mean_violation_count", "unknown_hard_rate", "trace_completeness",
                    "grounding", "handoff_success", "decision_log_completeness",
-                   "turn_count", "total_latency_ms", "task_success"]
+                   "turn_count", "response_turns", "total_latency_ms", "task_success",
+                   "clarification_efficiency"]
     rows = []
     for variant, sub in scenario_variant.groupby("variant"):
         row = {"variant": variant, "n_scenarios": sub["scenario_id"].nunique()}

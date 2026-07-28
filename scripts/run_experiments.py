@@ -22,11 +22,15 @@ def main() -> None:
     parser.add_argument("--catalog", default="data/processed/jobs.jsonl")
     parser.add_argument("--out-dir", default="artifacts/runs")
     parser.add_argument("--variants", default="full,profile_only,one_shot,no_memory,no_context")
+    parser.add_argument("--allow-overwrite", action="store_true",
+                        help=("reuse/overwrite an experiment directory that already holds a "
+                              "complete experiment (without it, the run refuses instead of "
+                              "replacing the existing artifact)"))
     args = parser.parse_args()
 
     cfg = load_config(args.config, base_dir=str(Path(args.config).parent))
     runner = ExperimentRunner(cfg, args.catalog, args.scenarios, out_dir=args.out_dir)
-    manifest = runner.run(args.variants.split(","))
+    manifest = runner.run(args.variants.split(","), allow_overwrite=args.allow_overwrite)
     print(f"experiment_id={manifest['experiment_id']} runs={manifest['run_count']}")
     print(f"artifacts -> {manifest['experiment_dir']}")
 

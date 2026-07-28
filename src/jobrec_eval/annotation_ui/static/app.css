@@ -1,0 +1,219 @@
+/* Annotation UI styling.
+ *
+ * Accessibility decisions that are not cosmetic:
+ * - focus is ALWAYS visible (a thick outline plus offset), because the whole tool is designed to
+ *   be driven from the keyboard and an invisible focus ring makes that unusable;
+ * - no state is signalled by colour alone: a chosen grade gets a filled background AND a check
+ *   mark AND aria-pressed="true" AND a text readout of the selection;
+ * - body text is near-black on white and the accent colours were picked to keep a contrast ratio
+ *   of at least 4.5:1 against their backgrounds;
+ * - font sizes are in rem so browser zoom and user font settings are respected.
+ */
+
+:root {
+  --ink: #14161a;
+  --ink-soft: #41474f;
+  --page: #ffffff;
+  --panel: #f4f6f8;
+  --line: #767c85;
+  --accent: #1c4f8b;      /* 7.2:1 on white */
+  --accent-ink: #ffffff;
+  --alert-bg: #fdf1ec;
+  --alert-line: #94330f;  /* 6.6:1 on the alert background */
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 5rem;
+  font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--page);
+}
+
+main { padding: 1rem 1.5rem; max-width: 82rem; margin: 0 auto; }
+
+h1 { font-size: 1.6rem; margin: 0.4rem 0 0.6rem; }
+h2 { font-size: 1.2rem; margin: 1.2rem 0 0.4rem; }
+h3 { font-size: 1.05rem; margin: 1rem 0 0.3rem; }
+
+a { color: var(--accent); }
+a:hover { text-decoration: none; }
+
+/* Keyboard users must always know where they are. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 0.6rem 1rem;
+  z-index: 10;
+}
+.skip-link:focus {
+  left: 0;
+  position: static;
+  display: inline-block;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.6rem 1.5rem;
+  border-bottom: 2px solid var(--line);
+}
+.topbar p { margin: 0; }
+.brand { font-weight: 700; }
+.identity { color: var(--ink-soft); }
+
+.mainnav { padding: 0.4rem 1.5rem; border-bottom: 1px solid var(--line); }
+.mainnav ul { display: flex; flex-wrap: wrap; gap: 1.2rem; margin: 0; padding: 0; list-style: none; }
+
+.notice {
+  margin: 0;
+  padding: 0.6rem 1.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.lede { font-size: 1.05rem; max-width: 65ch; }
+.subtle { color: var(--ink-soft); font-size: 0.9rem; max-width: 70ch; }
+.itemmeta { color: var(--ink-soft); font-size: 0.9rem; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin: 0.8rem 0;
+}
+
+.two-col { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 60rem) {
+  .two-col { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+caption { text-align: left; font-weight: 700; padding-bottom: 0.3rem; }
+th, td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+thead th { background: #e6e9ed; }
+.fields th[scope="row"] { width: 32%; background: #e6e9ed; }
+
+code { font-family: ui-monospace, Consolas, "Courier New", monospace; word-break: break-all; }
+
+.conversation { padding-left: 1.2rem; }
+.conversation li { margin-bottom: 0.6rem; }
+.turn-index { margin: 0; font-weight: 600; font-size: 0.9rem; }
+blockquote {
+  margin: 0.2rem 0 0;
+  padding: 0.4rem 0.7rem;
+  background: var(--page);
+  border-left: 4px solid var(--accent);
+}
+.claim-text { font-size: 1.15rem; }
+
+.alert {
+  background: var(--alert-bg);
+  border: 2px solid var(--alert-line);
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  margin: 0.8rem 0;
+}
+.alert h2 { margin-top: 0.2rem; }
+
+button, .button {
+  font: inherit;
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.secondary { border-style: dashed; }
+button:hover, .button:hover { background: #dce6f2; color: var(--ink); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+
+.label-buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
+.label-button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 12rem;
+  text-align: left;
+}
+.label-value { font-weight: 700; }
+.label-desc { font-size: 0.9rem; }
+.label-key { font-size: 0.8rem; color: var(--ink-soft); }
+/* Selection is shown by fill, border weight AND the "selected" text below, never colour alone. */
+.label-button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-width: 3px;
+}
+.label-button[aria-pressed="true"] .label-key { color: var(--accent-ink); }
+.label-button[aria-pressed="true"] .label-value::after { content: " (selected)"; }
+
+.selected-readout { font-weight: 600; }
+
+.field { display: flex; flex-direction: column; gap: 0.25rem; max-width: 48rem; }
+.field label { font-weight: 600; }
+.checkbox-field { flex-direction: row; align-items: baseline; gap: 0.5rem; }
+.checkbox-field input { width: 1.1rem; height: 1.1rem; }
+textarea, input[type="text"] {
+  font: inherit;
+  padding: 0.4rem;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--page);
+  color: var(--ink);
+}
+
+.shortcuts { margin: 0.3rem 0; }
+kbd {
+  font-family: ui-monospace, Consolas, monospace;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  background: var(--page);
+}
+
+.rater-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.adjudication-list { list-style: none; padding: 0; }
+
+.statusbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--ink);
+  color: #ffffff;
+  padding: 0.5rem 1.5rem;
+  min-height: 2.2rem;
+}
+.status { margin: 0; }
+
+.case-status { font-weight: 600; }

@@ -161,7 +161,7 @@ class ExplanationAgent:
     def _claim(self, claim_type: str, text: str, evidence_ids: list[str], key_extra: str = "") -> ResponseClaim:
         return ResponseClaim(
             claim_id=content_id("claim", claim_type, text, key_extra),
-            claim_type=claim_type,  # type: ignore[arg-type]
+            claim_type=claim_type,
             text=text,
             evidence_ids=list(evidence_ids),
         )

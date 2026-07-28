@@ -313,6 +313,28 @@ def test_transport_errors_are_scrubbed_before_being_raised(monkeypatch) -> None:
     assert REDACTED_KEY in str(excinfo.value)
 
 
+def test_timeout_errors_are_scrubbed_before_being_raised(monkeypatch) -> None:
+    """The timeout branch scrubs too: an httpx timeout quoting the key must not escape.
+
+    ``httpx.TimeoutException`` is caught separately from the other transport errors and
+    re-raised as :class:`LLMTimeout`, so it needs its own case - the exception has to be
+    rendered to text before it is scrubbed, otherwise the key would ride along untouched.
+    """
+    monkeypatch.setenv(API_KEY_ENV, FAKE_KEY)
+    provider = RemoteLLMProvider()
+
+    def boom(_body: dict) -> dict:
+        raise httpx.ReadTimeout(f"timed out (Authorization: Bearer {FAKE_KEY})")
+
+    monkeypatch.setattr(provider, "_post", boom)
+
+    with pytest.raises(LLMTimeout) as excinfo:
+        provider.complete_json("hello", purpose="extraction")
+
+    assert FAKE_KEY not in str(excinfo.value)
+    assert REDACTED_KEY in str(excinfo.value)
+
+
 def test_the_provider_logger_scrubs_its_own_records(monkeypatch) -> None:
     """The module logger carries the filter, whatever handler is attached to it."""
     monkeypatch.setenv(API_KEY_ENV, FAKE_KEY)

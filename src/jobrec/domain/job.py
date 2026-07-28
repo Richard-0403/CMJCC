@@ -9,7 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobPosting(BaseModel):
-    """A normalised job posting from the curated catalog."""
+    """A normalised job posting from the curated catalog.
+
+    Two of the fields -- ``is_test_fixture`` and ``expected_ineligible_reason``
+    -- are *annotations* rather than catalog content: they declare that a record
+    is a deliberate negative fixture (e.g. an expired posting kept so the
+    pipeline can prove it never recommends it) so the data-quality validator
+    reports it as acknowledged instead of demanding its deletion (R17.1). They
+    are excluded from ``raw_payload_hash`` (see
+    :data:`jobrec.catalog.FIXTURE_ANNOTATION_FIELDS`), so annotating a record
+    never changes :func:`jobrec.catalog.catalog_hash` or the snapshot identity.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +56,13 @@ class JobPosting(BaseModel):
     required_work_authorization: list[str] = Field(default_factory=list)
     application_deadline: date | None = None
     is_active: bool = True
+
+    #: Declares the record a deliberate negative fixture (R17.1). Never affects
+    #: retrieval, ranking or eligibility -- only data-quality reporting.
+    is_test_fixture: bool = False
+    #: Why the fixture is expected to be ineligible, e.g. ``"expired"``. Only the
+    #: violation this reason explains is downgraded to an acknowledged finding.
+    expected_ineligible_reason: str | None = None
 
     source_uri: str | None = None
     source_snapshot_id: str

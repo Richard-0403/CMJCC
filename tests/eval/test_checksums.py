@@ -57,6 +57,7 @@ _EXPECTED_RUN_ARTIFACTS = (
     "model_calls.jsonl",
     "dialogue_trace.jsonl",
     "evidence_log.jsonl",
+    "evidence_items.jsonl",
     "resolved_config.yaml",
 )
 

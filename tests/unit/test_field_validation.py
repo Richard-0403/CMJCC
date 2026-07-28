@@ -908,7 +908,12 @@ def test_repeated_model_errors_fall_back_to_rules_after_a_bounded_number_of_atte
     pref_set, calls = _orchestrator(provider, max_retries=2)._extract(UTTERANCE)
 
     assert provider.attempts == 3, "retry budget was not max_retries + 1"
-    assert calls == [], "no successful model call should be recorded"
+    # No SUCCESSFUL call is recorded, yet all three spent attempts are: asserting an
+    # empty list made the retry budget invisible in the archive.
+    assert len(calls) == 3, "every spent attempt must be recorded"
+    assert all(c.metadata["failed"] is True and not c.parsed_ok for c in calls)
+    assert [c.metadata["attempts"] for c in calls] == [1, 2, 3]
+    assert len({c.call_id for c in calls}) == 3, "attempt records must not collide"
     assert pref_set.preferences, "rule fallback produced nothing"
     assert all(p.metadata["extraction_method"] == "rule" for p in pref_set.preferences)
     assert any(

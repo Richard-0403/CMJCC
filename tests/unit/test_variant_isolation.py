@@ -39,6 +39,15 @@ def test_flag_diff_full_vs_no_context_isolates_context_flags():
 
 
 def test_one_shot_vs_no_memory_differ_only_by_multi_turn_continuation():
+    """The pair is isolated to one flag, so any Δ between them attributes to it (R5.3).
+
+    Flag-level only: this says nothing about whether the flag is READ anywhere, and it
+    passed while the flag was semantically dead and the two conditions produced identical
+    runs. The behavioural counterpart is
+    ``tests/e2e/test_clarification_loop.py::test_one_shot_and_no_memory_diverge_behaviourally``
+    together with ``test_multi_turn_continuation_flag_is_not_dead``; both guarantees are
+    needed and neither replaces the other.
+    """
     diff = flag_diff(_flags("one_shot"), _flags("no_memory"))
     assert diff == {"use_multi_turn_continuation"}
 

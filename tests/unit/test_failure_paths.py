@@ -546,8 +546,18 @@ def test_partial_failure_recovers_on_the_retry_and_the_run_still_succeeds(caplog
     assert result.run_record.workflow_states[-1] == WorkflowState.COMPLETED.value
     assert all(h.validation_passed and h.status == "completed" for h in result.handoffs)
     assert result.response.response_type in NON_ERROR_RESPONSES
-    # Only the recovered call is recorded, and the model value was used (no rule fallback).
-    assert len(result.model_calls) == 1
+    # BOTH attempts are recorded -- the timed-out one and the recovered one -- and the
+    # model value was used (no rule fallback). This assertion used to demand exactly
+    # one record, which is what hid the failed attempt from every exported artifact:
+    # a bundle showing one successful call was indistinguishable from a call that
+    # succeeded first time, so retry cost and reliability were unmeasurable.
+    assert len(result.model_calls) == 2
+    failed, recovered = result.model_calls
+    assert failed.metadata["failed"] is True and failed.parsed_ok is False
+    assert failed.metadata["error"] == "LLMTimeout", "only the exception CLASS is kept"
+    assert failed.raw_response == "" and failed.call_id.endswith("#failed1")
+    assert recovered.parsed_ok is True and "failed" not in recovered.metadata
+    assert recovered.call_id != failed.call_id, "a failed attempt must not shadow the recording"
     assert result.extracted_preferences.preferences
     assert all(
         p.metadata["extraction_method"] == "llm" for p in result.extracted_preferences.preferences
@@ -574,7 +584,12 @@ def test_exhausted_timeouts_recover_via_the_rule_fallback_and_are_logged(caplog)
     result = service.process_turn(session_id, UTTERANCE)
 
     assert provider.attempts == 2, "attempts must be max_retries + 1"
-    assert result.model_calls == [], "no successful model call should be recorded"
+    # No SUCCESSFUL call is recorded, but every spent attempt is: the old expectation
+    # of an empty list meant an exhausted-retry run and a run that never called the
+    # model produced byte-identical evidence.
+    assert len(result.model_calls) == 2, "every spent attempt must be recorded"
+    assert all(c.metadata["failed"] is True for c in result.model_calls)
+    assert not any(c.parsed_ok for c in result.model_calls)
     assert any(
         "model call failed; falling back to rule extractor" in message
         and level >= logging.WARNING

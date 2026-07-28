@@ -1,0 +1,51 @@
+<h1>My progress</h1>
+
+<table class="fields">
+  <caption>Rater {{ progress.rater_id }}</caption>
+  <tbody>
+    <tr><th scope="row">Assigned</th><td>{{ progress.assigned }}</td></tr>
+    <tr><th scope="row">Completed</th><td>{{ progress.completed }}</td></tr>
+    <tr><th scope="row">Remaining</th><td>{{ progress.remaining }}</td></tr>
+    <tr><th scope="row">Complete</th><td>{{ progress.percent_complete }}%</td></tr>
+    <tr>
+      <th scope="row">Median time per item</th>
+      <td>
+        {% if has_median %}{{ progress.median_seconds }} seconds ({{ progress.median_duration_ms }} ms){% else %}not measurable yet, save at least one label{% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="subtle">
+  The median is computed from time actually spent on each item, measured in the browser from the
+  moment an item is rendered to the moment you save it. It is the number the thesis reports as
+  annotation effort, so it is measured rather than estimated.
+</p>
+
+<h2>By task</h2>
+<table class="fields">
+  <caption>Assigned items per task</caption>
+  <thead>
+    <tr>
+      <th scope="col">Task</th>
+      <th scope="col">Assigned</th>
+      <th scope="col">Completed</th>
+      <th scope="col">Remaining</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in kinds %}
+    <tr>
+      <th scope="row">{{ row.kind_label }}</th>
+      <td>{{ row.assigned }}</td>
+      <td>{{ row.completed }}</td>
+      <td>{{ row.remaining }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="actions">
+  <a class="button" href="{{ relevance_url }}">Continue relevance grading</a>
+  <a class="button" href="{{ claim_url }}">Continue grounding judgements</a>
+</p>

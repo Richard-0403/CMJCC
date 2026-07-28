@@ -1,0 +1,18 @@
+<h1>That item is not on your queue</h1>
+
+<p class="alert" role="alert">
+  Item <code>{{ item_key }}</code> was not assigned to you, so it cannot be opened here.
+</p>
+
+<p>
+  Every item is labelled independently by exactly two raters, and each rater only ever sees their
+  own queue. That is not a permissions detail: if you could read the item another rater is
+  working on, the two label sets would no longer be independent and the reported agreement
+  between them would not mean anything.
+</p>
+
+<p class="subtle">Technical detail: {{ detail }}</p>
+
+<p class="actions">
+  <a class="button" href="/queue">Back to my queue</a>
+</p>

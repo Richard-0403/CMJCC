@@ -1,7 +1,9 @@
 """Run-manifest builder (landing-plan R11).
 
 Captures the reproducibility-relevant environment and provenance for a single
-experiment run: source commit, interpreter and dependency versions, host
+experiment run: source commit (plus a dirty-tree flag and a content fingerprint of
+the sources, since a commit hash alone does not identify a dirty working tree),
+interpreter and dependency versions, host
 hardware summary, the run's content hashes, resolved feature flags, a
 non-sensitive API summary, and the DB/migration versions.
 
@@ -17,11 +19,12 @@ from __future__ import annotations
 
 import os
 import platform
-import subprocess
 import sys
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
+
+from .experiment_identity import commit_hash, git_dirty, source_fingerprint
 
 # Key runtime/eval packages whose versions materially affect reproducibility.
 _TRACKED_PACKAGES: tuple[str, ...] = (
@@ -58,21 +61,14 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
 
 
 def _commit_hash() -> str | None:
-    """Return the current git commit hash, or ``None`` when git is unavailable."""
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if out.returncode == 0:
-            value = out.stdout.strip()
-            return value or None
-    except Exception:  # noqa: BLE001 - git missing / not a repo / timeout
-        return None
-    return None
+    """Return the current git commit hash, or ``None`` when git is unavailable.
+
+    Delegates to the single git probe in
+    :mod:`jobrec.evaluation.experiment_identity` (cached per process), so the run
+    manifest, the experiment manifest and the experiment id can never disagree about
+    which commit produced a run.
+    """
+    return commit_hash()
 
 
 def _dependency_versions() -> dict[str, str | None]:
@@ -92,17 +88,22 @@ def _dependency_versions() -> dict[str, str | None]:
 
 def _total_memory_bytes() -> int | None:
     """Best-effort total physical memory in bytes; ``None`` when undeterminable."""
-    # POSIX sysconf is available without extra dependencies on Linux/macOS.
-    try:
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        phys_pages = os.sysconf("SC_PHYS_PAGES")
-        if page_size > 0 and phys_pages > 0:
-            return int(page_size) * int(phys_pages)
-    except (ValueError, OSError, AttributeError):
-        pass
+    # POSIX sysconf is available without extra dependencies on Linux/macOS. It does not
+    # exist at all on Windows, so look it up dynamically rather than calling os.sysconf
+    # directly (which would be an AttributeError at runtime and an error under a type
+    # checker running with --platform win32).
+    sysconf = getattr(os, "sysconf", None)
+    if sysconf is not None:
+        try:
+            page_size = sysconf("SC_PAGE_SIZE")
+            phys_pages = sysconf("SC_PHYS_PAGES")
+            if page_size > 0 and phys_pages > 0:
+                return int(page_size) * int(phys_pages)
+        except (ValueError, OSError):
+            pass
     # Optional psutil fallback if present in the environment.
     try:
-        import psutil  # type: ignore
+        import psutil
 
         return int(psutil.virtual_memory().total)
     except Exception:  # noqa: BLE001 - psutil not installed / probe failed
@@ -203,6 +204,11 @@ def build_run_manifest(
         "generated_at": datetime.now(UTC).isoformat(),
         "commit_hash": _commit_hash(),
         "code_version": _get(run_record, "code_version"),
+        # A commit hash alone does not identify the code when the tree is dirty, so record
+        # whether it was, plus a content digest of the sources actually on disk. Same
+        # fields (and same values) as the experiment manifest's code identity.
+        "git_dirty": git_dirty(),
+        "source_fingerprint": source_fingerprint(),
         "python": _python_summary(),
         "host": _host_summary(),
         "dependencies": _dependency_versions(),

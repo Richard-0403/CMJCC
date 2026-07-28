@@ -1,0 +1,37 @@
+<h1>Who is annotating?</h1>
+
+<p class="lede">
+  Pick your name from the registered rater pool. Your choice is stored in a signed, HTTP-only
+  cookie so that every label you save is attributed to you.
+</p>
+
+<section aria-labelledby="identity-heading" class="panel">
+  <h2 id="identity-heading">This is attribution, not a login</h2>
+  <p>
+    There is no password and no access control. Several people share this annotation machine and
+    the service only listens on the local loopback interface, so selecting a name answers
+    "whose label is this?" and nothing more. Anybody sitting at this machine can pick any name in
+    the list, so please pick your own, and use "Switch rater" when you hand the keyboard over.
+  </p>
+</section>
+
+{% if has_current %}
+<p class="current-selection">Currently annotating as <strong>{{ current_rater }}</strong>.</p>
+{% endif %}
+
+<h2>Registered raters</h2>
+<ul class="rater-list">
+  {% for rater in raters %}
+  <li>
+    <button type="button" class="rater-button" data-rater-id="{{ rater.rater_id }}">
+      Annotate as {{ rater.rater_id }}{% if rater.current %} (current selection){% endif %}
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if has_current %}
+<p>
+  <button type="button" id="switch-rater" class="secondary">Forget this name and switch rater</button>
+</p>
+{% endif %}

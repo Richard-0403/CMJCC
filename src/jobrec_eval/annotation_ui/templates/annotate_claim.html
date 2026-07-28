@@ -1,0 +1,154 @@
+<div id="annotate"
+     data-kind="{{ kind }}"
+     data-item-key="{{ item_key }}"
+     data-save-url="{{ save_url }}"
+     data-skip-url="{{ skip_url }}"
+     data-queue-url="{{ queue_url }}"
+     data-selected="{{ label }}"
+     data-flag-value="{{ flag_value }}"
+     data-was-saved="{{ was_saved }}">
+
+  <h1>Is this sentence supported by the evidence it cites?</h1>
+  <p class="lede">{{ task }}</p>
+  <p class="itemmeta">
+    Item <code>{{ item_key }}</code> &middot; {{ remaining_in_kind }} grounding items still
+    unlabelled &middot; {{ progress.completed }} of {{ progress.assigned }} done overall.
+    {% if done %}You have already judged this item ({{ label }}); saving again revises it.{% endif %}
+  </p>
+
+  {% if has_unresolvable %}
+  <section class="alert" role="alert" aria-labelledby="unresolvable-heading">
+    <h2 id="unresolvable-heading">Warning: {{ unresolvable_count }} cited evidence id(s) do not resolve</h2>
+    <p>
+      These ids are cited by the sentence but no evidence record exists for them anywhere in the
+      runs that produced it. A citation that resolves to nothing cannot support anything, so a
+      claim resting on one of these is not supported. Please also raise the flag below.
+    </p>
+    <ul class="unresolvable-list">
+      {% for evidence_id in unresolvable_ids %}<li><code>{{ evidence_id }}</code></li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="panel claim" aria-labelledby="claim-heading">
+    <h2 id="claim-heading">The claim</h2>
+    <blockquote class="claim-text">{{ claim_text }}</blockquote>
+    <table class="fields">
+      <caption>Claim metadata</caption>
+      <tbody>
+        <tr><th scope="row">Claim id</th><td><code>{{ claim_id }}</code></td></tr>
+        <tr><th scope="row">Claim type</th><td>{{ claim_type }}</td></tr>
+        <tr><th scope="row">Cited evidence ids</th><td>{{ cited_evidence_count }}</td></tr>
+        <tr><th scope="row">Occurrences across runs</th><td>{{ occurrence_count }}</td></tr>
+        <tr><th scope="row">Scenarios</th><td>{{ scenario_ids }}</td></tr>
+      </tbody>
+    </table>
+    {% if evidence_merged_across_runs %}
+    <p class="subtle">
+      This identical sentence was produced in more than one run, so the citations below are the
+      union over those runs. One judgement covers all of them.
+    </p>
+    {% endif %}
+  </section>
+
+  <div class="two-col">
+    <section class="panel" aria-labelledby="evidence-heading">
+      <h2 id="evidence-heading">Cited evidence, as resolved</h2>
+      {% if has_evidence %}
+      {% for record in evidence %}
+      <table class="fields evidence-record">
+        <caption>Evidence {{ record.index }}: {{ record.field_name }}</caption>
+        <tbody>
+          {% for row in record.rows %}
+          <tr><th scope="row">{{ row.label }}</th><td>{{ row.value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endfor %}
+      {% else %}
+      <p class="alert" role="alert">No cited evidence resolved for this claim at all.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="posting-heading">
+      <h2 id="posting-heading">Referenced job posting fields</h2>
+      {% if has_jobs %}
+      {% for job in jobs %}
+      <h3>{{ job.title }} (<code>{{ job.job_id }}</code>)</h3>
+      {% if job.missing %}
+      <p class="alert" role="alert">This posting is not in the catalog snapshot.</p>
+      {% endif %}
+      <table class="fields">
+        <caption>Posting {{ job.job_id }}</caption>
+        <tbody>
+          {% for row in job.rows %}
+          <tr><th scope="row">{{ row.label }}</th><td>{{ row.value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endfor %}
+      {% else %}
+      <p>This claim cites no job posting evidence.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  {% if has_scenario %}
+  <section class="panel" aria-labelledby="context-heading">
+    <h2 id="context-heading">Conversation the claim was produced in</h2>
+    <p class="subtle">Scenario <code>{{ scenario_id }}</code>. Context only: judge the citation, not the fit.</p>
+    {% if has_turns %}
+    <ol class="conversation">
+      {% for turn in turns %}
+      <li>
+        <p class="turn-index">Turn {{ turn.turn_number }} (turn_index {{ turn.turn_index }}), candidate said:</p>
+        <blockquote>{{ turn.candidate_utterance }}</blockquote>
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="panel decision" aria-labelledby="decision-heading">
+    <h2 id="decision-heading">Your judgement</h2>
+
+    <div class="label-buttons" role="group" aria-label="Grounding judgement">
+      {% for option in labels %}
+      <button type="button" class="label-button" data-label="{{ option.value }}" aria-pressed="false">
+        <span class="label-value">Label {{ option.value }}</span>
+        <span class="label-desc">{{ option.description }}</span>
+        <span class="label-key">key {{ option.hotkey }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <p class="selected-readout">Selected label: <span id="selected-label">none yet</span></p>
+
+    <p class="field checkbox-field">
+      <input type="checkbox" id="flag-unresolvable" data-flag="{{ flag_value }}">
+      <label for="flag-unresolvable">Flag (key E): a cited evidence id does not resolve</label>
+    </p>
+
+    <p class="field">
+      <label for="notes">Notes (optional, kept with your label and shown to the adjudicator)</label>
+      <textarea id="notes" name="notes" rows="4">{{ notes }}</textarea>
+    </p>
+
+    <p class="actions">
+      <button type="button" id="save" class="primary">Save judgement and go to next item</button>
+      <button type="button" id="skip" class="secondary">Skip this item for now</button>
+      <a class="button" href="{{ queue_url }}">Back to my queue</a>
+    </p>
+
+    <h3>Keyboard shortcuts</h3>
+    <ul class="shortcuts">
+      <li><kbd>1</kbd> supported by the cited evidence</li>
+      <li><kbd>0</kbd> not supported by the cited evidence</li>
+      <li><kbd>E</kbd> toggle the "evidence id does not resolve" flag</li>
+      <li><kbd>Enter</kbd> or <kbd>N</kbd> save and go to the next item</li>
+      <li><kbd>S</kbd> skip this item</li>
+    </ul>
+    <p class="subtle">Shortcuts are ignored while you are typing in the notes box.</p>
+  </section>
+</div>

@@ -1,0 +1,72 @@
+<div id="adjudication" data-verdict-url="/api/adjudication/verdicts" data-session-url="/api/adjudication/session">
+
+  <h1>Adjudication queue</h1>
+
+  <p class="lede">
+    Items where the two raters chose different labels. This page shows both labels side by side,
+    which is why no rater screen links to it: a rater who saw their colleague's answer would no
+    longer be an independent judge, and the reported agreement statistic would be meaningless.
+  </p>
+
+  <section class="panel" aria-labelledby="who-heading">
+    <h2 id="who-heading">Who is adjudicating?</h2>
+    <p class="field">
+      <label for="adjudicator">Adjudicator name (recorded with every verdict)</label>
+      <input type="text" id="adjudicator" name="adjudicator" value="{{ adjudicator }}" autocomplete="off">
+    </p>
+    <p class="subtle">
+      As on the rater screens this is attribution, not authentication. Nothing here is protected;
+      the service listens on the loopback interface only.
+    </p>
+  </section>
+
+  {% if has_rows %}
+  <p class="subtle">{% if open_only %}Showing unadjudicated cases only. <a href="/adjudication">Show all disagreements</a>{% else %}Showing every disagreement. <a href="/adjudication?open_only=1">Show unadjudicated only</a>{% endif %}</p>
+
+  <ul class="adjudication-list">
+    {% for row in rows %}
+    <li class="panel adjudication-case" data-item-key="{{ row.item_key }}" data-index="{{ row.index }}">
+      <h2>Case {{ row.index }}: {{ row.kind_label }} item <code>{{ row.item_key }}</code></h2>
+
+      <table class="fields">
+        <caption>Both raters' independent labels</caption>
+        <thead>
+          <tr><th scope="col">Slot</th><th scope="col">Rater</th><th scope="col">Label</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">rater_1</th><td>{{ row.slot_1_rater }}</td><td>{{ row.slot_1_label }}</td></tr>
+          <tr><th scope="row">rater_2</th><td>{{ row.slot_2_rater }}</td><td>{{ row.slot_2_label }}</td></tr>
+        </tbody>
+      </table>
+
+      <table class="fields">
+        <caption>Item references</caption>
+        <tbody>
+          <tr><th scope="row">Scenario</th><td>{{ row.scenario_id }}</td></tr>
+          <tr><th scope="row">Job</th><td>{{ row.job_id }}</td></tr>
+          <tr><th scope="row">Claim</th><td>{{ row.claim_id }}</td></tr>
+          <tr><th scope="row">Status</th><td>{{ row.status }}{% if row.adjudicated %} as {{ row.adjudicated_label }} by {{ row.adjudicator }}{% endif %}</td></tr>
+        </tbody>
+      </table>
+
+      <p class="field">
+        <label for="reason-{{ row.index }}">Reason for the final label (required)</label>
+        <textarea id="reason-{{ row.index }}" class="reason" rows="3"></textarea>
+      </p>
+
+      <div class="label-buttons" role="group" aria-label="Final label for case {{ row.index }}">
+        {% for option in row.options %}
+        <button type="button" class="verdict-button" data-label="{{ option.value }}">
+          Record final label {{ option.value }}
+        </button>
+        {% endfor %}
+      </div>
+
+      <p class="case-status" role="status" aria-live="polite"></p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No disagreements to adjudicate. Either both raters agreed everywhere, or not enough items have two labels yet.</p>
+  {% endif %}
+</div>

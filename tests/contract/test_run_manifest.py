@@ -9,12 +9,13 @@ the db/migration versions must always be present (and JSON-serializable), never 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from typing import Any
 
 from jobrec.config import AppConfig
 from jobrec.domain.run_record import RunRecord
-from jobrec.evaluation.manifest import build_run_manifest
+from jobrec.evaluation.manifest import _total_memory_bytes, build_run_manifest
 from jobrec.orchestration.feature_flags import FeatureFlags
 
 #: Live probe returned by ``SqlRepository.versions()``.
@@ -136,3 +137,33 @@ def test_manifest_is_json_serializable_and_redacts_api_credentials():
     assert manifest["api_summary"]["base_url_host"] == "api.example.com"
     assert "SUPERSECRET" not in serialized
     assert "api_key" not in serialized
+
+
+def test_host_memory_probe_is_portable_when_sysconf_is_absent(monkeypatch):
+    """``total_memory_bytes`` degrades to ``None`` on platforms without ``os.sysconf``.
+
+    ``os.sysconf`` is POSIX-only and simply does not exist on Windows, so the probe has to
+    look it up rather than call it. Deleting the attribute simulates a Windows interpreter:
+    the manifest must still build, and the key must still be present (``None`` when the
+    total cannot be determined and no ``psutil`` fallback is installed).
+    """
+    monkeypatch.delattr(os, "sysconf", raising=False)
+
+    probed = _total_memory_bytes()  # must not raise AttributeError
+    assert probed is None or isinstance(probed, int)
+
+    manifest = build_run_manifest(AppConfig(), _run_record(), _VERSIONS)
+    assert "total_memory_bytes" in manifest["host"]
+    json.dumps(manifest)  # still serializable
+
+
+def test_host_memory_probe_uses_sysconf_when_available(monkeypatch):
+    """When ``os.sysconf`` exists the probe multiplies page size by physical pages."""
+    monkeypatch.setattr(
+        os,
+        "sysconf",
+        lambda name: {"SC_PAGE_SIZE": 4096, "SC_PHYS_PAGES": 1000}[name],
+        raising=False,
+    )
+
+    assert _total_memory_bytes() == 4096 * 1000

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,32 @@ def _read_jsonl(path: Path) -> list[dict]:
         if line:
             out.append(json.loads(line))
     return out
+
+
+@dataclass(frozen=True)
+class ResolvedClaimEvidence:
+    """What a single claim's ``evidence_ids`` actually point at.
+
+    ``items`` holds the evidence records that resolved, in the order the claim
+    cited them; ``unresolved_ids`` holds the ids with no matching record. The
+    unresolvable case is reported rather than silently dropped: a dangling
+    evidence id is the R10.1 failure mode, and a human annotator judging whether a
+    claim is supported has to be able to see that a citation goes nowhere.
+    """
+
+    claim_id: str | None
+    items: tuple[dict, ...] = ()
+    unresolved_ids: tuple[str, ...] = ()
+
+    @property
+    def fully_resolved(self) -> bool:
+        """True when every cited id resolved to an evidence record."""
+        return not self.unresolved_ids
+
+    @property
+    def cited_count(self) -> int:
+        """How many ids the claim cited in total."""
+        return len(self.items) + len(self.unresolved_ids)
 
 
 @dataclass
@@ -53,10 +79,57 @@ class RunBundle:
     # retrieval_results.json: initial pool + scores, pool size, full-catalog
     # fallback signal and retrieval latency (R14.1).
     retrieval: dict | None = None
+    # evidence_items.jsonl: the session's registered EvidenceItem dumps (source,
+    # source_object_id, field_name, raw_text, normalized_value, confidence,
+    # confirmation_status, persistence_scope, turn_id, span, extractor). These are
+    # what a claim's ``evidence_ids`` point at -- NOT the per-stage decision log in
+    # ``evidence_log``. Empty for bundles written before the artifact existed.
+    evidence_items: list[dict] = field(default_factory=list)
 
     @property
     def run_id(self) -> str:
         return self.run_record.get("run_id", "")
+
+    # ------------------------------------------------------- evidence resolution
+    @property
+    def evidence_index(self) -> dict[str, dict]:
+        """``evidence_id -> evidence item`` for this run.
+
+        Ids are content-addressed within a session, so the lookup table belongs to
+        the bundle that owns them; every caller already holds the bundle. Returns an
+        empty mapping for a bundle with no ``evidence_items.jsonl``, which makes
+        every cited id unresolvable rather than falsely supported.
+        """
+        return {
+            str(item["evidence_id"]): item
+            for item in self.evidence_items
+            if isinstance(item, dict) and item.get("evidence_id")
+        }
+
+    def resolve_claim_evidence(self, claim: dict) -> ResolvedClaimEvidence:
+        """Resolve one claim's ``evidence_ids`` against this run's evidence items.
+
+        Reports the ids that do NOT resolve instead of dropping them (R10.1), so
+        callers -- metrics and human annotators alike -- see a dangling citation.
+        """
+        index = self.evidence_index
+        items: list[dict] = []
+        unresolved: list[str] = []
+        for evidence_id in (claim.get("evidence_ids") or []):
+            found = index.get(str(evidence_id))
+            if found is None:
+                unresolved.append(str(evidence_id))
+            else:
+                items.append(found)
+        return ResolvedClaimEvidence(
+            claim_id=claim.get("claim_id"),
+            items=tuple(items),
+            unresolved_ids=tuple(unresolved),
+        )
+
+    def resolve_all_claim_evidence(self) -> list[ResolvedClaimEvidence]:
+        """Resolution result for every claim of this run, in claim order."""
+        return [self.resolve_claim_evidence(claim) for claim in self.claims]
 
     @property
     def response_turns(self) -> int:
@@ -118,6 +191,10 @@ def load_bundles(experiment_dir: str | Path) -> list[RunBundle]:
                 bundles[-1].extracted_preferences = _read_json(
                     run_dir / "extracted_preferences.json")
                 bundles[-1].retrieval = _read_json(run_dir / "retrieval_results.json")
+                # Missing file -> empty list, so bundles written before this
+                # artifact existed still load (their cited ids simply do not
+                # resolve, which resolve_claim_evidence reports explicitly).
+                bundles[-1].evidence_items = _read_jsonl(run_dir / "evidence_items.jsonl")
     return bundles
 
 

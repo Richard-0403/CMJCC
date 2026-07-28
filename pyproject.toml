@@ -31,8 +31,13 @@ dev = [
     "pytest-asyncio>=0.23",
     "hypothesis>=6.100,<7",
     "coverage>=7.4",
-    "ruff>=0.4",
-    "mypy>=1.9",
+    # Linter and type checker are pinned to exact versions for the thesis freeze: both
+    # back a CI gate (`ruff check`, and the mypy error-count ceiling MYPY_MAX_ERRORS in
+    # .github/workflows/ci.yml). With an open range a newly released ruff/mypy can add
+    # rules or infer more precisely and flip the gate's verdict on unchanged code, so the
+    # archived artifact would no longer reproduce its own CI result. Bump deliberately.
+    "ruff==0.16.0",
+    "mypy==2.3.0",
 ]
 eval = [
     "pandas>=2.1",
@@ -45,6 +50,11 @@ jobrec = "jobrec.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The annotation web UI ships its own templates and static assets (no node/npm build step, so
+# these files ARE the front end). Without this they would be missing from a built wheel.
+[tool.setuptools.package-data]
+"jobrec_eval.annotation_ui" = ["templates/*.html", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -66,7 +76,13 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["B008", "E501"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 is the lowest version mypy can actually check this project at: the installed numpy
+# stubs use PEP 695 `type` statements, which mypy only parses for 3.12+, so pinning 3.11
+# made mypy abort on numpy/__init__.pyi before checking a single project file. This is the
+# single source of truth: CI no longer duplicates it as `--python-version 3.12`, so a plain
+# `mypy src` (and `make typecheck`) is exactly the CI gate. Runtime support floor
+# stays `requires-python = ">=3.11"` and ruff still targets py311.
+python_version = "3.12"
 warn_unused_ignores = true
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]

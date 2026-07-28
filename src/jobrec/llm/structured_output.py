@@ -78,8 +78,8 @@ def parse_extraction_lenient(payload: dict | str, utterance: str = "") -> Extrac
             confirmation_status=confirmation,
             persistence_scope=PersistenceScope.ACTIVE_SEARCH,
             proposed_strength=ConstraintStrength(strength),
-            polarity=polarity,  # type: ignore[arg-type]
-            temporal_scope=temporal,  # type: ignore[arg-type]
+            polarity=polarity,
+            temporal_scope=temporal,
         ))
     return ExtractedPreferenceSet(
         utterance_id=payload.get("utterance_id") or content_id("utt", utterance),

@@ -23,14 +23,20 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from jobrec.config import load_config
-from jobrec.evaluation.experiment_runner import ExperimentRunner
+from jobrec.domain.enums import ExperimentVariant
+from jobrec.evaluation.experiment_runner import (
+    TERMINATION_CONTINUATION_DISABLED,
+    ExperimentRunner,
+)
+from jobrec.orchestration.feature_flags import FeatureFlags, flag_diff
 from jobrec_eval import simulated_user as simulated_user_module
 from jobrec_eval.simulated_user import SimulatedUser
 
 CATALOG_PATH = "data/processed/jobs.jsonl"
 
-#: Every termination reason the loop can record (`_terminal_reason` outcomes plus the
-#: three guard exits). A run must always end on one of these.
+#: Every termination reason a run can record (`_terminal_reason` outcomes, the three
+#: in-loop guard exits, and the continuation gate that keeps a single-turn variant out of
+#: the loop entirely). A run must always end on one of these.
 _TERMINAL_REASONS = frozenset({
     "recommendation",
     "recommendation_empty",
@@ -40,6 +46,7 @@ _TERMINAL_REASONS = frozenset({
     "max_turns",
     "cannot_answer",
     "repeated_slot",
+    TERMINATION_CONTINUATION_DISABLED,
 })
 
 
@@ -321,10 +328,15 @@ _E2E_SLOTS = ["target_roles", "preferred_locations", "work_modes"]
 #: Variants whose flags thread prior dialogue into the current turn (memory mechanism on).
 _MEMORY_VARIANTS = ("full", "no_context")
 #: Variants that do not carry prior dialogue (memory off, or the current turn ignored
-#: entirely under profile_only), so the role must be asked again.
-_MEMORYLESS_VARIANTS = ("no_memory", "one_shot", "profile_only")
+#: entirely under profile_only) but MAY continue the dialogue, so the role is asked again
+#: and answered in one extra turn.
+_MEMORYLESS_VARIANTS = ("no_memory", "profile_only")
+#: Variants that may not continue the dialogue at all (``use_multi_turn_continuation`` is
+#: off): the system may still ask for the role, but no answer is fed back, so the run ends
+#: on the scripted turns with ``termination_reason == "continuation_disabled"``.
+_SINGLE_TURN_VARIANTS = ("one_shot",)
 
-_E2E_VARIANTS = (*_MEMORY_VARIANTS, *_MEMORYLESS_VARIANTS)
+_E2E_VARIANTS = (*_MEMORY_VARIANTS, *_MEMORYLESS_VARIANTS, *_SINGLE_TURN_VARIANTS)
 
 _E2E_MAX_TURNS = 3
 
@@ -336,8 +348,9 @@ def test_e2e_clarification_scenario_runs_across_variants(loop_env) -> None:
     intervention: the run finishes, records a termination reason, and writes a
     per-run ``dialogue_trace.jsonl`` with one row per turn. ``response_turns`` is
     not the same for all variants -- the variants that carry prior dialogue finish
-    on the scripted turns alone, while the memory-less variants have to spend an
-    extra turn re-collecting the role stated in turn 1.
+    on the scripted turns alone, the memory-less variants have to spend an extra
+    turn re-collecting the role stated in turn 1, and ``one_shot`` cannot spend that
+    turn at all because its ``use_multi_turn_continuation`` is off.
 
     **Validates: Requirements 7.8, 7.9**
     """
@@ -353,6 +366,7 @@ def test_e2e_clarification_scenario_runs_across_variants(loop_env) -> None:
     exp_dir = loop_env["out_dir"] / "exp_e2e"
 
     turns_by_variant: dict[str, int] = {}
+    reason_by_variant: dict[str, str] = {}
     for variant in _E2E_VARIANTS:
         with mock.patch.object(
             simulated_user_module,
@@ -395,6 +409,7 @@ def test_e2e_clarification_scenario_runs_across_variants(loop_env) -> None:
             )
 
         turns_by_variant[variant] = row["response_turns"]
+        reason_by_variant[variant] = reason
 
     # R7.8: the same scenario does NOT yield one uniform turn count across variants.
     assert len(set(turns_by_variant.values())) > 1, turns_by_variant
@@ -406,3 +421,132 @@ def test_e2e_clarification_scenario_runs_across_variants(loop_env) -> None:
         assert turns_by_variant[variant] == len(_E2E_TURNS), (variant, turns_by_variant)
     for variant in _MEMORYLESS_VARIANTS:
         assert turns_by_variant[variant] == len(_E2E_TURNS) + 1, (variant, turns_by_variant)
+    # one_shot is memory-less too, so it also loses the role -- but it may not continue
+    # the dialogue, so it never spends the extra turn and says so in its reason.
+    for variant in _SINGLE_TURN_VARIANTS:
+        assert turns_by_variant[variant] == len(_E2E_TURNS), (variant, turns_by_variant)
+        assert reason_by_variant[variant] == TERMINATION_CONTINUATION_DISABLED, (
+            variant, reason_by_variant)
+
+
+# ---------------------------------------------------------------------------
+# R5.3/R5.6: one_shot and no_memory must differ in OBSERVED BEHAVIOUR, not only in
+# their flag sets. The flag-level guarantee lives in
+# tests/unit/test_variant_isolation.py; these two tests drive the real
+# ``ExperimentRunner`` over the real deterministic pipeline, because a flag that no
+# code path reads passes every flag-level assertion while producing byte-identical
+# runs (which is exactly how ``use_multi_turn_continuation`` shipped dead).
+# ---------------------------------------------------------------------------
+
+#: A clarification-dependent scenario whose opening turn states no role, so the system
+#: asks for one. Whether that ask is ANSWERED is the whole difference between a variant
+#: that may continue the dialogue and one that may not.
+_DIVERGENCE_TURNS = ["I am looking for something in Kuala Lumpur, hybrid, around RM5000."]
+
+#: The run-row fields that describe the observable outcome of a run. ``run_id`` and
+#: ``total_latency_ms`` are excluded: they differ between any two runs and would make the
+#: divergence assertions pass vacuously.
+_OBSERVABLE_FIELDS = ("response_turns", "termination_reason", "response_type",
+                      "returned", "success")
+
+
+def _observable(row: dict) -> dict:
+    """The outcome of a run as the metrics pipeline sees it (no volatile fields)."""
+    return {field: row[field] for field in _OBSERVABLE_FIELDS}
+
+
+def _run_variant(loop_env, variant: str, exp_name: str, *, continuation: bool | None = None,
+                 max_dialogue_turns: int = _E2E_MAX_TURNS) -> dict:
+    """Drive one variant through the real runner and return its run row.
+
+    ``continuation`` optionally overrides ``memory.use_multi_turn_continuation`` in the
+    config, which is the only way to change that flag without changing the variant.
+    Each call writes into its own experiment directory so nothing is overwritten.
+    """
+    config = loop_env["config"].model_copy(deep=True)
+    config.experiment.max_dialogue_turns = max_dialogue_turns
+    if continuation is not None:
+        config.memory.use_multi_turn_continuation = continuation
+    runner = ExperimentRunner(
+        config,
+        loop_env["catalog_path"],
+        loop_env["scenarios_path"],
+        out_dir=str(loop_env["out_dir"]),
+    )
+    scenario = _scenario(_E2E_SLOTS, _DIVERGENCE_TURNS)
+    row, _failure = runner._run_one(
+        variant, scenario, 0, loop_env["out_dir"] / exp_name)
+    return row
+
+
+def test_one_shot_and_no_memory_diverge_behaviourally(loop_env) -> None:
+    """``one_shot`` and ``no_memory`` produce different OUTCOMES, not just different flags.
+
+    Same scenario, same catalog, same config, same real ``SimulatedUser``: the two
+    conditions differ on exactly ``use_multi_turn_continuation``, so ``no_memory`` answers
+    the system's clarification and reaches a recommendation while ``one_shot`` ends on the
+    asking turn with ``continuation_disabled``. A regression that makes the flag dead again
+    collapses both rows onto the same values and fails here (R5.3/R5.6).
+
+    **Validates: Requirements 5.3, 5.6**
+    """
+    one_shot = _run_variant(loop_env, "one_shot", "exp_divergence_one_shot")
+    no_memory = _run_variant(loop_env, "no_memory", "exp_divergence_no_memory")
+
+    assert _observable(one_shot) != _observable(no_memory), (
+        "one_shot and no_memory produced identical observable outcomes: the only flag "
+        "they differ on has no behavioural effect"
+    )
+    # Named, not incidental: the difference is turns / terminal outcome / task result.
+    assert one_shot["response_turns"] < no_memory["response_turns"]
+    assert one_shot["termination_reason"] != no_memory["termination_reason"]
+
+    # one_shot is a genuine single-turn condition: the scripted turn only, the system's
+    # clarification left unanswered, nothing recommended.
+    assert one_shot["response_turns"] == len(_DIVERGENCE_TURNS)
+    assert one_shot["termination_reason"] == TERMINATION_CONTINUATION_DISABLED
+    assert str(one_shot["response_type"]) == "clarification"
+    assert one_shot["returned"] == 0
+
+    # no_memory keeps the multi-turn workflow: the ask is answered and the dialogue ends
+    # on a real recommendation.
+    assert no_memory["response_turns"] > len(_DIVERGENCE_TURNS)
+    assert no_memory["termination_reason"] == "recommendation"
+    assert no_memory["returned"] > 0
+
+    # Neither run failed: this is a difference in dialogue behaviour, not an error.
+    assert one_shot["success"] and no_memory["success"]
+
+
+def test_multi_turn_continuation_flag_is_not_dead(loop_env) -> None:
+    """``use_multi_turn_continuation`` has an observable effect on the shared code path.
+
+    The guard against the flag going semantically dead again. Everything is held fixed --
+    same variant (``no_memory``), same scenario, same catalog -- and only
+    ``memory.use_multi_turn_continuation`` is flipped, which is the one input that changes
+    that flag without changing anything else about the condition. The resolved flag sets
+    must differ on exactly that field, AND the runs must differ observably; a flag no code
+    path enforces satisfies the first assertion and fails the second.
+
+    **Validates: Requirements 5.3, 5.6**
+    """
+    variant = "no_memory"
+    flags = {}
+    for continuation in (True, False):
+        cfg = loop_env["config"].model_copy(deep=True)
+        cfg.experiment.variant = ExperimentVariant(variant)
+        cfg.memory.use_multi_turn_continuation = continuation
+        flags[continuation] = FeatureFlags.from_config(cfg)
+
+    assert flag_diff(flags[True], flags[False]) == {"use_multi_turn_continuation"}
+
+    on = _run_variant(loop_env, variant, "exp_gate_on", continuation=True)
+    off = _run_variant(loop_env, variant, "exp_gate_off", continuation=False)
+
+    assert _observable(on) != _observable(off), (
+        "flipping memory.use_multi_turn_continuation changed nothing observable: the "
+        "flag is semantically dead again"
+    )
+    assert off["response_turns"] < on["response_turns"]
+    assert off["termination_reason"] == TERMINATION_CONTINUATION_DISABLED
+    assert on["termination_reason"] == "recommendation"

@@ -18,6 +18,18 @@ authoritative):
 ``one_shot`` and ``no_memory`` are distinct conditions: they differ on exactly
 ``use_multi_turn_continuation``, so ``one_shot`` is a genuine single-turn condition while
 ``no_memory`` keeps the multi-turn workflow without memory (R5.3/R5.6).
+
+``use_multi_turn_continuation`` is enforced in two places, and BOTH are required for the
+one_shot / no_memory pair to be observably different:
+
+* :meth:`jobrec.evaluation.experiment_runner.ExperimentRunner._continues_dialogue` --
+  with the flag off the runner never answers a system clarification, so the run ends on
+  the asking turn with ``termination_reason="continuation_disabled"``. This is the only
+  consumer that fires for the one_shot / no_memory pair, which differs on nothing else.
+* :meth:`jobrec.orchestration.orchestrator.ConversationOrchestrator.process_turn` -- with
+  the flag off, prior-turn dialogue evidence is not merged into the current turn. That
+  conjunct is only reachable together with ``use_prior_dialogue=True``, i.e. through
+  ``memory.use_multi_turn_continuation: false`` in config, never through the matrix above.
 """
 
 from __future__ import annotations

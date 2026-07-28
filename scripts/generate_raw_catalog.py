@@ -5,6 +5,12 @@ levels, locations, work modes, salary availability (present / missing / partial)
 skill overlap, and active / expired / boundary deadlines relative to the fixed
 reference date. Output is fully deterministic (seeded) for reproducibility.
 
+The deliberately expired postings are annotated ``is_test_fixture=true`` /
+``expected_ineligible_reason=expired`` so the data-quality validator records them
+as acknowledged fixtures instead of defects to delete (R17.1). Those two columns
+are excluded from the catalog content hash, so adding them does not change
+``catalog_hash``.
+
 Usage:
     python scripts/generate_raw_catalog.py --output data/raw/jobs.csv --count 200
 """
@@ -81,10 +87,15 @@ def build_rows(count: int, seed: int) -> list[dict]:
             sper = "month"
             scur = currency
 
-        # Deadlines: mix of future, boundary, expired, and none.
+        # Deadlines: mix of future, boundary, expired, and none. The expired
+        # slice is deliberate -- the pipeline must prove it never recommends
+        # them -- so those rows carry the fixture annotation that tells the
+        # data-quality validator not to demand their deletion (R17.1).
         deadline_roll = rng.random()
         deadline = ""
         is_active = "true"
+        is_test_fixture = ""
+        expected_ineligible_reason = ""
         if deadline_roll < 0.55:
             deadline = (REFERENCE_DATE + timedelta(days=rng.randint(10, 120))).isoformat()
         elif deadline_roll < 0.70:
@@ -92,6 +103,8 @@ def build_rows(count: int, seed: int) -> list[dict]:
         elif deadline_roll < 0.85:
             deadline = (REFERENCE_DATE - timedelta(days=rng.randint(5, 60))).isoformat()
             is_active = "false"  # expired
+            is_test_fixture = "true"
+            expected_ineligible_reason = "expired"
         # else: no deadline, active
 
         # Work authorization: Singapore roles require SG auth sometimes.
@@ -126,6 +139,8 @@ def build_rows(count: int, seed: int) -> list[dict]:
                 "required_work_authorization": auth_req,
                 "application_deadline": deadline,
                 "is_active": is_active,
+                "is_test_fixture": is_test_fixture,
+                "expected_ineligible_reason": expected_ineligible_reason,
                 "source_uri": f"synthetic://catalog/{i:04d}",
             }
         )
@@ -138,7 +153,7 @@ FIELDS = [
     "salary_min", "salary_max", "salary_currency", "salary_period", "country",
     "city", "region", "work_mode", "min_years_experience", "max_years_experience",
     "experience_level", "required_work_authorization", "application_deadline",
-    "is_active", "source_uri",
+    "is_active", "is_test_fixture", "expected_ineligible_reason", "source_uri",
 ]
 
 

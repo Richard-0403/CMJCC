@@ -1,0 +1,39 @@
+<div id="export" data-export-url="/api/export">
+
+  <h1>Export human labels</h1>
+
+  <p class="lede">
+    Writes <code>relevance_labels_human.csv</code> and <code>claim_annotations_human.csv</code>,
+    appends the archive dump and writes the manifest. Items where only one rater has answered are
+    skipped and counted, never written as blank rows.
+  </p>
+
+  <table class="fields">
+    <caption>Current annotation session</caption>
+    <tbody>
+      <tr><th scope="row">Relevance items</th><td>{{ summary.relevance_items }}</td></tr>
+      <tr><th scope="row">Claim items</th><td>{{ summary.claim_items }}</td></tr>
+      <tr><th scope="row">Items with both raters' labels</th><td>{{ summary.both_slots_complete }}</td></tr>
+      <tr><th scope="row">Disagreements</th><td>{{ summary.disagreements }}</td></tr>
+      <tr><th scope="row">Still unadjudicated</th><td>{{ summary.unadjudicated }}</td></tr>
+      <tr><th scope="row">CSV destination</th><td><code>{{ export_dir }}</code></td></tr>
+      <tr><th scope="row">Archive destination</th><td><code>{{ release_dir }}</code></td></tr>
+    </tbody>
+  </table>
+
+  <p class="subtle">
+    Destinations are fixed when the server starts, so this page cannot be asked to write
+    somewhere else.
+  </p>
+
+  <p class="actions">
+    <button type="button" id="run-export" class="primary">Run the export now</button>
+  </p>
+
+  <section aria-labelledby="result-heading">
+    <h2 id="result-heading">Result</h2>
+    <div id="export-result" role="status" aria-live="polite">
+      <p>No export run in this page yet.</p>
+    </div>
+  </section>
+</div>

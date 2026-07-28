@@ -8,10 +8,12 @@ report flags this as a construct-validity threat.
 Grade definition (0-3), per (scenario, job), applied to the WHOLE catalog so the
 ideal DCG is computed over the full label universe (no pooling bias):
 
-  1. Evaluate the job against the scenario's authoritative hard constraints
-     (taken from the `full` variant's JobContextState). Any hard violation or an
-     inactive/expired job => grade 0 (the guide's rule: a hard violation forces
-     relevance 0 regardless of text similarity).
+  1. Evaluate the job against the scenario's authoritative hard constraints, taken
+     from the CANONICAL scenario reference (:mod:`jobrec_eval.oracle_reference`) --
+     a frozen function of the scenario file and the catalog, not of the experiment
+     being graded. Any hard violation or an inactive/expired job => grade 0 (the
+     guide's rule: a hard violation forces relevance 0 regardless of text
+     similarity).
   2. Otherwise combine role fit and required-skill coverage:
         score = 0.5 * role_score + 0.5 * skill_coverage
      where role_score = 1.0 exact role-family match, 0.5 partial (title token
@@ -33,17 +35,11 @@ from jobrec.taxonomy import canonical_role, canonical_skill
 ORACLE_VERSION = "1.0.0"
 
 
-def build_references(bundles) -> dict[str, dict]:
-    """Per scenario, take the full-variant reference constraints + active search."""
-    refs: dict[str, dict] = {}
-    for b in bundles:
-        if b.variant != "full":
-            continue
-        if b.scenario_id in refs:
-            continue
-        if b.job_context and b.active_search:
-            refs[b.scenario_id] = {"job_context": b.job_context, "active_search": b.active_search}
-    return refs
+# NOTE: the bundle-derived ``build_references`` that used to live here is gone on
+# purpose. It kept the first ``full``-variant bundle it met -- repeat 0 of the condition
+# under evaluation -- which made the labels a sample of the system's own output and, with
+# repeats > 1, a coin flip. Its replacement is
+# :func:`jobrec_eval.oracle_reference.load_or_build_canonical_references`.
 
 
 def _role_score(active: dict, job: JobPosting) -> float:

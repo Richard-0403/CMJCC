@@ -25,7 +25,21 @@ S: list[dict] = []
 def add(scenario_id, scenario_type, difficulty, profile, turns, *,
         memory_dependency="none", context_dependency="low",
         no_match_expected=False, clarification_expected=False,
-        acceptable_slots=None, expected_response="recommendation", notes=""):
+        acceptable_slots=None, expected_response="recommendation", notes="",
+        hard_fields=None, blocking=None):
+    """Append a scenario.
+
+    ``hard_fields`` is the authoritative hard-constraint reference: the fields the
+    turn text states as non-negotiable ("only", "must"), which the data-quality
+    validator requires of every scenario whose outcome depends on hard filtering
+    (R17.2). ``blocking`` names the hard constraint(s) that make a no-match
+    scenario infeasible inside its requested role family.
+    """
+    expects: dict = {"response_type": expected_response}
+    if hard_fields:
+        expects["hard_fields"] = list(hard_fields)
+    if blocking:
+        expects["blocking"] = list(blocking)
     S.append({
         "scenario_id": scenario_id,
         "scenario_type": scenario_type,
@@ -37,7 +51,7 @@ def add(scenario_id, scenario_type, difficulty, profile, turns, *,
         "no_match_expected": no_match_expected,
         "clarification_expected": clarification_expected,
         "acceptable_slots": acceptable_slots or [],
-        "expects": {"response_type": expected_response},
+        "expects": expects,
         "notes": notes,
     })
 
@@ -161,25 +175,32 @@ add("SC-D-05", "preference_change", "medium",
 add("SC-E-01", "multiple_hard", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Data Analyst"]},
     ["I only want a data analyst role in Kuala Lumpur, must be at least RM4000, hybrid only."],
-    context_dependency="high")
+    context_dependency="high",
+    hard_fields=["target_roles", "preferred_locations", "salary_min", "work_modes"])
 add("SC-E-02", "multiple_hard", "hard",
     {"skills": ["Python", "SQL", "Excel"], "years_experience": 3, "target_roles": ["Business Analyst"]},
     ["Business analyst, only Kuala Lumpur, must pay at least RM4500, onsite only."],
     context_dependency="high", no_match_expected=True, expected_response="no_match",
-    notes="Many hard constraints jointly infeasible in the catalog -> correct no-match.")
+    hard_fields=["preferred_locations", "salary_min", "work_modes"],
+    blocking=["preferred_locations", "work_modes", "salary_min"],
+    notes="Jointly infeasible for business analysts: no KL onsite BA posting pays >= RM4500.")
 add("SC-E-03", "multiple_hard", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Data Analyst"]},
     ["Only Penang, must be remote, data analyst, at least RM4000."],
-    context_dependency="high")
+    context_dependency="high",
+    hard_fields=["target_roles", "preferred_locations", "salary_min", "work_modes"])
 add("SC-E-04", "multiple_hard", "hard",
     {"skills": ["Python", "SQL", "AWS"], "years_experience": 5, "target_roles": ["Software Engineer"]},
     ["Software engineer, only Kuala Lumpur, must be hybrid, at least RM6000."],
     context_dependency="high", no_match_expected=True, expected_response="no_match",
-    notes="Many hard constraints jointly infeasible in the catalog -> correct no-match.")
+    hard_fields=["preferred_locations", "salary_min", "work_modes"],
+    blocking=["preferred_locations", "work_modes", "salary_min"],
+    notes="Jointly infeasible for software engineers: no KL hybrid SE posting pays >= RM6000.")
 add("SC-E-05", "multiple_hard", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Product Analyst"]},
     ["Product analyst, only Kuala Lumpur, at least RM4000, hybrid only."],
-    context_dependency="high")
+    context_dependency="high",
+    hard_fields=["preferred_locations", "salary_min", "work_modes"])
 
 # ---- F. Soft preference trade-off (4) ------------------------------------
 add("SC-F-01", "soft_tradeoff", "medium",
@@ -215,16 +236,24 @@ add("SC-G-02", "ambiguous_role", "hard",
 add("SC-H-01", "no_match", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 1, "target_roles": ["Data Analyst"]},
     ["I only want a data analyst role in Kuala Lumpur with salary at least RM50000 per month."],
-    context_dependency="high", no_match_expected=True, expected_response="no_match")
+    context_dependency="high", no_match_expected=True, expected_response="no_match",
+    hard_fields=["target_roles", "preferred_locations", "salary_min"],
+    blocking=["salary_min"],
+    notes="salary_min alone filters every data-analyst posting in the catalog.")
 add("SC-H-02", "no_match", "hard",
     {"skills": ["Python", "SQL"], "years_experience": 2, "target_roles": ["Business Analyst"]},
     ["Business analyst, only Penang, must pay at least RM60000 per month."],
-    context_dependency="high", no_match_expected=True, expected_response="no_match")
+    context_dependency="high", no_match_expected=True, expected_response="no_match",
+    hard_fields=["preferred_locations", "salary_min"], blocking=["salary_min"],
+    notes="salary_min alone filters every business-analyst posting in the catalog.")
 add("SC-H-03", "no_match", "hard",
     {"skills": ["Python", "SQL", "AWS"], "years_experience": 4, "target_roles": ["Software Engineer"],
      "work_authorizations": ["XX"]},
     ["Only Kuala Lumpur software engineer, at least RM80000 per month."],
-    context_dependency="high", no_match_expected=True, expected_response="no_match")
+    context_dependency="high", no_match_expected=True, expected_response="no_match",
+    hard_fields=["target_roles", "preferred_locations", "salary_min"],
+    blocking=["preferred_locations", "salary_min"],
+    notes="Location and salary_min each filter every software-engineer posting.")
 
 
 # ---- D2. Multi-turn memory (role established first, not repeated) (7) -----

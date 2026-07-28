@@ -1,0 +1,42 @@
+<h1>My queue</h1>
+
+<p class="lede">
+  {{ progress.completed }} of {{ progress.assigned }} items labelled
+  ({{ progress.percent_complete }}%), {{ progress.remaining }} still to do. The order below is
+  your own recorded presentation order.
+</p>
+
+<p class="actions">
+  <a class="button" href="{{ relevance_url }}">Continue relevance grading</a>
+  <a class="button" href="{{ claim_url }}">Continue grounding judgements</a>
+</p>
+
+{% if has_items %}
+<table class="queue-table">
+  <caption>Items assigned to you</caption>
+  <thead>
+    <tr>
+      <th scope="col">Order</th>
+      <th scope="col">Task</th>
+      <th scope="col">Item</th>
+      <th scope="col">Status</th>
+      <th scope="col">Your label</th>
+      <th scope="col">Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.position }}</td>
+      <td>{{ item.kind_label }}</td>
+      <th scope="row"><code>{{ item.item_key }}</code></th>
+      <td>{{ item.status }}</td>
+      <td>{% if item.done %}{{ item.label }}{% else %}-{% endif %}</td>
+      <td><a href="{{ item.url }}">Open item {{ item.position }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No items are assigned to you in this annotation session.</p>
+{% endif %}

@@ -4,11 +4,61 @@ Case studies (evaluation guide 25.4): full-beats-no_memory, full-beats-no_contex
 a full difficulty/failure case, a correct no-match, and a claim-validator block
 (the latter only materialises under a real LLM; deterministic runs ground all
 claims by construction).
+
+Error taxonomy (:func:`error_taxonomy`) assigns each task-unsuccessful run ONE primary
+root cause, read off the RECORDED run-metric columns rather than off the variant name
+wherever the columns can carry the attribution. The categories, in the precedence order
+the classifier applies them:
+
+1. ``missing_dialogue_continuation (ablation)`` -- the run ended an *unresolved*
+   clarification dialogue: it asked a question, the answer was never fed back
+   (``clarification_answered`` false), it returned nothing, and its recorded terminal
+   state says the dialogue was not continued (``termination_reason`` in
+   :data:`DIALOGUE_NOT_CONTINUED_REASONS`). The failure is single-turn truncation, i.e.
+   the multi-turn continuation mechanism, not memory and not constraint handling.
+2. ``missing_constraint_enforcement (ablation)`` -- ``no_context`` returned a
+   recommendation that violates a hard constraint (``hcsr < 1``).
+3. ``no_context_other`` -- any other ``no_context`` failure.
+4. ``stale_or_missing_memory (ablation)`` -- a memory-ablated variant asked a
+   clarification for evidence it should have carried over from earlier turns or from
+   persistent memory (the ask itself is the symptom of the missing memory).
+5. ``missing_dialogue_evidence (baseline)`` -- ``profile_only`` ignores the current
+   turn, so its failures (including re-asking an already answered slot) are caused by
+   the dialogue evidence it never consumes.
+6. ``under/over_clarification`` -- any other failure whose final response is a
+   clarification, e.g. a dialogue that ran out of turns (``max_turns``), asked a slot
+   the user cannot answer (``cannot_answer``) or re-asked an answered slot
+   (``repeated_slot``) while continuation WAS available.
+7. ``no_match_misclassification`` -- an unexpected no-match.
+8. ``other`` -- everything else.
+
+Category 1 is checked first because a truncated dialogue produced no recommendation at
+all, so none of the downstream evidence (ranking, HCSR, no-match) exists to attribute
+the failure to; and because a recorded terminal state is a direct observation of the
+mechanism that ended the run, which outranks the variant-name inferences below it. It
+cannot steal from category 2: that one only fires on a recommendation response, while
+category 1 only fires on a clarification response.
 """
 
 from __future__ import annotations
 
 import pandas as pd
+
+#: Terminal states in which the dialogue was never continued past the clarification the
+#: system asked, so the pending question is still open when the run ends. Today only the
+#: experiment condition can produce that (``FeatureFlags.use_multi_turn_continuation``
+#: off, i.e. the ``one_shot`` variant or ``memory.use_multi_turn_continuation: false``),
+#: recorded by ``jobrec.evaluation.experiment_runner.TERMINATION_CONTINUATION_DISABLED``.
+#:
+#: The loop's other exits are deliberately NOT in this family. ``cannot_answer``,
+#: ``max_turns`` and ``repeated_slot`` are only reachable by a variant that IS allowed to
+#: continue: there the dialogue mechanism worked and the failure is what the system asked
+#: for (an unanswerable slot, an exhausted turn budget, a re-asked answered slot), which
+#: the clarification-quality / baseline categories already own. Folding them in here
+#: would relabel those defects as a truncation that did not happen -- and would pull
+#: ``profile_only``'s ``repeated_slot`` failures out of the baseline category that
+#: legitimately owns them.
+DIALOGUE_NOT_CONTINUED_REASONS = frozenset({"continuation_disabled"})
 
 
 def _bundle_index(bundles):
@@ -145,13 +195,89 @@ def render_cases_md(cases: dict) -> str:
     return "\n".join(lines)
 
 
+def _flag(value) -> bool:
+    """Read a recorded boolean column that may arrive as bool, string or NaN."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    return bool(value)
+
+
+def _text(value) -> str:
+    """Read a recorded string column, mapping missing/NaN to the empty string."""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
+
+
+def _returned(row) -> int:
+    """Number of jobs the run delivered; a missing column counts as none delivered."""
+    value = row.get("returned_count")
+    try:
+        if value is None or pd.isna(value):
+            return 0
+    except (TypeError, ValueError):
+        return 0
+    return int(value)
+
+
+def _is_unresolved_clarification(row) -> bool:
+    """The run ended with the question it asked still open and nothing delivered.
+
+    Read purely from the recorded columns (``response_type``, ``returned_count``,
+    ``clarification_asked``, ``clarification_answered``), so the state is recognised for
+    whichever variant produced it.
+    """
+    return (_text(row.get("response_type")) == "clarification"
+            and _returned(row) == 0
+            and _flag(row.get("clarification_asked"))
+            and not _flag(row.get("clarification_answered")))
+
+
+def _dialogue_was_not_continued(row) -> bool:
+    """Whether the run's terminal state says the dialogue was never continued.
+
+    Keyed on the recorded ``termination_reason`` family
+    (:data:`DIALOGUE_NOT_CONTINUED_REASONS`). When no terminal state was recorded --
+    an older metrics frame, or a scenario that never entered the clarification loop
+    because it did not expect a clarification -- fall back to the scenario's own
+    expectation: an *expected* clarification that was asked and never answered is a
+    dialogue that stopped one turn early, whereas an *unexpected* clarification means
+    asking was itself the defect (the evidence-driven categories own that case).
+    """
+    reason = _text(row.get("termination_reason"))
+    if reason:
+        return reason in DIALOGUE_NOT_CONTINUED_REASONS
+    return _flag(row.get("clarification_expected"))
+
+
 def error_taxonomy(run_metrics: pd.DataFrame) -> pd.DataFrame:
-    """Assign a primary root cause to each task-failure run and tabulate."""
+    """Assign a primary root cause to each task-failure run and tabulate.
+
+    Categories and their precedence are documented in the module docstring. The
+    truncated-dialogue rule is applied first and is the only rule derived entirely from
+    the recorded dialogue state rather than from the variant name.
+    """
     fails = run_metrics[run_metrics.task_success == 0].copy()
 
     def root_cause(row) -> str:
         v = row["variant"]
         rt = row["response_type"]
+        # The run never got to answer its own question: the dialogue was cut off, so
+        # the truncation -- not memory, constraints or ranking -- is the root cause.
+        if _is_unresolved_clarification(row) and _dialogue_was_not_continued(row):
+            return "missing_dialogue_continuation (ablation)"
         if v == "no_context" and (row.get("hcsr") is not None and row.get("hcsr", 1) < 1):
             return "missing_constraint_enforcement (ablation)"
         if v == "no_context":

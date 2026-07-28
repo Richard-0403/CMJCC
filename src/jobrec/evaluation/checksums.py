@@ -20,6 +20,12 @@ The manifest is a flat, deterministic ``{relative_path: sha256}`` mapping:
 * keys are sorted, and no timestamp or host detail is recorded, so writing the
   manifest twice over an unchanged tree yields byte-identical output.
 
+When a later stage legitimately rewrites an artifact the manifest already
+covers, :func:`restamp_checksums` updates just those entries, so the manifest
+describes the final on-disk state instead of an intermediate one. It is the only
+sanctioned way to amend a manifest in place; every other artifact keeps the
+digest it was first recorded with, so tampering elsewhere is still caught.
+
 :func:`verify_checksums` recomputes the tree and reports every disagreement as a
 :class:`ChecksumMismatch` -- ``modified`` (digest changed), ``missing`` (recorded
 but absent) or ``untracked`` (present but not recorded) -- naming the offending
@@ -30,7 +36,7 @@ artifact so the ``verify`` CLI command can print it and exit non-zero
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +50,7 @@ __all__ = [
     "compute_checksums",
     "iter_artifacts",
     "read_checksums",
+    "restamp_checksums",
     "sha256_of_file",
     "verify_checksums",
     "write_checksums",
@@ -161,6 +168,51 @@ def write_checksums(exp_dir: str | Path) -> Path:
         if legacy.exists():
             legacy.unlink()
     return target
+
+
+def _enclosing_manifest_root(path: Path) -> Path | None:
+    """The nearest ancestor directory of ``path`` that carries a manifest, if any."""
+    for parent in path.parents:
+        if (parent / CHECKSUMS_FILENAME).is_file():
+            return parent
+    return None
+
+
+def restamp_checksums(paths: Iterable[str | Path]) -> list[Path]:
+    """Re-hash ``paths`` in the manifest that already covers them (R16.1).
+
+    An artifact that is legitimately rewritten AFTER its directory's
+    ``checksums.json`` was written leaves a stale digest behind, and
+    :func:`verify_checksums` then reports a ``modified`` finding for a tree
+    nobody tampered with. This updates exactly the named entries in the nearest
+    enclosing manifest so the manifest keeps describing the final on-disk state,
+    without re-walking (and thereby silently re-blessing) the rest of the tree:
+    a genuinely tampered sibling artifact is still caught.
+
+    Paths with no enclosing manifest, and paths that no longer exist, are
+    skipped, so callers can pass whatever they wrote without probing first.
+    Returns the manifest files that were rewritten (empty when nothing drifted).
+    """
+    pending: dict[Path, dict[str, str]] = {}
+    for candidate in paths:
+        path = Path(candidate).resolve()
+        if not path.is_file():
+            continue
+        root = _enclosing_manifest_root(path)
+        if root is None:
+            continue
+        pending.setdefault(root, {})[path.relative_to(root).as_posix()] = sha256_of_file(path)
+
+    written: list[Path] = []
+    for root, updates in pending.items():
+        recorded = read_checksums(root)
+        if all(recorded.get(artifact) == digest for artifact, digest in updates.items()):
+            continue
+        recorded.update(updates)
+        target = root / CHECKSUMS_FILENAME
+        target.write_text(json.dumps(recorded, indent=2, sort_keys=True) + "\n")
+        written.append(target)
+    return written
 
 
 def read_checksums(exp_dir: str | Path) -> dict[str, str]:

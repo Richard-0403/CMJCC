@@ -21,7 +21,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from jobrec.catalog import load_catalog
+from jobrec.catalog import catalog_hash, load_catalog, normalize_job
 from jobrec.config import load_config
 from jobrec.domain.job import JobPosting
 from jobrec_eval.data_quality import (
@@ -125,7 +125,21 @@ def test_real_shipped_dataset_has_no_errors(config):
     # Every expired posting in the catalog is accounted for, and each one is
     # correctly flagged inactive (so it is a warning, not contradictory data).
     assert report.by_type("expired_deadline_active") == ()
-    assert report.by_type("expired_deadline")
+    expired = report.by_type("expired_deadline")
+    assert expired
+    # Each shipped expired posting declares itself a deliberate fixture, so it is
+    # recorded as acknowledged rather than as a defect to delete (R17.1).
+    assert {f.severity for f in expired} == {"info"}
+    assert report.by_type("unsupported_test_fixture_marker") == ()
+
+
+def test_real_shipped_scenarios_all_carry_a_hard_constraint_reference(config):
+    """Every shipped scenario whose outcome rests on hard constraints names them (R17.2)."""
+    scenarios = load_scenarios("data/scenarios/scenarios.jsonl")
+
+    report = validate_dataset([], scenarios, config=config, verify_no_match=False)
+
+    assert report.by_type("missing_hard_constraint_reference") == (), report.summary()
 
 
 # -------------------------------------------------------------- catalog defects
@@ -189,7 +203,7 @@ def test_missing_job_id_is_flagged(clean_row, config):
 
 
 def test_expired_but_inactive_posting_is_a_warning_not_an_error(clean_row, config):
-    """Deliberately expired fixtures are recorded without failing the dataset."""
+    """An unmarked expired posting is recorded, as a warning, without failing the run."""
     expired = _mutate(clean_row, job_id="job-expired",
                       application_deadline="2025-10-01", is_active=False)
 
@@ -199,6 +213,132 @@ def test_expired_but_inactive_posting_is_a_warning_not_an_error(clean_row, confi
     assert [f.identifier for f in findings] == ["job-expired"]
     assert findings[0].severity == "warning"
     assert report.ok
+
+
+# ------------------------------------------------------------- fixture markers
+_FIXTURE = {"is_test_fixture": True, "expected_ineligible_reason": "expired"}
+
+
+@pytest.mark.parametrize(
+    ("violation_type", "changes"),
+    [
+        ("expired_deadline", {"application_deadline": "2025-10-01", "is_active": False}),
+        ("expired_deadline_active", {"application_deadline": "2025-11-30", "is_active": True}),
+    ],
+)
+def test_declared_expired_fixture_is_acknowledged_not_demanded_deleted(
+    clean_row, config, violation_type, changes
+):
+    """``is_test_fixture`` + a matching reason downgrades the finding to info (R17.1).
+
+    The posting still appears in the report -- a deliberate fixture must be
+    auditable, not invisible -- but it is no longer a defect the report asks the
+    author to delete.
+    """
+    fixture = _mutate(clean_row, job_id="job-fixture", **changes, **_FIXTURE)
+
+    report = validate_dataset([fixture], [], config=config)
+
+    findings = report.by_type(violation_type)
+    assert [f.identifier for f in findings] == ["job-fixture"]
+    assert findings[0].severity == "info"
+    assert "acknowledged deliberate test fixture" in findings[0].detail
+    assert report.infos == findings
+    assert report.errors == ()
+    assert report.warnings == ()
+    assert report.ok
+
+
+@pytest.mark.parametrize(
+    ("label", "marker"),
+    [
+        ("no reason", {"is_test_fixture": True}),
+        ("empty reason", {"is_test_fixture": True, "expected_ineligible_reason": ""}),
+        ("unknown reason",
+         {"is_test_fixture": True, "expected_ineligible_reason": "just because"}),
+        ("wrong reason",
+         {"is_test_fixture": True, "expected_ineligible_reason": "unknown_currency"}),
+    ],
+)
+def test_fixture_marker_without_a_matching_reason_exempts_nothing(
+    clean_row, config, label, marker
+):
+    """The marker is never a blanket suppression: an unexplained one exempts nothing."""
+    marked = _mutate(clean_row, job_id="job-marked",
+                     application_deadline="2025-11-30", is_active=True, **marker)
+
+    report = validate_dataset([marked], [], config=config)
+
+    expired = report.by_type("expired_deadline_active")
+    assert [f.identifier for f in expired] == ["job-marked"], f"{label}: {report.summary()}"
+    assert expired[0].severity == "error"
+    # ...and the useless marker is itself reported, so it cannot rot unnoticed.
+    unsupported = report.by_type("unsupported_test_fixture_marker")
+    assert [f.identifier for f in unsupported] == ["job-marked"]
+    assert unsupported[0].severity == "warning"
+    assert not report.ok
+
+
+def test_declared_fixture_still_reports_its_other_defects(clean_row, config):
+    """Only the declared defect is acknowledged; the rest keep their severity."""
+    fixture = _mutate(
+        clean_row, job_id="job-fixture-plus",
+        application_deadline="2025-10-01", is_active=False,
+        salary_min=9000.0, salary_max=4000.0, salary_currency="XYZ", **_FIXTURE,
+    )
+
+    report = validate_dataset([fixture], [], config=config)
+
+    assert [f.severity for f in report.by_type("expired_deadline")] == ["info"]
+    assert [f.severity for f in report.by_type("salary_min_exceeds_max")] == ["error"]
+    assert [f.severity for f in report.by_type("unknown_currency")] == ["error"]
+    assert report.by_type("unsupported_test_fixture_marker") == ()
+    assert not report.ok
+
+
+#: Catalog defects that an ``expired`` fixture declaration must never excuse.
+_NON_EXPIRY_DEFECTS: dict[str, dict[str, Any]] = {
+    "salary_min_exceeds_max": {"salary_min": 9000.0, "salary_max": 4000.0},
+    "unknown_currency": {"salary_currency": "XYZ"},
+    "invalid_work_mode": {"work_mode": "teleport"},
+    "invalid_experience_level": {"experience_level": "wizard"},
+    "invalid_deadline": {"application_deadline": "not-a-date"},
+    "empty_title": {"title": "   "},
+    "empty_skills": {"required_skills": [], "preferred_skills": []},
+    "empty_location": {"city": None, "region": None, "country": None},
+}
+
+
+@pytest.mark.parametrize("violation_type", sorted(_NON_EXPIRY_DEFECTS))
+def test_expired_fixture_marker_never_hides_an_unrelated_defect(
+    clean_row, config, violation_type
+):
+    """An ``expired`` declaration acknowledges expiry only -- nothing else."""
+    changes = _NON_EXPIRY_DEFECTS[violation_type]
+    marked = _mutate(clean_row, job_id="job-sneaky", **changes, **_FIXTURE)
+
+    report = validate_dataset([marked], [], config=config)
+
+    findings = report.by_type(violation_type)
+    assert [f.identifier for f in findings] == ["job-sneaky"], report.summary()
+    assert findings[0].severity == "error"
+    assert not report.ok
+
+
+def test_fixture_annotation_does_not_change_the_catalog_content_hash(clean_row):
+    """Annotating a record leaves ``raw_payload_hash`` (and catalog_hash) alone.
+
+    The fixture flags are metadata about a record, not content of the posting, so
+    marking an existing posting must not move the catalog snapshot identity that
+    every run record is verified against.
+    """
+    plain = normalize_job(dict(clean_row), "catalog-test")
+    annotated = normalize_job({**clean_row, **_FIXTURE}, "catalog-test")
+
+    assert annotated.is_test_fixture is True
+    assert annotated.expected_ineligible_reason == "expired"
+    assert annotated.raw_payload_hash == plain.raw_payload_hash
+    assert catalog_hash([annotated]) == catalog_hash([plain])
 
 
 # ------------------------------------------------------------- scenario defects
@@ -254,6 +394,65 @@ def test_missing_hard_constraint_reference_is_flagged(config):
 
     findings = report.by_type("missing_hard_constraint_reference")
     assert [f.identifier for f in findings] == [scenario["scenario_id"]]
+    assert findings[0].severity == "warning"
+    assert "no-match" in findings[0].detail
+
+
+@pytest.mark.parametrize(
+    ("label", "overrides"),
+    [
+        ("hard-constraint scenario type",
+         {"scenario_type": "multiple_hard", "expects": {"response_type": "recommendation"}}),
+        ("asserts an eligibility exclusion",
+         {"expects": {"response_type": "recommendation",
+                      "no_unknown_salary_in_eligible": True}}),
+        ("asserts a resolved hard value",
+         {"expects": {"response_type": "recommendation", "active_salary_min": 4000}}),
+    ],
+)
+def test_scenario_depending_on_hard_constraints_needs_a_reference(config, label, overrides):
+    """A recommendation scenario whose expectation rests on hard filtering is flagged.
+
+    Three dependencies count: the scenario type declares it, the expects block
+    asserts an eligibility exclusion, or it asserts a resolved hard value (R17.2).
+    """
+    scenario = {**_recommendation_scenario("SC-DQ-HARD"), **overrides}
+
+    report = validate_dataset([], [scenario], config=config, verify_no_match=False)
+
+    findings = report.by_type("missing_hard_constraint_reference")
+    assert [f.identifier for f in findings] == ["SC-DQ-HARD"], f"{label}: {report.summary()}"
+    assert findings[0].severity == "warning"
+    assert findings[0].field_name == "expects"
+
+
+@pytest.mark.parametrize(
+    "reference",
+    ["hard_fields", "hard_constraint_fields", "blocking", "blocking_fields",
+     "blocking_constraint"],
+)
+def test_an_explicit_hard_constraint_reference_clears_the_warning(config, reference):
+    """Any of the recognised reference keys satisfies the requirement."""
+    scenario = {**_recommendation_scenario("SC-DQ-HARD-OK"),
+                "scenario_type": "multiple_hard",
+                "expects": {"response_type": "recommendation",
+                            "no_unknown_salary_in_eligible": True,
+                            reference: ["salary_min"]}}
+
+    report = validate_dataset([], [scenario], config=config, verify_no_match=False)
+
+    assert report.by_type("missing_hard_constraint_reference") == (), report.summary()
+
+
+def test_policy_level_filter_assertions_do_not_require_a_reference(config):
+    """``no_expired_in_results`` exercises catalog freshness, not a stated constraint."""
+    scenario = {**_recommendation_scenario("SC-DQ-EXPIRED-POLICY"),
+                "expects": {"response_type": "recommendation",
+                            "no_expired_in_results": True}}
+
+    report = validate_dataset([], [scenario], config=config, verify_no_match=False)
+
+    assert report.by_type("missing_hard_constraint_reference") == ()
 
 
 def test_contradictory_expectation_labels_are_flagged(config):
@@ -367,6 +566,7 @@ _CATALOG_FIELD_DEFECTS: dict[str, dict[str, Any]] = {
 _STRUCTURAL_DEFECTS: tuple[str, ...] = (
     "duplicate_job_id",
     "empty_job_id",
+    "unsupported_test_fixture_marker",
     "duplicate_scenario_id",
     "empty_scenario_id",
     "empty_scenario_turns",
@@ -379,9 +579,11 @@ _STRUCTURAL_DEFECTS: tuple[str, ...] = (
 DEFECT_CATALOGUE: tuple[str, ...] = (*_CATALOG_FIELD_DEFECTS, *_STRUCTURAL_DEFECTS)
 
 #: Defects the validator records as ``warning`` by design: an expired posting that is
-#: correctly flagged inactive, and missing-but-optional references.
+#: correctly flagged inactive, missing-but-optional references, and a fixture marker
+#: that explains nothing (the record's own defects still stand at full severity).
 _WARNING_DEFECTS: frozenset[str] = frozenset({
     "expired_deadline", "missing_hard_constraint_reference", "missing_relevance_label",
+    "unsupported_test_fixture_marker",
 })
 
 
@@ -418,6 +620,11 @@ def _inject_defects(
         elif defect == "empty_job_id":
             jobs.append(_mutate(clean_row, job_id=""))
             expected.add((f"<catalog row {len(jobs) - 1}>", defect))
+        elif defect == "unsupported_test_fixture_marker":
+            # A fixture marker on an otherwise clean record explains nothing, so it
+            # is itself the defect -- and it exempts nothing.
+            jobs.append(_mutate(clean_row, job_id=job_id, is_test_fixture=True))
+            expected.add((job_id, defect))
         elif defect == "duplicate_scenario_id":
             scenarios.append(_recommendation_scenario(sid))
             scenarios.append(_recommendation_scenario(sid))

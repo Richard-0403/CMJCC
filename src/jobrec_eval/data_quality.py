@@ -10,8 +10,8 @@ Two layers of checking, matching the requirement:
 
 * **Catalog (R17.1)** -- duplicate job ids, salary ranges where the minimum
   exceeds the maximum, unknown currencies, invalid ``work_mode`` and
-  ``experience_level`` values, expired/unparseable deadlines and empty required
-  fields (title, skills, location).
+  ``experience_level`` values, expired/unparseable deadlines, empty required
+  fields (title, skills, location) and test-fixture markers that explain nothing.
 * **Scenarios (R17.1/R17.2)** -- duplicate scenario ids, empty turn scripts, a
   relevance label where one is required, a hard-constraint reference where one is
   required, expectation labels that contradict each other, and -- for every
@@ -44,13 +44,24 @@ Expired-deadline nuance: a posting whose deadline has passed *and* is flagged
 ``is_active=False`` is expected content in the research catalog (the pipeline must
 prove it never recommends it), so it is recorded as a ``warning``. A posting that
 is expired while still marked active is contradictory data and is an ``error``.
+
+Deliberate negative fixtures: a posting may declare itself one by carrying
+``is_test_fixture=True`` together with an ``expected_ineligible_reason``
+(``"expired"`` is the only reason in the vocabulary today). The violation that
+reason explains is then reported at ``info`` severity -- still named in the report
+as an acknowledged fixture, never silently dropped, and never a defect the report
+demands be deleted. The marker is deliberately *not* a blanket suppression: only
+the declared defect is downgraded, every other violation on the same record keeps
+its normal severity, and a marker that explains nothing found is itself reported
+as ``unsupported_test_fixture_marker`` so the annotation cannot rot into a
+catch-all exemption.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -70,6 +81,9 @@ from jobrec.utils.money import can_normalize
 __all__ = [
     "DATA_QUALITY_REPORT_FILENAME",
     "DATA_QUALITY_VERSION",
+    "SEVERITY_ERROR",
+    "SEVERITY_INFO",
+    "SEVERITY_WARNING",
     "DataQualityReport",
     "Finding",
     "read_data_quality_report",
@@ -86,9 +100,21 @@ DATA_QUALITY_VERSION = "1.0.0"
 
 #: Severity levels. ``error`` means the data is wrong; ``warning`` means the data
 #: is usable but incomplete or deliberately degenerate (e.g. an expired posting
-#: correctly flagged inactive).
+#: correctly flagged inactive); ``info`` means the record declared the defect
+#: itself as a deliberate test fixture, so it is recorded for the audit trail
+#: rather than raised for action.
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
+SEVERITY_INFO = "info"
+
+#: The ``expected_ineligible_reason`` vocabulary (R17.1): each declared reason
+#: maps to the catalog violations it legitimises on a posting that also carries
+#: ``is_test_fixture``. A reason only ever downgrades the violation it actually
+#: explains, so the marker cannot suppress an unrelated defect; extend this table
+#: -- deliberately -- to acknowledge a new class of negative fixture.
+_FIXTURE_REASON_VIOLATIONS: Mapping[str, frozenset[str]] = {
+    "expired": frozenset({"expired_deadline", "expired_deadline_active"}),
+}
 
 #: Work-mode values a catalog record may carry: the canonical taxonomy modes plus
 #: the explicit "not stated" marker used by :class:`~jobrec.domain.job.JobPosting`.
@@ -108,6 +134,18 @@ _HARD_CONSTRAINT_KEYS: tuple[str, ...] = (
 #: hard-constraint reference even when they expect a recommendation.
 _HARD_CONSTRAINT_TYPES: frozenset[str] = frozenset({"multiple_hard"})
 
+#: ``expects`` keys whose assertion can only hold if hard filtering ran on a
+#: candidate-stated constraint -- an eligibility exclusion, or a resolved hard
+#: value -- without naming *which* fields are hard. A scenario carrying one of
+#: these depends on hard constraints, so it still needs an explicit reference for
+#: per-constraint compliance to be checkable (R17.2). Policy-level filters that no
+#: candidate ever states (e.g. ``no_expired_in_results``, which exercises catalog
+#: freshness rather than a stated constraint) are deliberately absent.
+_HARD_CONSTRAINT_ASSERTION_KEYS: tuple[str, ...] = (
+    "no_unknown_salary_in_eligible",
+    "active_salary_min",
+)
+
 #: Named checks, so the report can state what ran and what could not.
 CHECK_CATALOG = "catalog_records"
 CHECK_DUPLICATE_JOB_IDS = "duplicate_job_ids"
@@ -116,6 +154,7 @@ CHECK_DUPLICATE_SCENARIO_IDS = "duplicate_scenario_ids"
 CHECK_RELEVANCE_LABELS = "scenario_relevance_labels"
 CHECK_HARD_CONSTRAINT_REFS = "scenario_hard_constraint_references"
 CHECK_NO_MATCH = "no_match_scenarios_unsatisfiable"
+CHECK_TEST_FIXTURE_MARKERS = "job_test_fixture_markers"
 
 
 # --------------------------------------------------------------------- findings
@@ -179,6 +218,11 @@ class DataQualityReport:
         return tuple(f for f in self.findings if f.severity == SEVERITY_WARNING)
 
     @property
+    def infos(self) -> tuple[Finding, ...]:
+        """Findings the data itself declared deliberate (acknowledged fixtures)."""
+        return tuple(f for f in self.findings if f.severity == SEVERITY_INFO)
+
+    @property
     def ok(self) -> bool:
         """True when no ``error``-severity violation was found."""
         return not self.errors
@@ -196,7 +240,8 @@ class DataQualityReport:
         """Multi-line summary; the first line is the verdict."""
         head = (
             f"data quality {'OK' if self.ok else 'FAILED'}: "
-            f"{len(self.errors)} error(s), {len(self.warnings)} warning(s) over "
+            f"{len(self.errors)} error(s), {len(self.warnings)} warning(s), "
+            f"{len(self.infos)} acknowledged fixture(s) over "
             f"{self.job_count} job(s) and {self.scenario_count} scenario(s)"
         )
         lines = [head]
@@ -216,6 +261,7 @@ class DataQualityReport:
             "ok": self.ok,
             "error_count": len(self.errors),
             "warning_count": len(self.warnings),
+            "info_count": len(self.infos),
             "checks_run": list(self.checks_run),
             "checks_skipped": dict(self.checks_skipped),
             "counts_by_violation_type": self.counts_by_violation_type(),
@@ -240,10 +286,24 @@ class _JobView:
     experience_level: Any
     deadline: Any
     is_active: bool
+    is_test_fixture: bool = False
+    expected_ineligible_reason: str | None = None
 
     @property
     def label(self) -> str:
         return self.job_id or f"<catalog row {self.index}>"
+
+    @property
+    def declared_reason(self) -> str:
+        """The declared fixture reason, normalised (empty when none was given)."""
+        return str(self.expected_ineligible_reason or "").strip().lower()
+
+    @property
+    def acknowledged_violations(self) -> frozenset[str]:
+        """Violation types this record's fixture declaration legitimises."""
+        if not self.is_test_fixture:
+            return frozenset()
+        return _FIXTURE_REASON_VIOLATIONS.get(self.declared_reason, frozenset())
 
 
 def _as_list(value: Any) -> list[str]:
@@ -271,6 +331,8 @@ def _job_view(job: JobPosting | Mapping[str, Any], index: int) -> _JobView:
             experience_level=job.experience_level,
             deadline=job.application_deadline,
             is_active=job.is_active,
+            is_test_fixture=job.is_test_fixture,
+            expected_ineligible_reason=job.expected_ineligible_reason,
         )
     data = dict(job)
     return _JobView(
@@ -290,6 +352,8 @@ def _job_view(job: JobPosting | Mapping[str, Any], index: int) -> _JobView:
         experience_level=data.get("experience_level"),
         deadline=data.get("application_deadline"),
         is_active=bool(data.get("is_active", True)),
+        is_test_fixture=bool(data.get("is_test_fixture", False)),
+        expected_ineligible_reason=data.get("expected_ineligible_reason"),
     )
 
 
@@ -330,8 +394,34 @@ class _ScenarioView:
         return any(self.expects.get(key) for key in _HARD_CONSTRAINT_KEYS)
 
     @property
+    def hard_constraint_dependency(self) -> str | None:
+        """Why this scenario needs a hard-constraint reference, or ``None`` (R17.2).
+
+        Three ways a scenario's expectation can rest on hard constraints:
+
+        * it expects **no match**, so the whole expectation is a claim about hard
+          infeasibility;
+        * its ``scenario_type`` declares it a hard-constraint case
+          (:data:`_HARD_CONSTRAINT_TYPES`);
+        * its ``expects`` block asserts hard *behaviour* -- an eligibility
+          exclusion or a resolved hard value
+          (:data:`_HARD_CONSTRAINT_ASSERTION_KEYS`) -- without naming the fields.
+
+        The returned string is the reason, used verbatim in the finding detail so
+        the report says *why* the reference is required.
+        """
+        if self.expects_no_match:
+            return "expects a no-match outcome"
+        if self.scenario_type in _HARD_CONSTRAINT_TYPES:
+            return f"is tagged scenario_type '{self.scenario_type}'"
+        asserted = [key for key in _HARD_CONSTRAINT_ASSERTION_KEYS if self.expects.get(key)]
+        if asserted:
+            return f"asserts {', '.join(asserted)}"
+        return None
+
+    @property
     def needs_hard_constraint_reference(self) -> bool:
-        return self.expects_no_match or self.scenario_type in _HARD_CONSTRAINT_TYPES
+        return self.hard_constraint_dependency is not None
 
     @property
     def needs_relevance_label(self) -> bool:
@@ -468,7 +558,60 @@ def _job_field_findings(view: _JobView, reference_date: date) -> list[Finding]:
         add("empty_skills", "no required or preferred skills", field_name="required_skills")
     if not view.locations:
         add("empty_location", "no city, region or country", field_name="city")
-    return findings
+    return _apply_fixture_marker(view, findings)
+
+
+def _apply_fixture_marker(view: _JobView, findings: list[Finding]) -> list[Finding]:
+    """Downgrade the one violation a declared test fixture explains (R17.1).
+
+    A posting that carries ``is_test_fixture`` *and* an ``expected_ineligible_reason``
+    naming the defect it deliberately has (e.g. ``"expired"`` for an expired
+    deadline) is a fixture the pipeline needs, not data to delete: that finding is
+    re-emitted at ``info`` severity so it stays visible in the report as an
+    acknowledged fixture.
+
+    Everything else is untouched, which is what keeps the marker from becoming a
+    blanket suppression:
+
+    * any other violation on the same record keeps its normal severity;
+    * a marker whose declared reason explains nothing that was actually found
+      (absent reason, unknown reason, or a defect that is not there) adds an
+      ``unsupported_test_fixture_marker`` warning instead of exempting anything.
+    """
+    if not view.is_test_fixture:
+        return findings
+
+    acknowledged = view.acknowledged_violations
+    reason = view.declared_reason or "<unset>"
+    out: list[Finding] = []
+    matched: list[str] = []
+    for finding in findings:
+        if finding.violation_type in acknowledged:
+            matched.append(finding.violation_type)
+            out.append(replace(
+                finding, severity=SEVERITY_INFO,
+                detail=(f"{finding.detail}; acknowledged deliberate test fixture "
+                        f"(expected_ineligible_reason='{reason}')"),
+            ))
+        else:
+            out.append(finding)
+
+    if not matched:
+        why = (
+            "the record has no defect for it to explain"
+            if not findings else
+            f"none of the {len(findings)} finding(s) on the record match it"
+        )
+        out.append(Finding(
+            identifier=view.label, entity="job",
+            violation_type="unsupported_test_fixture_marker",
+            field_name="expected_ineligible_reason", severity=SEVERITY_WARNING,
+            observed=view.expected_ineligible_reason,
+            detail=(f"record is flagged is_test_fixture with "
+                    f"expected_ineligible_reason='{reason}' but {why}, so the marker "
+                    "exempts nothing"),
+        ))
+    return out
 
 
 def _as_number(value: Any) -> float | None:
@@ -522,13 +665,17 @@ def _scenario_findings(
                         f"'{view.expected_response}'"),
             ))
 
-        if view.needs_hard_constraint_reference and not view.has_hard_constraint_reference:
+        dependency = view.hard_constraint_dependency
+        if dependency is not None and not view.has_hard_constraint_reference:
             findings.append(Finding(
                 identifier=view.label, entity="scenario",
                 violation_type="missing_hard_constraint_reference",
                 field_name="expects", severity=SEVERITY_WARNING,
-                detail=("scenario asserts hard-constraint behaviour but names no "
-                        "hard/blocking constraint reference"),
+                observed=sorted(view.expects),
+                detail=(f"scenario {dependency}, so its outcome depends on hard "
+                        "constraints, but its expects block names no authoritative "
+                        "hard-constraint reference (one of "
+                        f"{', '.join(_HARD_CONSTRAINT_KEYS)})"),
             ))
 
         if label_ids is not None and view.needs_relevance_label:
@@ -751,7 +898,7 @@ def validate_dataset(
     findings.extend(_scenario_findings(views, label_ids))
 
     checks = [
-        CHECK_CATALOG, CHECK_DUPLICATE_JOB_IDS,
+        CHECK_CATALOG, CHECK_DUPLICATE_JOB_IDS, CHECK_TEST_FIXTURE_MARKERS,
         CHECK_SCENARIOS, CHECK_DUPLICATE_SCENARIO_IDS,
         CHECK_HARD_CONSTRAINT_REFS,
     ]

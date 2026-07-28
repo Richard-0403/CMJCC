@@ -17,6 +17,18 @@ from .utils.time import utcnow
 NORMALIZATION_VERSION = "1.0.0"
 SCHEMA_VERSION = "1.0.0"
 
+#: Raw columns that annotate a record as a deliberate negative fixture for the
+#: data-quality validator (R17.1) rather than describing the job itself.
+#:
+#: They are stripped before ``raw_payload_hash`` is computed, so marking an
+#: existing posting as an intentional fixture leaves both ``raw_payload_hash`` and
+#: :func:`catalog_hash` -- and therefore the catalog snapshot identity every run
+#: record is checked against -- byte-for-byte unchanged.
+FIXTURE_ANNOTATION_FIELDS: tuple[str, ...] = (
+    "is_test_fixture",
+    "expected_ineligible_reason",
+)
+
 
 def _split_list(value: Any) -> list[str]:
     if value is None or value == "":
@@ -68,7 +80,12 @@ def normalize_job(raw: dict[str, Any], catalog_snapshot_id: str) -> JobPosting:
     smax_myr = to_monthly_myr(smax, currency, period) if (smax is not None and currency) else None
 
     title = str(raw.get("title", "")).strip()
-    payload_hash = stable_hash(raw)
+    # Fixture annotations are metadata about the record, not content of the
+    # posting, so they must not perturb the content hash (or catalog_hash).
+    payload_hash = stable_hash(
+        {k: v for k, v in raw.items() if k not in FIXTURE_ANNOTATION_FIELDS}
+    )
+    fixture_reason = (raw.get("expected_ineligible_reason") or "").strip() or None
 
     return JobPosting(
         job_id=str(raw["job_id"]).strip(),
@@ -98,6 +115,8 @@ def normalize_job(raw: dict[str, Any], catalog_snapshot_id: str) -> JobPosting:
         required_work_authorization=_split_list(raw.get("required_work_authorization")),
         application_deadline=_parse_date(raw.get("application_deadline")),
         is_active=_to_bool(raw.get("is_active", True)),
+        is_test_fixture=_to_bool(raw.get("is_test_fixture", False)),
+        expected_ineligible_reason=fixture_reason,
         source_uri=(raw.get("source_uri") or None),
         source_snapshot_id=catalog_snapshot_id,
         ingested_at=utcnow(),

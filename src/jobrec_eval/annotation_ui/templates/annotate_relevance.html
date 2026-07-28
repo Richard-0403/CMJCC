@@ -1,0 +1,128 @@
+<div id="annotate"
+     data-kind="{{ kind }}"
+     data-item-key="{{ item_key }}"
+     data-save-url="{{ save_url }}"
+     data-skip-url="{{ skip_url }}"
+     data-queue-url="{{ queue_url }}"
+     data-selected="{{ label }}"
+     data-was-saved="{{ was_saved }}">
+
+  <h1>Grade this job posting for this candidate</h1>
+  <p class="lede">{{ task }}</p>
+  <p class="itemmeta">
+    Item <code>{{ item_key }}</code> &middot; {{ remaining_in_kind }} relevance items still
+    unlabelled &middot; {{ progress.completed }} of {{ progress.assigned }} done overall.
+    {% if done %}You have already graded this item ({{ label }}); saving again revises it.{% endif %}
+  </p>
+
+  {% if scenario_missing %}
+  <p class="alert" role="alert">This scenario is not in the scenario file, so the candidate side is empty.</p>
+  {% endif %}
+  {% if job_missing %}
+  <p class="alert" role="alert">This job id is not in the catalog snapshot, so there is nothing to compare against.</p>
+  {% endif %}
+
+  <div class="two-col">
+    <section class="panel" aria-labelledby="candidate-heading">
+      <h2 id="candidate-heading">Candidate</h2>
+      <p class="subtle">Scenario <code>{{ scenario_id }}</code> &middot; type {{ scenario_type }}</p>
+
+      {% if has_profile %}
+      <table class="fields">
+        <caption>Candidate profile</caption>
+        <tbody>
+          {% for row in profile_rows %}
+          <tr><th scope="row">{{ row.label }}</th><td>{{ row.value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <h3>Conversation, in order</h3>
+      {% if has_turns %}
+      <ol class="conversation">
+        {% for turn in turns %}
+        <li>
+          <p class="turn-index">Turn {{ turn.turn_number }} (turn_index {{ turn.turn_index }}), candidate said:</p>
+          <blockquote>{{ turn.candidate_utterance }}</blockquote>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="subtle">A later turn can revise an earlier preference, so read them in sequence.</p>
+      {% else %}
+      <p>No conversation turns are recorded for this scenario.</p>
+      {% endif %}
+
+      <p class="subtle">Acceptable clarification slots: {{ clarification_slots }}</p>
+    </section>
+
+    <section class="panel" aria-labelledby="job-heading">
+      <h2 id="job-heading">Job posting</h2>
+      <p class="job-title"><strong>{{ job_title }}</strong> at {{ job_company }} (<code>{{ job_id }}</code>)</p>
+
+      <table class="fields">
+        <caption>Posting fields</caption>
+        <tbody>
+          {% for row in job_rows %}
+          <tr><th scope="row">{{ row.label }}</th><td>{{ row.value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h3>Description</h3>
+      <p class="description">{{ job_description }}</p>
+
+      {% if has_responsibilities %}
+      <h3>Responsibilities</h3>
+      <ul>
+        {% for entry in job_responsibilities %}<li>{{ entry }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="panel rubric" aria-labelledby="rubric-heading">
+    <h2 id="rubric-heading">Grading rubric</h2>
+    <dl class="rubric-list">
+      {% for grade in grades %}
+      <dt>Grade {{ grade.value }}</dt>
+      <dd>{{ grade.description }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="panel decision" aria-labelledby="decision-heading">
+    <h2 id="decision-heading">Your grade</h2>
+
+    <div class="label-buttons" role="group" aria-label="Relevance grade">
+      {% for grade in grades %}
+      <button type="button" class="label-button" data-label="{{ grade.value }}" aria-pressed="false">
+        <span class="label-value">Grade {{ grade.value }}</span>
+        <span class="label-desc">{{ grade.description }}</span>
+        <span class="label-key">key {{ grade.hotkey }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <p class="selected-readout">Selected grade: <span id="selected-label">none yet</span></p>
+
+    <p class="field">
+      <label for="notes">Notes (optional, kept with your label and shown to the adjudicator)</label>
+      <textarea id="notes" name="notes" rows="4">{{ notes }}</textarea>
+    </p>
+
+    <p class="actions">
+      <button type="button" id="save" class="primary">Save grade and go to next item</button>
+      <button type="button" id="skip" class="secondary">Skip this item for now</button>
+      <a class="button" href="{{ queue_url }}">Back to my queue</a>
+    </p>
+
+    <h3>Keyboard shortcuts</h3>
+    <ul class="shortcuts">
+      <li><kbd>0</kbd> <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> choose the grade</li>
+      <li><kbd>Enter</kbd> or <kbd>N</kbd> save and go to the next item</li>
+      <li><kbd>S</kbd> skip this item</li>
+    </ul>
+    <p class="subtle">Shortcuts are ignored while you are typing in the notes box.</p>
+  </section>
+</div>

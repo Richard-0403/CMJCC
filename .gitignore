@@ -21,11 +21,18 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Artifacts (generated run bundles, logs, indexes)
+# Artifacts (generated run bundles, logs, indexes, CI/perf/data-quality output)
 artifacts/runs/
 artifacts/logs/
 artifacts/indexes/
 artifacts/reports/
+artifacts/data_quality/
+artifacts/ci-smoke/
+# Hybrid connectivity-smoke run bundles and the official hybrid run logs. Same rule as
+# the directories above: generated evidence lives on disk and ships with the thesis
+# archive, not in git (the smoke tree alone is 268 files of run bundles).
+artifacts/hybrid_smoke/
+artifacts/*.log
 
 # OS
 .DS_Store
@@ -39,3 +46,14 @@ evaluation/outputs/*/normalized/
 
 # Hybrid (real-LLM) run outputs; curated copies live under test_results/hybrid/
 evaluation/outputs_hybrid/
+
+
+# Reproduction package. Deliberately NOT in version control: it is a bulky copy of
+# artifacts that already exist elsewhere in the tree (~82 MB / 4886 files for the
+# deterministic runs alone), and git is the wrong transport for it. It ships with the
+# thesis as a standalone archive instead; the archive's sha256 is recorded in
+# CMJCC_Final_Thesis_Readiness_Checklist.md so the copy stays verifiable.
+# NOTE: the run bundles under final_release/deterministic_runs/_runs/ exist ONLY here
+# and on disk (evaluation/outputs/_runs/ is ignored above) - do not delete either copy
+# without producing the archive first.
+final_release/

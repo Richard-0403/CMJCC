@@ -39,6 +39,52 @@ _ACTIVE_LIST_FIELDS = [
 ]
 _ACTIVE_SCALAR_FIELDS = ["salary_min", "salary_currency", "experience_level", "years_experience"]
 
+
+def _stated_values(raw: object) -> list[object]:
+    """The individual values a preference states, as a flat list.
+
+    A preference for a list-valued search field normally states ONE value, but the
+    skills normalizer legitimately fans one utterance out into several
+    (``"python, sql"`` -> ``["python", "sql"]``). Flattening here is what keeps a list
+    from being appended as a single nested element -- the shape that made
+    ``canonical_skill``/``canonical_role`` raise on a well-formed skills extraction.
+    Nested containers are flattened one level, which is all any normalizer produces.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple, set, frozenset)):
+        return [v for item in raw for v in _stated_values(item)]
+    return [raw]
+
+
+def _text_values(raw: object) -> list[str]:
+    """The stated values usable as taxonomy text: non-empty strings only.
+
+    Values of any other shape are skipped rather than coerced with ``str()``: coercing
+    a list produced exclusion keys like ``"['sales analyst']"`` that can never match a
+    role family, i.e. a constraint that looks recorded but is silently inert. A skipped
+    value is always already reported by :func:`~jobrec.llm.field_validation.validate_field`
+    as an arity or domain warning, so the loss is traceable there.
+    """
+    return [v.strip() for v in _stated_values(raw) if isinstance(v, str) and v.strip()]
+
+
+def _states_scalar_value(field_name: str, value: object) -> bool:
+    """Whether a scalar search field actually carries a stated value.
+
+    ``normalize_salary`` returns the canonical ``{min_salary, max_salary, currency,
+    period}`` structure even for an absent input, so a plain ``is not None`` test
+    counted ``salary_min: null`` as *present*: the field landed in
+    ``soft_preference_fields`` and was omitted from ``unknown_fields`` while
+    ``ActiveSearchState.salary_min`` stayed ``None``. A structure with no amount states
+    nothing and is treated as absent.
+    """
+    if value is None:
+        return False
+    if field_name == "salary_min" and isinstance(value, dict):
+        return value.get("min_salary") is not None or value.get("max_salary") is not None
+    return True
+
 # Map CandidateState attributes -> active-search field names.
 _PROFILE_TO_ACTIVE_LIST = {
     "target_roles": "target_roles",
@@ -236,8 +282,10 @@ class CMJCC:
         if self.flags.use_current_turn:
             # locations from current turn OVERRIDE profile locations for this search.
             current_locations = [
-                p.normalized_value for p in inp.extracted_preferences.preferences
+                v
+                for p in inp.extracted_preferences.preferences
                 if p.field_name == "preferred_locations" and p.polarity == "positive"
+                for v in _stated_values(p.normalized_value)
             ]
             if current_locations:
                 list_values["preferred_locations"] = list(dict.fromkeys(current_locations))
@@ -247,17 +295,23 @@ class CMJCC:
                 ids = evidence_by_field.get(f, [])
                 if pref.polarity == "negative":
                     if f in ("excluded_roles", "target_roles"):
-                        exclusions["roles"].append(str(pref.normalized_value).lower())
+                        exclusions["roles"].extend(
+                            v.lower() for v in _text_values(pref.normalized_value))
                     elif f in ("excluded_locations", "preferred_locations"):
-                        exclusions["locations"].append(str(pref.normalized_value).lower())
+                        exclusions["locations"].extend(
+                            v.lower() for v in _text_values(pref.normalized_value))
                     elif f == "work_modes":
                         pass  # negative work mode handled as exclusion of that mode
                     continue
 
                 if f in _ACTIVE_LIST_FIELDS:
                     if f != "preferred_locations":  # locations already overridden above
-                        if pref.normalized_value not in list_values[f]:
-                            list_values[f].append(pref.normalized_value)
+                        # EXTEND, never append: one preference may state several values
+                        # (the skills normalizer fans "python, sql" out into two), and
+                        # appending the container nested a list inside a list[str] field.
+                        for value in _stated_values(pref.normalized_value):
+                            if value not in list_values[f]:
+                                list_values[f].append(value)
                     add_ev(f, ids)
                     strengths[f] = _stronger(strengths.get(f), pref.proposed_strength)
                 elif f in _ACTIVE_SCALAR_FIELDS:
@@ -277,7 +331,8 @@ class CMJCC:
 
         # ---- classify hard / soft / unknown -----------------------------
         present_fields = [f for f in _ACTIVE_LIST_FIELDS if list_values[f]]
-        present_fields += [f for f in _ACTIVE_SCALAR_FIELDS if scalar_values[f] is not None]
+        present_fields += [f for f in _ACTIVE_SCALAR_FIELDS
+                           if _states_scalar_value(f, scalar_values[f])]
 
         hard_fields: list[str] = []
         soft_fields: list[str] = []
@@ -305,10 +360,13 @@ class CMJCC:
         # dialogue ("python") do not produce duplicates.
         from ..taxonomy import canonical_role, canonical_skill
 
+        # Only text can be canonicalised. A non-string that reached here despite the
+        # arity/domain gates is skipped rather than passed to the taxonomy, which would
+        # raise on ``.strip()`` and kill the whole run over one malformed field.
         list_values["target_roles"] = list(dict.fromkeys(
-            canonical_role(r) for r in list_values["target_roles"]))
+            canonical_role(r) for r in _text_values(list_values["target_roles"])))
         list_values["skills_have"] = list(dict.fromkeys(
-            canonical_skill(s) for s in list_values["skills_have"]))
+            canonical_skill(s) for s in _text_values(list_values["skills_have"])))
 
         active_id = content_id(
             "as", inp.dialogue_state.session_id, cand.version,

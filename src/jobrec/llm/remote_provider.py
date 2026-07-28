@@ -11,6 +11,12 @@ in :meth:`RemoteLLMProvider.manifest` (which is persisted into run artifacts),
 never rendered by ``repr``, and the module logger carries
 :class:`~jobrec.utils.redaction.SecretLogFilter` so nothing this module logs —
 including a transport error that quoted a request — can contain it.
+
+Call accounting (R11.1): every returned :class:`~jobrec.llm.provider.LLMCallRecord`
+carries a ``metadata`` dict with the token usage reported by the server, the
+request parameters *as actually sent* and the retry/fallback trace, which the run
+bundle exporter surfaces as ``request_params``/``response_metadata``. That dict
+deliberately holds no prompt, no response text and no credential material.
 """
 
 from __future__ import annotations
@@ -43,6 +49,55 @@ install_secret_log_filter(logger)
 def _scrub(text: str) -> str:
     """Redact credential material from a message before it is raised or logged."""
     return redact(str(text), secrets=secret_values())
+
+
+#: Token-count aliases: OpenAI-compatible servers report either the classic
+#: ``prompt_tokens``/``completion_tokens`` spelling or the newer
+#: ``input_tokens``/``output_tokens`` one. Both are normalised to the classic name
+#: so the exported artifacts have a single, comparable shape.
+_TOKEN_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("prompt_tokens", ("prompt_tokens", "input_tokens")),
+    ("completion_tokens", ("completion_tokens", "output_tokens")),
+    ("total_tokens", ("total_tokens",)),
+)
+
+
+def _token_usage(data: Any) -> dict[str, Any]:
+    """Normalise a response's ``usage`` block into flat, comparable token counts.
+
+    Returns ``{}`` when the response carries no usable ``usage`` object (some
+    proxies omit it entirely), so a missing usage block is recorded as *absent*
+    rather than as a fabricated zero. ``total_tokens`` is derived by addition only
+    when the server did not report it but reported both halves.
+    """
+    usage = data.get("usage") if isinstance(data, dict) else None
+    if not isinstance(usage, dict):
+        return {}
+    out: dict[str, Any] = {"usage": dict(usage)}
+    for canonical, names in _TOKEN_ALIASES:
+        for name in names:
+            value = usage.get(name)
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                out[canonical] = value
+                break
+    if "total_tokens" not in out and "prompt_tokens" in out and "completion_tokens" in out:
+        out["total_tokens"] = out["prompt_tokens"] + out["completion_tokens"]
+    return out
+
+
+def _status_reason(exc: httpx.HTTPStatusError) -> str:
+    """A short, non-sensitive label for the status that triggered the retry."""
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return f"http_{status}" if status is not None else "http_error"
+
+
+def _finish_reason(data: Any) -> str | None:
+    """The first choice's ``finish_reason``, or ``None`` when the server omits it."""
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        reason = choices[0].get("finish_reason")
+        return str(reason) if reason is not None else None
+    return None
 
 
 def _extract_json(text: str) -> dict | None:
@@ -107,7 +162,33 @@ class RemoteLLMProvider:
             resp.raise_for_status()
             return resp.json()
 
-    def _chat(self, prompt: str, temperature: float, json_mode: bool) -> tuple[str, float]:
+    def _request_params(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Request parameters exactly as they were sent on the successful attempt.
+
+        Reads them back off ``body`` rather than off ``self``, so a parameter the
+        code deliberately omitted (temperature for the ``gpt-5`` family) or dropped
+        on the retry is recorded as absent instead of as a value that was never
+        transmitted.
+        """
+        params: dict[str, Any] = {
+            "timeout_seconds": self.timeout,
+            "json_mode": "response_format" in body,
+        }
+        if "temperature" in body:
+            params["temperature"] = body["temperature"]
+        if "response_format" in body:
+            params["response_format"] = body["response_format"]
+        return params
+
+    def _chat(
+        self, prompt: str, temperature: float, json_mode: bool
+    ) -> tuple[str, float, dict[str, Any]]:
+        """Post one chat completion and return ``(content, latency_ms, metadata)``.
+
+        ``metadata`` carries the request parameters as actually sent, the token
+        usage / finish reason from the response and the retry-fallback trace. It
+        never carries the prompt, the response text or credential material.
+        """
         if not self._api_key:
             raise LLMTimeout(
                 f"no API key configured for remote provider: set {self.api_key_env}"
@@ -122,49 +203,71 @@ class RemoteLLMProvider:
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         start = time.perf_counter()
+        attempts = 1
+        retried = False
+        retry_reason: str | None = None
         try:
             data = self._post(body)
         except httpx.TimeoutException as exc:
-            raise LLMTimeout(_scrub(exc)) from exc
+            raise LLMTimeout(_scrub(str(exc))) from exc
         except httpx.HTTPStatusError as exc:
             # Fallback: retry once without response_format / temperature, which
             # some proxies or newer models reject.
             body.pop("response_format", None)
             body.pop("temperature", None)
+            retried = True
+            attempts = 2
+            retry_reason = _status_reason(exc)
             try:
                 data = self._post(body)
             except httpx.HTTPError as exc2:
-                raise LLMError(f"remote model error: {_scrub(exc2)}") from exc
+                raise LLMError(f"remote model error: {_scrub(str(exc2))}") from exc
         except httpx.HTTPError as exc:
-            raise LLMError(f"remote model error: {_scrub(exc)}") from exc
+            raise LLMError(f"remote model error: {_scrub(str(exc))}") from exc
         latency_ms = (time.perf_counter() - start) * 1000
-        return data["choices"][0]["message"]["content"], latency_ms
+        metadata: dict[str, Any] = {
+            **self._request_params(body),
+            **_token_usage(data),
+            "attempts": attempts,
+            "retried_without_response_format": retried,
+        }
+        reason = _finish_reason(data)
+        if reason is not None:
+            metadata["finish_reason"] = reason
+        if retry_reason is not None:
+            metadata["retry_reason"] = retry_reason
+        return data["choices"][0]["message"]["content"], latency_ms, metadata
 
     def complete_json(self, prompt: str, *, purpose: str) -> tuple[dict, LLMCallRecord]:
-        raw, latency = self._chat(prompt, self.extraction_temperature, json_mode=True)
+        raw, latency, metadata = self._chat(
+            prompt, self.extraction_temperature, json_mode=True)
         payload = _extract_json(raw)
         if payload is None:
             raise LLMInvalidJSON("could not parse JSON object from model response")
         record = LLMCallRecord(
             call_id=content_id("call", purpose, prompt), purpose=purpose, prompt=prompt,
             raw_response=raw, parsed_ok=True, latency_ms=latency,
-            provider=self.name, model=self.model,
+            provider=self.name, model=self.model, metadata=metadata,
         )
         return payload, record
 
     def complete_text(self, prompt: str, *, purpose: str, fallback: str = "") -> tuple[str, LLMCallRecord]:
         try:
-            raw, latency = self._chat(prompt, self.response_temperature, json_mode=False)
-        except Exception:  # noqa: BLE001 - phrasing must never break the pipeline
+            raw, latency, metadata = self._chat(
+                prompt, self.response_temperature, json_mode=False)
+        except Exception as exc:  # noqa: BLE001 - phrasing must never break the pipeline
+            # Record WHY we fell back (the exception class only, never its message,
+            # which can quote the request) so the fallback is visible in artifacts.
             return fallback, LLMCallRecord(
                 call_id=content_id("call", purpose, prompt), purpose=purpose, prompt=prompt,
                 raw_response=fallback, parsed_ok=False, latency_ms=0.0,
-                provider=self.name, model=self.model, metadata={"fell_back": True},
+                provider=self.name, model=self.model,
+                metadata={"fell_back": True, "error": type(exc).__name__},
             )
         record = LLMCallRecord(
             call_id=content_id("call", purpose, prompt), purpose=purpose, prompt=prompt,
             raw_response=raw, parsed_ok=True, latency_ms=latency,
-            provider=self.name, model=self.model,
+            provider=self.name, model=self.model, metadata=metadata,
         )
         return raw, record
 

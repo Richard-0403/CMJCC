@@ -127,13 +127,15 @@ def run_scenarios(
     catalog: str = typer.Option("data/processed/jobs.jsonl"),
     out_dir: str = typer.Option("artifacts/runs"),
     variants: str = typer.Option("full,profile_only,one_shot,no_memory,no_context"),
+    allow_overwrite: bool = typer.Option(
+        False, help="overwrite an experiment directory that already holds a complete run"),
 ) -> None:
     """Run all scenarios across the given experiment variants and export artifacts."""
     from ..evaluation.experiment_runner import ExperimentRunner
 
     cfg = _load(config)
     runner = ExperimentRunner(cfg, catalog_path=catalog, scenarios_path=scenarios, out_dir=out_dir)
-    manifest = runner.run(variants.split(","))
+    manifest = runner.run(variants.split(","), allow_overwrite=allow_overwrite)
     typer.echo(f"Ran {manifest['run_count']} runs across {len(manifest['variants'])} variants")
     typer.echo(f"Artifacts: {manifest['experiment_dir']}")
 

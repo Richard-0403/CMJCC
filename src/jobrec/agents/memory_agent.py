@@ -158,7 +158,7 @@ class MemoryAgent:
             turn_id=content_id("turn", dialogue.session_id, str(turn_index)),
             session_id=dialogue.session_id,
             turn_index=turn_index,
-            speaker=speaker,  # type: ignore[arg-type]
+            speaker=speaker,
             text=text,
             created_at=utcnow(),
             evidence_ids=evidence_ids or [],
