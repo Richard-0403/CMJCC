@@ -697,9 +697,15 @@ def _relevance_header_note(data: dict) -> str:
         lines = [
             "**Relevance is scored by a deterministic automatic oracle, not human "
             "raters.**",
-            f"{_RELEVANCE_METRIC_NAMES} therefore measure agreement with a",
-            "transparent rule-based reference (documented in `relevance.py`), and should be",
-            "read as such. Explanation grounding uses the system's claim validator.",
+            f"{_RELEVANCE_METRIC_NAMES} therefore measure agreement with a versioned",
+            "canonical reference, built by `oracle_reference.py` and graded by",
+            "`relevance.py`. The reference is frozen with its own fingerprint and is",
+            "independent of the experiment variants and of stochastic repeats, so every",
+            "condition and both backends are scored against one yardstick. It is NOT",
+            "independent of the system itself: its constraint values and hard/soft",
+            "strengths are still produced by the system's own deterministic extraction,",
+            "so the oracle remains a transparent proxy rather than ground truth (§12).",
+            "Explanation grounding uses the system's claim validator.",
         ]
         lines.append(
             "Adjudicated human labels are available for this run: §4 reports rater "
@@ -855,8 +861,15 @@ def _construct_threat_bullet(data: dict) -> str:
             "evidence support, not perceived explanation quality or user trust.")
     bullet = (
         "- **Construct:** relevance uses an automatic oracle, not human judgement; NDCG/P@5\n"
-        "  measure agreement with a rule-based reference. Grounding measures evidence\n"
-        "  support, not perceived explanation quality or user trust.")
+        "  measure agreement with a rule-based reference. That reference is canonical --\n"
+        "  frozen, fingerprinted, and identical across variants, repeats and backends, so\n"
+        "  no condition is graded against its own output and no repeat decides the labels\n"
+        "  -- but it is derived by the system's OWN deterministic extraction, so the\n"
+        "  hard/soft strength of a stated constraint is the extractor's reading of the\n"
+        "  utterance rather than an independently declared truth. The residual dependency\n"
+        "  is therefore stabilised, not eliminated: a metric here measures agreement with\n"
+        "  that reading. Grounding measures evidence support, not perceived explanation\n"
+        "  quality or user trust.")
     if info["human_labels_available"]:
         bullet += ("\n  Adjudicated human labels exist for this run and are compared against\n"
                    "  the oracle in §5.5, but the reported ranking metrics are the oracle's.")

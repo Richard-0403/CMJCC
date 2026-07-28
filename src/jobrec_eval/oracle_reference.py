@@ -26,13 +26,29 @@ inputs. Two rejected alternatives, for the record: a majority vote across repeat
 system-derived, and undefined at 1 repeat), and failing loudly when repeats disagree
 (which would leave the hybrid experiment unanalysable).
 
-What is still a threat
-----------------------
-This is NOT human annotation. The reference is derived by the system's own deterministic
-rule extraction and constraint semantics, so the oracle remains a transparent proxy
-rather than ground truth, and the report keeps declaring that. What the canonical
-reference removes is narrower but real: variant privilege, repeat luck, and the two
-experiments disagreeing about what the scenario asked for.
+What is still a threat -- read this before citing the oracle
+-----------------------------------------------------------
+The derivation below runs the scenario through the deterministic ``full`` pipeline and
+reads that run's ``JobContextState`` / ``ActiveSearchState``. So the reference's constraint
+VALUES and, critically, its hard/soft STRENGTHS are the system's own extractor reading the
+utterance -- ``ActiveSearchState.hard_constraint_fields`` is an extractor decision, not a
+declared fact. The circular dependency is therefore **stabilised, not eliminated**: this
+module removes variant privilege, repeat luck and cross-experiment divergence, and it
+freezes the result so it cannot drift; it does not make the reference independent of the
+system under evaluation.
+
+That the residual dependency is real, not theoretical, is visible in the data: the
+deterministic and the hybrid extractor disagreed about the strength of
+``preferred_locations`` / ``work_modes`` on three scenarios (SC-D-07, SC-D-09, SC-D-10),
+and a hard violation forces grade 0 -- so which extractor read the utterance decided a
+large part of the label universe. That is exactly why the reference must not be taken from
+the run being scored, and equally why the current derivation is not the end state.
+
+The end state is a DECLARED reference: each scenario carrying its authoritative
+constraints (field, value, strength) as a reviewed input, with this module mapping the
+declaration through the constraint machinery and never through the extractor. Because the
+oracle is applied at ANALYSIS time over saved bundles, that change costs an analysis
+re-run, never an experiment re-run.
 """
 
 from __future__ import annotations
