@@ -117,7 +117,10 @@ class SimulatedUser:
         return raw
 
     def _is_answerable(self, field: str) -> bool:
-        """A field is answerable if the scenario lists it or the profile supplies it."""
+        """A field is answerable if it is declared, the scenario lists it, or the profile
+        supplies it."""
+        if self._declared_answer(field) is not None:
+            return True
         if field in self.acceptable_slots and field in _DEFAULTS:
             return True
         if field in self.acceptable_slots and self._profile_value(field) is not None:
@@ -125,13 +128,36 @@ class SimulatedUser:
         return self._profile_value(field) is not None
 
     def _value_for(self, field: str) -> Any:
-        """Resolve the answer value: profile first, then the scenario-domain default."""
+        """Resolve the answer value: DECLARED answer, then profile, then domain default.
+
+        The declared answer comes first because it is the only one that is scenario
+        specific and reviewable. Without it, an ambiguous-role scenario is answered from
+        :data:`_DEFAULTS` -- so SC-G-02 ("an analyst position of some sort in Penang") was
+        answered "data analyst" from a single global string, and the relevance oracle then
+        graded that scenario against a constant living in the evaluation harness rather
+        than against anything the scenario states. A scenario that declares
+        ``reference.clarification_answer`` pins its own answer, which is also what the
+        oracle grades against, so the two cannot disagree.
+        """
+        declared = self._declared_answer(field)
+        if declared is not None:
+            return declared
         val = self._profile_value(field)
         if val is not None:
             return val
         if field in self.acceptable_slots:
             return _DEFAULTS.get(field)
         return None
+
+    def _declared_answer(self, field: str) -> Any:
+        """The scenario's declared clarification answer for ``field``, if it has one."""
+        scenario = self.scenario
+        reference = (scenario.get("reference") if isinstance(scenario, Mapping)
+                     else getattr(scenario, "reference", None)) or {}
+        if not isinstance(reference, Mapping):
+            return None
+        answers = reference.get("clarification_answer") or {}
+        return answers.get(field) if isinstance(answers, Mapping) else None
 
     def _utterance_for(self, field: str, value: Any) -> str | None:
         """Phrase ``value`` for ``field`` so the rule extractor re-extracts it."""

@@ -51,15 +51,43 @@ from ..utils.hashing import sha256_of_bytes, stable_hash
 
 #: Packages whose source determines what a run and its analysis produce. ``jobrec`` is
 #: the system under evaluation; ``jobrec_eval`` is the pipeline that turns run bundles
-#: into the reported numbers. Both are named by the experiment id, so both count.
+#: into the reported numbers. Both are named by the code identity, so both count.
 SOURCE_PACKAGES: tuple[str, ...] = ("jobrec", "jobrec_eval")
 
+#: The package whose source can change what a RUN produces.
+EXECUTION_PACKAGE = "jobrec"
+
+#: Modules OUTSIDE :data:`EXECUTION_PACKAGE` that the run path nevertheless imports, so
+#: their source can change a run bundle. ``jobrec_eval.simulated_user`` is the answerer the
+#: clarification loop feeds back into the session, and it pulls in
+#: ``jobrec_eval.scenarios``; both therefore decide run outcomes despite living in the
+#: analysis package.
+#:
+#: This allowlist exists because splitting the fingerprint by PACKAGE would be wrong:
+#: ``jobrec_eval`` is mostly analysis code that cannot touch a bundle, but not entirely.
+#: ``tests/unit/test_experiment_identity_split.py`` statically scans the execution package
+#: for ``jobrec_eval`` imports and fails if this list drifts, so it cannot rot.
+EXECUTION_EXTRA_MODULES: tuple[str, ...] = (
+    "jobrec_eval/simulated_user.py",
+    "jobrec_eval/scenarios.py",
+)
+
 #: Keys of the dict returned by :func:`code_identity`, in manifest order.
+#:
+#: ``source_fingerprint`` covers both packages and stays the single "what code was this"
+#: value. ``execution_fingerprint`` and ``analysis_fingerprint`` split it by what the code
+#: can actually affect, which is what lets an analysis-only edit be re-run over saved
+#: bundles without invalidating them: the experiment id is derived from the EXECUTION
+#: fingerprint alone (see :func:`experiment_id`). Before the split, editing a report
+#: renderer changed the id of an experiment it could not possibly have influenced, which
+#: forced an otherwise pointless re-run.
 CODE_IDENTITY_FIELDS: tuple[str, ...] = (
     "code_version",
     "commit_hash",
     "git_dirty",
     "source_fingerprint",
+    "execution_fingerprint",
+    "analysis_fingerprint",
 )
 
 #: The file whose presence marks a directory as holding a COMPLETE experiment. The runner
@@ -136,6 +164,12 @@ def source_fingerprint() -> str:
     on Windows and on Linux fingerprints identically; anything else that differs in the
     bytes of a source file changes the fingerprint, committed or not.
     """
+    return stable_hash(_per_file_digests())
+
+
+@lru_cache(maxsize=1)
+def _per_file_digests() -> dict[str, str]:
+    """``relative posix path -> sha256`` for every shipped source file, line-normalised."""
     per_file: dict[str, str] = {}
     for rel, path in _package_source_files():
         try:
@@ -143,7 +177,41 @@ def source_fingerprint() -> str:
         except OSError:
             continue
         per_file[rel] = sha256_of_bytes(raw.replace(b"\r\n", b"\n"))
-    return stable_hash(per_file)
+    return per_file
+
+
+def is_execution_source(relative_path: str) -> bool:
+    """Whether a source file can change what a RUN produces.
+
+    True for the execution package and for the explicitly allowlisted analysis modules the
+    run path imports (:data:`EXECUTION_EXTRA_MODULES`).
+    """
+    return (relative_path.startswith(f"{EXECUTION_PACKAGE}/")
+            or relative_path in EXECUTION_EXTRA_MODULES)
+
+
+@lru_cache(maxsize=1)
+def execution_fingerprint() -> str:
+    """Digest over the sources that can change a run bundle.
+
+    This is what :func:`experiment_id` is derived from, so two runs share an id exactly
+    when the code that could have influenced their bundles is identical.
+    """
+    digests = _per_file_digests()
+    return stable_hash({rel: digest for rel, digest in digests.items()
+                        if is_execution_source(rel)})
+
+
+@lru_cache(maxsize=1)
+def analysis_fingerprint() -> str:
+    """Digest over the sources that can only change the ANALYSIS of saved bundles.
+
+    Recorded, never part of the experiment id: an edit here is re-runnable over existing
+    bundles, which is the whole point of separating it.
+    """
+    digests = _per_file_digests()
+    return stable_hash({rel: digest for rel, digest in digests.items()
+                        if not is_execution_source(rel)})
 
 
 @lru_cache(maxsize=1)
@@ -154,6 +222,8 @@ def _identity_items() -> tuple[tuple[str, Any], ...]:
         ("commit_hash", commit_hash()),
         ("git_dirty", git_dirty()),
         ("source_fingerprint", source_fingerprint()),
+        ("execution_fingerprint", execution_fingerprint()),
+        ("analysis_fingerprint", analysis_fingerprint()),
     )
 
 
@@ -164,7 +234,8 @@ def code_identity() -> dict[str, Any]:
 
 def reset_code_identity_cache() -> None:
     """Forget the cached identity. For tests, and for any caller that edits sources."""
-    for fn in (commit_hash, git_dirty, source_fingerprint, _identity_items):
+    for fn in (commit_hash, git_dirty, _per_file_digests, source_fingerprint,
+               execution_fingerprint, analysis_fingerprint, _identity_items):
         fn.cache_clear()
 
 
@@ -180,18 +251,25 @@ def experiment_id(
     Deterministic in the experiment inputs AND in the code identity, so:
 
     * re-running unchanged code over unchanged inputs yields the same id (idempotent), and
-    * changing the code yields a different id, which is what stops a new official run from
-      landing on top of an older one.
+    * changing the code that could have influenced the bundles yields a different id, which
+      is what stops a new official run from landing on top of an older one.
+
+    Derived from the EXECUTION fingerprint, not from the whole tree. Editing a report
+    renderer or a metric cannot change what a bundle contains, so it must not change the
+    id of the experiment that produced it -- otherwise every analysis fix appears to
+    invalidate the run, and re-running an expensive batch looks mandatory when re-running
+    the analysis over saved bundles is both sufficient and correct. The analysis identity
+    is recorded separately in the manifests.
     """
     identity = identity or code_identity()
     return "exp-" + stable_hash({
         "variants": list(variants),
         "scenarios": list(scenario_ids),
         "config": config_hash,
-        # Only the two fields that describe the code CONTENT -- see the module docstring.
+        # Only the fields that describe the code that can affect a RUN.
         "code": {
             "code_version": identity.get("code_version"),
-            "source_fingerprint": identity.get("source_fingerprint"),
+            "execution_fingerprint": identity.get("execution_fingerprint"),
         },
     })[:12]
 

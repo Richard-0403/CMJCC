@@ -239,7 +239,42 @@ def reference_from_declaration(
         **values,
     )
     context = JobContextAgent(config).build_context(active, catalog_snapshot_id)
+    context = _apply_declared_unknown_policies(context, declaration)
     return context.model_dump(mode="json"), active.model_dump(mode="json")
+
+
+def _apply_declared_unknown_policies(context, declaration: dict):
+    """Override the unknown policy of the named constraints from the declaration.
+
+    Unknown handling is POLICY, not mechanism: whether a job with no stated work mode
+    fails, passes or triggers a clarification changes eligibility, and therefore changes
+    grades. ``JobContextAgent`` picks it from config per field (hard ``work_modes`` fails on
+    unknown, hard ``work_authorizations`` clarifies), which is the right default for the
+    SYSTEM but is a system decision leaking into the ground truth. A declaration may
+    therefore pin it:
+
+        "reference": {"hard": ["salary_min"], "unknown": {"salary_min": "pass"}}
+
+    The comparison itself stays shared with the system on purpose. A second implementation
+    of "does this job satisfy salary_min >= 4000" would be unvalidated, and any divergence
+    between it and the system would be indistinguishable from a finding about the system.
+    What must not be shared is the JUDGEMENT -- values, strengths and now unknown handling
+    -- and that is exactly what the declaration supplies.
+    """
+    from jobrec.domain.enums import UnknownPolicy
+
+    declared = declaration.get("unknown") or {}
+    if not isinstance(declared, dict) or not declared:
+        return context
+    constraints = []
+    for constraint in context.constraints:
+        policy = declared.get(constraint.field_name)
+        if policy is None:
+            constraints.append(constraint)
+            continue
+        constraints.append(constraint.model_copy(
+            update={"unknown_policy": UnknownPolicy(str(policy))}))
+    return context.model_copy(update={"constraints": constraints})
 
 
 def frozen_artifact_path(scenarios_path: str | Path) -> Path:

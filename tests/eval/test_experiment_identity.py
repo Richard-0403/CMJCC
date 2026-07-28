@@ -69,6 +69,8 @@ def _identity(**overrides) -> dict:
         "commit_hash": "a" * 40,
         "git_dirty": False,
         "source_fingerprint": "f" * 64,
+        "execution_fingerprint": "e" * 64,
+        "analysis_fingerprint": "d" * 64,
     }
     base.update(overrides)
     return base
@@ -76,9 +78,15 @@ def _identity(**overrides) -> dict:
 
 # --------------------------------------------------------------- the id itself
 def test_identical_inputs_with_different_code_yield_different_ids():
-    """The dangerous case: same experiment inputs, different source -> different id."""
-    before = experiment_id(**_INPUTS, identity=_identity(source_fingerprint="1" * 64))
-    after = experiment_id(**_INPUTS, identity=_identity(source_fingerprint="2" * 64))
+    """The dangerous case: same experiment inputs, different EXECUTION source -> new id.
+
+    The id is keyed on the execution fingerprint, so this is what "different code" means
+    for a run: code that could have changed the bundles. An analysis-only edit is the
+    complementary case with the opposite requirement, asserted in
+    ``tests/unit/test_experiment_identity_split.py``.
+    """
+    before = experiment_id(**_INPUTS, identity=_identity(execution_fingerprint="1" * 64))
+    after = experiment_id(**_INPUTS, identity=_identity(execution_fingerprint="2" * 64))
 
     assert before != after
     assert before.startswith("exp-") and after.startswith("exp-")
@@ -307,7 +315,8 @@ def test_a_different_code_version_writes_a_new_directory_and_keeps_the_baseline(
     baseline_dir = Path(baseline["experiment_dir"])
     baseline_manifest = (baseline_dir / EXPERIMENT_MANIFEST_FILENAME).read_text()
 
-    patched = {**code_identity(), "source_fingerprint": "9" * 64}
+    patched = {**code_identity(), "execution_fingerprint": "9" * 64,
+               "source_fingerprint": "9" * 64}
     monkeypatch.setattr(runner_module, "code_identity", lambda: patched)
     after_fix = _runner(tiny_inputs, runs).run(["full"])
     after_dir = Path(after_fix["experiment_dir"])

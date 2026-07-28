@@ -56,13 +56,20 @@ _FIELD_MARKERS: dict[str, tuple[str, ...]] = {
     "work_authorizations": ("visa", "authorisation", "authorization", "work permit"),
 }
 
+#: Fields that must be dropped from the reference when the utterance never mentions them,
+#: however the profile is populated. ``work_authorizations`` is the live case: SC-H-03's
+#: profile carries the synthetic placeholder ``["XX"]`` and its utterance ("Only Kuala
+#: Lumpur software engineer, at least RM80000 per month.") says nothing about authorisation
+#: -- so a constraint on it is not something the candidate stated.
+_PROFILE_ONLY_EXCLUSIONS = ("work_authorizations",)
+
 
 def _clauses(turns: list[str]) -> list[str]:
     """Utterances split into clauses, lowercased.
 
-    Cue attribution has to be clause-local: "Business analyst, only Kuala Lumpur, must pay
-    at least RM4500, onsite only" binds three different fields with three different cues,
-    and a whole-utterance match would smear "only" across all of them.
+    Punctuation and ``and`` only. Splitting further would break multi-word markers, so the
+    remaining ambiguity is resolved by PROXIMITY in :func:`_cue_reading` rather than by
+    cutting more aggressively here.
     """
     parts: list[str] = []
     for turn in turns:
@@ -73,22 +80,62 @@ def _clauses(turns: list[str]) -> list[str]:
     return parts
 
 
-def _cue_reading(field: str, clauses: list[str]) -> str | None:
-    """``"hard"`` / ``"soft"`` from the utterance cues alone, or ``None`` when silent."""
+def _occurrences(clause: str, needles: tuple[str, ...]) -> list[tuple[int, str]]:
+    """Every ``(position, needle)`` of ``needles`` in ``clause``."""
+    found: list[tuple[int, str]] = []
+    for needle in needles:
+        start = 0
+        while (at := clause.find(needle, start)) >= 0:
+            found.append((at, needle))
+            start = at + 1
+    return found
+
+
+def _cue_evidence(field: str, clauses: list[str]) -> dict[str, Any]:
+    """The cue evidence for one field: ``{verdict, clause, hard, soft}``.
+
+    Each cue is assigned to the field whose marker is NEAREST to it, and a field's verdict
+    is read only from the cues assigned to it. Two weaker rules were tried and both
+    misreported:
+
+    * attributing every cue in a clause to every field in it made "business analyst in
+      Kuala Lumpur at least RM4000" (one comma-free clause) say the LOCATION was binding,
+      because "at least" -- which binds the salary -- was counted for both;
+    * anchoring on the field and taking its nearest cue has the same failure whenever a
+      clause contains one cue and two fields.
+
+    Nearest-marker assignment gets both right: "at least" is 9 characters from "rm4000"
+    and 13 from "kuala lumpur", so it binds the salary and the location is left with no
+    cue at all -- which is the truth about that sentence.
+
+    ``verdict`` is ``None`` when no cue is assigned to the field, and ``"conflict"`` when
+    both a hard and a soft cue are. Neither is decided here: the rubric decides, and the
+    reviewer sees the clause.
+    """
     markers = _FIELD_MARKERS.get(field)
     if not markers:
-        return None
-    verdict: str | None = None
+        return {"verdict": None, "clause": None, "hard": [], "soft": []}
+
     for clause in clauses:
-        if not any(marker in clause for marker in markers):
+        own = _occurrences(clause, markers)
+        if not own:
             continue
-        if any(cue in clause for cue in _SOFT_CUES):
-            verdict = "soft"
-        elif any(cue in clause for cue in _HARD_CUES):
-            # A hard cue wins over an earlier soft one for the same field only if no soft
-            # cue appears with it; a clause saying both is reported as a conflict below.
-            verdict = verdict if verdict == "soft" else "hard"
-    return verdict
+        # Markers of every OTHER field in this clause, so a cue can be lost to them.
+        rival = [pos for other, other_markers in _FIELD_MARKERS.items() if other != field
+                 for pos, _ in _occurrences(clause, other_markers)]
+        hard: list[str] = []
+        soft: list[str] = []
+        for cues, bucket in ((_HARD_CUES, hard), (_SOFT_CUES, soft)):
+            for at, needle in _occurrences(clause, cues):
+                mine = min(abs(at - pos) for pos, _ in own)
+                theirs = min((abs(at - pos) for pos in rival), default=None)
+                if theirs is None or mine <= theirs:
+                    bucket.append(needle)
+        if not hard and not soft:
+            continue
+        verdict = "conflict" if hard and soft else ("hard" if hard else "soft")
+        return {"verdict": verdict, "clause": clause.strip(), "hard": hard, "soft": soft}
+    return {"verdict": None, "clause": None, "hard": [], "soft": []}
 
 
 def build(scenarios: list[dict], references: dict[str, dict]) -> tuple[list[dict], list[dict]]:
@@ -119,37 +166,84 @@ def build(scenarios: list[dict], references: dict[str, dict]) -> tuple[list[dict
                         "exclusions")
             if active.get(key) not in (None, [], {})
         }
-        declaration["hard"] = seeded_hard
+
+        # --- apply the rubric ------------------------------------------------
+        # Strength is decided by the utterance, not by the extractor: a field is hard only
+        # where the utterance says so ("only", "must", "at least"). A bare mention is a
+        # preference. This is what makes the reference independent of the system, and it
+        # also removes three outliers the extractor produced with nothing in the wording to
+        # justify them (preferred_locations hard in SC-B-04 and SC-D-09 while soft in
+        # eighteen comparable scenarios; work_modes hard in SC-D-12 alone).
+        rubric_hard: list[str] = []
+        for field in sorted({c["field_name"] for c in constraints} - {"not_expired"}):
+            if _cue_evidence(field, clauses)["verdict"] == "hard":
+                rubric_hard.append(field)
+        declaration["hard"] = rubric_hard
+
+        # A constraint the candidate never mentioned is not part of the reference. It would
+        # otherwise enter the constraint bundle and be counted as "applicable" in the
+        # per-constraint compliance table, which is a reported number.
+        for field in _PROFILE_ONLY_EXCLUSIONS:
+            if field in declaration and not any(
+                    marker in " ".join(clauses)
+                    for marker in _FIELD_MARKERS.get(field, ())):
+                declaration.pop(field, None)
+                declaration["excluded"] = sorted(
+                    {*declaration.get("excluded", []), field})
 
         # --- review findings -------------------------------------------------
         for field in sorted({c["field_name"] for c in constraints}
                             - {"not_expired", "experience", "required_skills"}):
-            cue = _cue_reading(field, clauses)
-            seeded = "hard" if field in seeded_hard else "soft"
-            if cue is not None and cue != seeded:
+            evidence = _cue_evidence(field, clauses)
+            cue, seeded = evidence["verdict"], ("hard" if field in seeded_hard else "soft")
+            quoted = f' in "{evidence["clause"]}"' if evidence["clause"] else ""
+            if cue == "conflict":
                 findings.append({
-                    "scenario_id": scenario_id, "kind": "strength_disagreement",
-                    "detail": f"{field}: extractor says {seeded}, utterance cues say {cue}",
+                    "scenario_id": scenario_id, "kind": "cue_conflict",
+                    "detail": f"{field}: extractor says {seeded}; the clause carries both "
+                              f"hard {evidence['hard']} and soft {evidence['soft']} "
+                              f"cues{quoted} -- needs a human reading",
                 })
             elif cue is None:
                 findings.append({
                     "scenario_id": scenario_id, "kind": "strength_unsupported_by_cues",
-                    "detail": f"{field}: extractor says {seeded}; no explicit cue in the "
-                              f"utterance, so the strength is an inference",
+                    "detail": f"{field}: extractor says {seeded}; the utterance states no "
+                              f"cue for this field, so the strength is an inference "
+                              f"(rubric: bare mention -> soft)",
+                })
+            elif cue != seeded:
+                findings.append({
+                    "scenario_id": scenario_id, "kind": "strength_disagreement",
+                    "detail": f"{field}: extractor says {seeded}, the utterance says {cue} "
+                              f"via {evidence['hard'] or evidence['soft']}{quoted}",
                 })
 
         if any(cue in " ".join(clauses) for cue in ("some kind of", "of some sort")):
+            # The vagueness IS the scenario. The reference must not silently resolve it, so
+            # the initial role is marked unspecified and the scenario declares what the
+            # candidate answers when asked -- which is also what the SimulatedUser feeds
+            # back, so the harness and the oracle cannot disagree. Grading against the
+            # CLARIFIED role means a variant that never asked scores badly, which is the
+            # intended finding; a broad "any data role is relevant" set would instead have
+            # rewarded not asking.
+            declaration["role_scope"] = "unspecified_until_clarified"
+            declaration["clarification_answer"] = {
+                "target_roles": (declaration.get("target_roles") or [None])[0]}
             findings.append({
-                "scenario_id": scenario_id, "kind": "ambiguous_role_asserted",
-                "detail": f"utterance is deliberately vague about the role, yet the "
-                          f"reference asserts target_roles={declaration.get('target_roles')}",
+                "scenario_id": scenario_id, "kind": "ambiguous_role_needs_declared_answer",
+                "detail": f"utterance is deliberately vague about the role; drafted "
+                          f"role_scope=unspecified_until_clarified with "
+                          f"clarification_answer="
+                          f"{declaration['clarification_answer']['target_roles']!r} "
+                          f"(seeded from the harness default -- CONFIRM or change it)",
             })
 
-        if declaration.get("work_authorizations"):
+        for field in declaration.get("excluded", []):
             findings.append({
-                "scenario_id": scenario_id, "kind": "profile_placeholder_as_constraint",
-                "detail": f"work_authorizations={declaration['work_authorizations']} comes "
-                          f"from the profile, not from anything the candidate said",
+                "scenario_id": scenario_id, "kind": "profile_only_field_excluded",
+                "detail": f"{field}={active.get(field)} comes from the profile and is "
+                          f"mentioned nowhere in the utterance, so it is EXCLUDED from the "
+                          f"reference (synthetic fixture placeholder)",
             })
 
         out.append({**scenario, "reference": declaration})
