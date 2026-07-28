@@ -174,6 +174,14 @@ class CMJCC:
         # are eligible. We respect use_current_turn so nothing is written back when the
         # current utterance is out of scope for the variant; persist_confirmed_updates
         # and use_persistent_memory gate the mechanism per the resolved flag matrix.
+        #
+        # All three conjuncts are load-bearing, but only because
+        # ``memory.persist_confirmed_updates`` is an honoured config key: across the five
+        # VARIANTS alone, persist_confirmed_updates == use_persistent_memory and
+        # use_current_turn, so the first conjunct would be redundant and the variant
+        # comparison cannot attribute anything to write-back on its own. Any claim about
+        # the write-back mechanism therefore has to come from a config-level condition,
+        # not from the ablation matrix.
         candidate_state = inp.candidate_state
         if (
             self.flags.persist_confirmed_updates

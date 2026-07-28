@@ -21,7 +21,13 @@ the classifier applies them:
 3. ``no_context_other`` -- any other ``no_context`` failure.
 4. ``stale_or_missing_memory (ablation)`` -- a memory-ablated variant asked a
    clarification for evidence it should have carried over from earlier turns or from
-   persistent memory (the ask itself is the symptom of the missing memory).
+   persistent memory (the ask itself is the symptom of the missing memory). Note that a
+   ``one_shot`` run cannot legitimately reach this rule any more: the runner records
+   ``continuation_disabled`` for EVERY run that ends on a clarification under a variant
+   that may not continue, including one whose scenario never expected the ask, so
+   category 1 claims them first. It used to stamp that reason only for scenarios with
+   ``clarification_expected``, and the unstamped runs landed here -- reported as stale
+   memory when the actual cause was a dialogue that was never allowed to continue.
 5. ``missing_dialogue_evidence (baseline)`` -- ``profile_only`` ignores the current
    turn, so its failures (including re-asking an already answered slot) are caused by
    the dialogue evidence it never consumes.
@@ -79,6 +85,7 @@ def _trace(bundle, grade) -> dict:
             "skill_gaps": rj.get("skill_gaps", []),
         })
     return {
+        "repeat_index": bundle.run_index,
         "variant": bundle.variant,
         "turns": [t.get("text") for t in (bundle.dialogue_state or {}).get("turns", [])
                   if t.get("speaker") == "candidate"],
@@ -93,68 +100,126 @@ def _trace(bundle, grade) -> dict:
     }
 
 
-def extract_cases(bundles, run_metrics: pd.DataFrame, grade: dict) -> dict:
+def _repeat_index(row) -> int:
+    """The repeat a run-metrics row describes (``repeat_index``, defaulting to 0)."""
+    value = row.get("repeat_index")
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return 0
+    return int(value)
+
+
+def _bundle_for(idx: dict, row):
+    """The bundle of the EXACT run a row describes, or ``None`` when it is not loaded.
+
+    Cases are selected from a run-metrics row but the bundle used to be fetched with a
+    hardcoded ``run_index`` of 0. With more than one repeat the selected row is often not
+    repeat 0, so the rendered trace belonged to a DIFFERENT run than the one that met the
+    selection criterion -- e.g. a "full succeeded here" case illustrated by a repeat in
+    which full did not. Keying on the row's own ``repeat_index`` is what makes the
+    rendered evidence the evidence for the claim.
+    """
+    return idx.get((row["variant"], row["scenario_id"], _repeat_index(row)))
+
+
+def extract_cases(bundles, run_metrics: pd.DataFrame, grade: dict,
+                  llm_mode: str | None = None) -> dict:
+    """Pick the five case studies. ``llm_mode`` only phrases the claim-validator note."""
     idx = _bundle_index(bundles)
     rm = run_metrics
     cases: dict[str, dict] = {}
 
-    def pair(scenario_id, base="full", other=None):
-        b = idx.get((base, scenario_id, 0))
-        o = idx.get((other, scenario_id, 0)) if other else None
-        return b, o
-
     # 1) full beats no_memory (memory-dependent)
     cand = rm[(rm.variant == "full") & (rm.task_success == 1) &
               (rm.memory_dependency.isin(["medium", "high"]))]
-    for sid in cand.scenario_id:
+    for _, frow in cand.iterrows():
+        sid = frow["scenario_id"]
         nm = rm[(rm.variant == "no_memory") & (rm.scenario_id == sid) & (rm.task_success == 0)]
-        if len(nm):
-            b, o = pair(sid, "full", "no_memory")
-            cases["full_beats_no_memory"] = {"scenario_id": sid, "full": _trace(b, grade),
-                                             "no_memory": _trace(o, grade)}
-            break
+        if not len(nm):
+            continue
+        b, o = _bundle_for(idx, frow), _bundle_for(idx, nm.iloc[0])
+        # A missing bundle means this row's run was not loaded; skip to the next
+        # candidate rather than rendering a case from a bundle that is not its own.
+        if b is None or o is None:
+            continue
+        cases["full_beats_no_memory"] = {"scenario_id": sid, "full": _trace(b, grade),
+                                         "no_memory": _trace(o, grade)}
+        break
 
     # 2) full beats no_context (context-dependent)
     cand = rm[(rm.variant == "full") & (rm.task_success == 1) & (rm.context_dependency == "high")]
-    for sid in cand.scenario_id:
+    for _, frow in cand.iterrows():
+        sid = frow["scenario_id"]
         nc = rm[(rm.variant == "no_context") & (rm.scenario_id == sid) & (rm.task_success == 0)]
-        if len(nc):
-            b, o = pair(sid, "full", "no_context")
-            cases["full_beats_no_context"] = {"scenario_id": sid, "full": _trace(b, grade),
-                                              "no_context": _trace(o, grade)}
-            break
+        if not len(nc):
+            continue
+        b, o = _bundle_for(idx, frow), _bundle_for(idx, nc.iloc[0])
+        if b is None or o is None:
+            continue
+        cases["full_beats_no_context"] = {"scenario_id": sid, "full": _trace(b, grade),
+                                          "no_context": _trace(o, grade)}
+        break
 
     # 3) correct no-match by full
     cand = rm[(rm.variant == "full") & (rm.no_match_expected) & (rm.response_type == "no_match")]
-    if len(cand):
-        sid = cand.iloc[0].scenario_id
-        cases["correct_no_match"] = {"scenario_id": sid, "full": _trace(idx[("full", sid, 0)], grade)}
+    for _, row in cand.iterrows():
+        bundle = _bundle_for(idx, row)
+        if bundle is not None:
+            cases["correct_no_match"] = {"scenario_id": row["scenario_id"],
+                                         "full": _trace(bundle, grade)}
+            break
 
     # 4) a full failure / hardest case
     fails = rm[(rm.variant == "full") & (rm.task_success == 0)]
-    if len(fails):
-        sid = fails.iloc[0].scenario_id
-        cases["full_failure"] = {"scenario_id": sid, "full": _trace(idx[("full", sid, 0)], grade),
-                                 "note": "full did not meet the task-success rule for this scenario"}
-    else:
-        hardest = rm[(rm.variant == "full")].sort_values("partial_task_score").head(1)
-        if len(hardest):
-            sid = hardest.iloc[0].scenario_id
-            cases["full_hardest"] = {"scenario_id": sid, "full": _trace(idx[("full", sid, 0)], grade),
-                                     "note": "no full task failures; showing the lowest partial-score case"}
+    for _, row in fails.iterrows():
+        bundle = _bundle_for(idx, row)
+        if bundle is not None:
+            cases["full_failure"] = {
+                "scenario_id": row["scenario_id"], "full": _trace(bundle, grade),
+                "note": "full did not meet the task-success rule for this scenario"}
+            break
+    if "full_failure" not in cases:
+        hardest = rm[(rm.variant == "full")].sort_values("partial_task_score")
+        for _, row in hardest.iterrows():
+            bundle = _bundle_for(idx, row)
+            if bundle is not None:
+                cases["full_hardest"] = {
+                    "scenario_id": row["scenario_id"], "full": _trace(bundle, grade),
+                    "note": "no full task failures; showing the lowest partial-score case"}
+                break
 
     # 5) claim-validator block (dropped claims) — only under a real LLM
     dropped = rm[rm.get("grounding", 1.0) < 1.0] if "grounding" in rm.columns else pd.DataFrame()
-    if len(dropped):
-        sid = dropped.iloc[0].scenario_id
-        v = dropped.iloc[0].variant
-        cases["claim_block"] = {"scenario_id": sid, "trace": _trace(idx[(v, sid, 0)], grade)}
-    else:
-        cases["claim_block_note"] = (
-            "Under the deterministic backend every emitted claim is grounded by "
-            "construction, so the claim validator drops nothing (grounding = 1.0). "
-            "This case becomes informative only under a real LLM backend.")
+    for _, row in dropped.iterrows():
+        bundle = _bundle_for(idx, row)
+        if bundle is not None:
+            cases["claim_block"] = {"scenario_id": row["scenario_id"],
+                                    "trace": _trace(bundle, grade)}
+            break
+    if "claim_block" not in cases:
+        cases["claim_block_note"] = _claim_block_note(llm_mode)
     return cases
+
+
+def _claim_block_note(llm_mode: str | None) -> str:
+    """Why no claim was blocked, phrased for the backend that actually ran.
+
+    This used to be a fixed sentence about "the deterministic backend", printed verbatim
+    in the HYBRID report too -- where it was simply false as an explanation: under a real
+    model the reason nothing is dropped is that the explanation TEXT is never model-
+    generated (claims are assembled from evidence), not that the backend is deterministic.
+    Stating the wrong mechanism would let a reader conclude the validator was untested
+    against model output.
+    """
+    shared = ("so the claim validator drops nothing (grounding = 1.0)")
+    if str(llm_mode or "").lower() == "deterministic":
+        return ("Under the deterministic backend every emitted claim is grounded by "
+                f"construction, {shared}. This case becomes informative only under a "
+                "real LLM backend that generates explanation text.")
+    return (f"No claim was blocked in this run ({llm_mode} backend), {shared}. Note that "
+            "this is by construction rather than a property of the model: claims are "
+            "assembled from evidence records and the explanation text is not model-"
+            "generated, so the validator has nothing ungrounded to reject. A backend "
+            "that let the model write claim text is where this case becomes informative.")
 
 
 def render_cases_md(cases: dict) -> str:
@@ -162,7 +227,10 @@ def render_cases_md(cases: dict) -> str:
 
     def fmt(trace, label):
         top = "; ".join(f"{t['job_id']}(g={t['grade']},s={t['score']})" for t in trace["selected_top"])
-        return (f"- **{label}** [{trace['variant']}] — turns={trace['turns']}; "
+        # The repeat is part of the run's identity: without it the reader cannot find the
+        # bundle this case was rendered from when the experiment has more than one repeat.
+        return (f"- **{label}** [{trace['variant']} repeat {trace['repeat_index']}] — "
+                f"turns={trace['turns']}; "
                 f"response={trace['response_type']}; active roles={trace['active_roles']}, "
                 f"loc={trace['active_locations']}, salary_min={trace['active_salary_min']}, "
                 f"hard={trace['hard_fields']}; top=[{top}]"

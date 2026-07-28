@@ -82,7 +82,7 @@ from .data_quality import (
     validate_dataset,
     write_data_quality_report,
 )
-from .loaders import load_bundles, normalize
+from .loaders import load_bundles, model_call_identities, normalize
 from .metrics import (
     MetricsComputer,
     aggregate_scenario_variant,
@@ -476,7 +476,7 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     # Graded from the SELECTED label table, so the grades shown beside a case match the
     # ranking metrics reported for that run.
     grade = grade_lookup(primary_labels)
-    cases = extract_cases(bundles, run_metrics, grade)
+    cases = extract_cases(bundles, run_metrics, grade, llm_mode=cfg.llm.mode.value)
     cases_md = render_cases_md(cases)
     err_tax = error_taxonomy(run_metrics)
     _write_csv(err_tax, out / "metrics" / "error_taxonomy.csv")
@@ -575,7 +575,11 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
         "relevance_agreement": rel_agree,
         "claim_agreement": clm_agree,
         "llm_mode": cfg.llm.mode.value,
-        "llm_model": (cfg.llm.provider if cfg.llm.mode.value != "deterministic" else "mock-deterministic"),
+        # The PROVIDER is what the config selects (the transport); the MODEL is only
+        # knowable from the recorded calls, because it comes from the environment. These
+        # used to be one field, so a hybrid run was reported as using model "remote".
+        "llm_provider": cfg.llm.provider,
+        "model_call_identities": model_call_identities(bundles),
     }
 
     # ---- manifests ------------------------------------------------------
@@ -654,8 +658,17 @@ def _write_audit(out: Path, run_metrics: pd.DataFrame, references, scenarios):
         {"report_section": "7", "metric_name": "scenario_type_summary", "source_file": "metrics/scenario_type_summary.csv"},
         {"report_section": "8", "metric_name": "paired_comparisons", "source_file": "statistics/paired_comparisons.csv"},
         {"report_section": "5.5", "metric_name": "relevance_source_comparison", "source_file": "metrics/relevance_source_comparison.csv"},
+        # The three pipeline-stage tables. They were written on every run but rendered
+        # nowhere, so they had no report section to be traced from either.
+        {"report_section": "5.6", "metric_name": "retrieval_metrics", "source_file": "metrics/retrieval_metrics.csv"},
+        {"report_section": "5.6", "metric_name": "topk_contribution", "source_file": "metrics/topk_contribution.csv"},
+        {"report_section": "5.6", "metric_name": "extraction_source_metrics", "source_file": "metrics/extraction_source_metrics.csv"},
+        {"report_section": "9", "metric_name": "error_taxonomy", "source_file": "metrics/error_taxonomy.csv"},
         {"report_section": "9.x", "metric_name": "relevance_labels", "source_file": "normalized/relevance_labels.csv"},
         {"report_section": "10.1", "metric_name": "failure_metrics", "source_file": "metrics/failure_metrics.csv"},
+        # The frozen canonical reference every grade-derived metric is measured against.
+        {"report_section": "5", "metric_name": "canonical_reference",
+         "source_file": f"manifests/{CANONICAL_ORACLE_FILENAME}"},
     ]
     _write_csv(pd.DataFrame(lineage), out / "audit" / "data_lineage.csv")
 
@@ -734,6 +747,41 @@ def run_verify(artifact_dir: str, *, report_untracked: bool = True) -> int:
     return 1
 
 
+def run_replay(experiment_dir: str, *, catalog_path: str | None = None,
+               out_path: str | None = None) -> int:
+    """Replay every run bundle under ``experiment_dir`` and write the diff report.
+
+    Returns 0 when every run replayed and reproduced identical key states, 1 otherwise.
+
+    :mod:`jobrec.evaluation.replay_check` had no entry point outside the test suite, so
+    the reproducibility claim it backs ("N/N runs replayed, 0 differences") could not be
+    reproduced by anyone reading the thesis -- the only way to obtain it was to write
+    Python. This is that command.
+    """
+    from jobrec.evaluation.replay_check import write_replay_diff
+
+    root = Path(experiment_dir)
+    if not root.is_dir():
+        print(f"FAIL: {root} is not a directory")
+        return 2
+    report_path = write_replay_diff(root, catalog_path=catalog_path, out_path=out_path)
+    payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+    print(json.dumps({
+        "root": payload.get("root"),
+        "run_count": payload.get("run_count"),
+        "replayed_count": payload.get("replayed_count"),
+        "identical": payload.get("identical"),
+        "difference_count": payload.get("difference_count"),
+        "report": str(report_path),
+    }, indent=2))
+    if payload.get("identical"):
+        return 0
+    print(f"FAIL: {payload.get('difference_count')} key-state difference(s); "
+          f"{payload.get('run_count', 0) - payload.get('replayed_count', 0)} run(s) "
+          f"could not be replayed. See {report_path}")
+    return 1
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="CMJCC evaluation pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -780,6 +828,13 @@ def main() -> None:
     ver.add_argument("--allow-untracked", action="store_true",
                      help="ignore files added after the manifest was written")
 
+    rep = sub.add_parser("replay", help="replay run bundles and diff their key states (R18)")
+    rep.add_argument("experiment_dir", help="run-bundle directory to replay")
+    rep.add_argument("--catalog", dest="catalog_path", default=None,
+                     help="catalog to replay against (default: the snapshot in the tree)")
+    rep.add_argument("--out", dest="out_path", default=None,
+                     help="where to write the diff report (default: beside the bundles)")
+
     args = parser.parse_args()
     if args.command == "pipeline":
         variants = args.variants.split(",") if args.variants else None
@@ -807,6 +862,11 @@ def main() -> None:
     elif args.command == "verify":
         code = run_verify(args.artifact_dir,
                           report_untracked=not args.allow_untracked)
+        if code != 0:
+            raise SystemExit(code)
+    elif args.command == "replay":
+        code = run_replay(args.experiment_dir, catalog_path=args.catalog_path,
+                          out_path=args.out_path)
         if code != 0:
             raise SystemExit(code)
 

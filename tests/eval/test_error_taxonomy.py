@@ -100,6 +100,21 @@ def test_truncation_is_recognised_for_any_variant_not_only_one_shot():
         assert _category_of(_truncated_row(variant=variant)) == TRUNCATED, variant
 
 
+def test_truncation_of_an_unexpected_ask_is_still_a_continuation_failure():
+    """A single-turn run that asked an UNEXPECTED question is truncated all the same.
+
+    This is the class that used to be misfiled: the runner only stamped
+    ``continuation_disabled`` when the scenario expected a clarification, so these runs
+    arrived with no terminal state and the fallback (classify by expectation) sent them
+    to the memory category. The runner now records the reason for them too, and the rule
+    must honour it rather than re-deriving anything from the expectation.
+    """
+    row = _truncated_row(clarification_expected=False)
+    assert _category_of(row) == TRUNCATED
+    assert _category_of(_truncated_row(variant="no_memory",
+                                       clarification_expected=False)) == TRUNCATED
+
+
 def test_truncation_without_a_recorded_reason_still_classified_by_expectation():
     """Frames predating ``termination_reason`` fall back to the scenario expectation.
 

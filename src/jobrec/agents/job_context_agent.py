@@ -95,7 +95,11 @@ class JobContextAgent:
                 rule_id=f"rule.{field}",
             )
 
-        # Job validity / deadline is always a hard system constraint.
+        # Job validity / deadline is always a hard system constraint. This is the ONLY
+        # place expiry policy is decided: an expired job fails, a job with no deadline
+        # passes (``UnknownPolicy.PASS``). ``context.expired_job_policy`` looks like it
+        # governs this but is inert -- see the note on ``ContextConfig``. Any claim about
+        # expiry handling must cite this constraint, not that key.
         constraints.append(
             ConstraintDefinition(
                 constraint_id=content_id("con", active.active_search_id, "not_expired"),

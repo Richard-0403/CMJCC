@@ -179,8 +179,12 @@ def test_report_renders_the_clarification_efficiency_table_and_joint_reading():
     assert "unresolved-dialogue penalty" in squeezed
 
     row = _table_rows(section)["full"]
+    # The tier composition and the median are the primary reading; the mean is kept but
+    # explicitly labelled a penalty scale rather than a magnitude.
+    assert "penalty scale, not a rate" in squeezed
     header = ["MedTurns", "IQR(Q1-Q3)", "NecRecall", "NecAsked", "UnnecAsked",
-              "NecMissed", "RepeatGuard", "Abandoned", "AnsweredRate", "EffScore", "n"]
+              "NecMissed", "RepeatGuard", "Abandoned", "AnsweredRate",
+              "Tier res/aband/skip", "MedEff", "EffScore", "n"]
     cells = dict(zip(header, row, strict=True))
     assert cells["MedTurns"] == "2.00"
     assert cells["IQR(Q1-Q3)"] == "2.00 (1.00-3.00)"

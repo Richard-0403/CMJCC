@@ -245,19 +245,29 @@ class ExperimentRunner:
         # loop: the system may still ASK, but nothing is fed back, so the run ends on the
         # asking turn. This is a gate on the shared path, not a second pipeline.
         termination_reason = self._terminal_reason(last_result)
-        if last_result is not None and self._is_clarification_dependent(scenario):
-            if self._continues_dialogue(flags):
-                last_result, extra_turns, termination_reason, loop_trace = (
-                    self._run_clarification_loop(
-                        svc, session_id, scenario, last_result,
-                        log_sink=log_trace, result_sink=turn_results)
-                )
-                response_turns += extra_turns
-                trace.extend(loop_trace)
-            elif termination_reason is None:
-                # Non-terminal (the system asked a clarification) and the condition
-                # cannot continue: record WHY the dialogue stopped here.
-                termination_reason = TERMINATION_CONTINUATION_DISABLED
+        if (last_result is not None and self._is_clarification_dependent(scenario)
+                and self._continues_dialogue(flags)):
+            last_result, extra_turns, termination_reason, loop_trace = (
+                self._run_clarification_loop(
+                    svc, session_id, scenario, last_result,
+                    log_sink=log_trace, result_sink=turn_results)
+            )
+            response_turns += extra_turns
+            trace.extend(loop_trace)
+        elif (last_result is not None and termination_reason is None
+                and not self._continues_dialogue(flags)):
+            # The run ended on a clarification (``_terminal_reason`` is None only for a
+            # clarification response) under a condition that may not continue: record
+            # WHY the dialogue stopped here.
+            #
+            # This deliberately does NOT require the scenario to expect a clarification.
+            # It used to, and the consequence was a mis-attribution rather than a missing
+            # label: a single-turn variant that asked an UNEXPECTED question got no
+            # terminal state at all, so the error taxonomy fell through to a
+            # memory-related category and blamed stale memory for a truncated dialogue.
+            # Whether continuation was permitted is a property of the experiment
+            # condition, not of the scenario's expectations.
+            termination_reason = TERMINATION_CONTINUATION_DISABLED
 
         # Stamp the loop's termination reason onto the final record so run-level
         # metrics can read the terminal outcome from the last trace row (R7.8).

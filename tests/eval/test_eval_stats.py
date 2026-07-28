@@ -16,6 +16,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from jobrec_eval.statistics import (
+    ESTIMAND_BINARY,
+    ESTIMAND_SCENARIO_MEAN,
     aggregate_scenario_success,
     compare,
     holm,
@@ -127,9 +129,35 @@ def test_task_success_pairs_at_scenario_level():
     assert res["mcnemar"]["n_discordant"] == 3
     assert res["effect_type"] == "rank_biserial"
     assert res["effect_size"] == pytest.approx((2 - 1) / 3)
-    # Means still come from the repeat-averaged scenario values.
-    assert res["base_mean"] == pytest.approx((1 + 2 / 3 + 0 + 2 / 3) / 4)
-    assert res["other_mean"] == pytest.approx((1 / 3 + 1 + 2 / 3 + 0) / 4)
+    # EVERY cell of the row describes the same estimand: the scenario-level binaries
+    # ([1,1,0,1] vs [0,1,1,0]) that McNemar and the effect size were computed on. The
+    # means used to be the repeat-averaged values instead, so one row mixed two
+    # estimands -- a visibly different mean and delta reported next to a p-value and an
+    # n that belonged to the other one.
+    assert res["estimand"] == ESTIMAND_BINARY
+    assert res["base_mean"] == pytest.approx(3 / 4)
+    assert res["other_mean"] == pytest.approx(2 / 4)
+    assert res["delta"] == pytest.approx(3 / 4 - 2 / 4)
+    assert res["ci_low"] is not None and res["ci_high"] is not None
+
+    # The repeat-averaged success RATE is still reported, under its own names.
+    assert res["base_repeat_mean"] == pytest.approx((1 + 2 / 3 + 0 + 2 / 3) / 4)
+    assert res["other_repeat_mean"] == pytest.approx((1 / 3 + 1 + 2 / 3 + 0) / 4)
+    assert res["repeat_mean_delta"] == pytest.approx(
+        res["base_repeat_mean"] - res["other_repeat_mean"])
+    # And it is genuinely a DIFFERENT number, so the two could not have been conflated
+    # without changing what the row reports.
+    assert res["base_repeat_mean"] != pytest.approx(res["base_mean"])
+    assert res["repeat_mean_delta"] != pytest.approx(res["delta"])
+
+
+def test_continuous_metric_row_declares_the_scenario_mean_estimand():
+    """A continuous metric keeps the repeat-averaged scenario mean, and says so."""
+    rm = _run_metrics()
+    sv = _scenario_variant(rm)
+    res = compare(sv, rm, "ndcg_at_5", "full", "no_memory", iterations=200)
+    assert res["estimand"] == ESTIMAND_SCENARIO_MEAN
+    assert "base_repeat_mean" not in res
 
 
 def test_task_success_scenario_binaries_use_majority_vote():

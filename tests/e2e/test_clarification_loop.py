@@ -550,3 +550,92 @@ def test_multi_turn_continuation_flag_is_not_dead(loop_env) -> None:
     assert off["response_turns"] < on["response_turns"]
     assert off["termination_reason"] == TERMINATION_CONTINUATION_DISABLED
     assert on["termination_reason"] == "recommendation"
+
+
+# ---------------------------------------------------------------------------
+# R7.8: the continuation gate is a property of the CONDITION, not of the scenario's
+# expectations. A single-turn variant that asks an UNEXPECTED clarification is just as
+# truncated as one that asks an expected one, and used to record no terminal state at
+# all -- which sent those runs into a memory-related error category and blamed stale
+# memory for a dialogue that was never allowed to continue.
+# ---------------------------------------------------------------------------
+
+#: The divergence scenario with its clarification expectation REMOVED. The system still
+#: asks (the opening turn states no role); the scenario simply does not declare it.
+def _unexpected_clarification_scenario() -> dict:
+    scenario = _scenario(_E2E_SLOTS, _DIVERGENCE_TURNS)
+    scenario["scenario_id"] = "SC-P10-UNEXPECTED"
+    scenario["clarification_expected"] = False
+    scenario["expects"] = {"response_type": "recommendation"}
+    return scenario
+
+
+def _run_scenario(loop_env, variant: str, scenario: dict, exp_name: str, *,
+                  continuation: bool | None = None) -> dict:
+    cfg = loop_env["config"].model_copy(deep=True)
+    cfg.experiment.max_dialogue_turns = _E2E_MAX_TURNS
+    if continuation is not None:
+        cfg.memory.use_multi_turn_continuation = continuation
+    runner = ExperimentRunner(
+        cfg, loop_env["catalog_path"], loop_env["scenarios_path"],
+        out_dir=str(loop_env["out_dir"]))
+    row, _failure = runner._run_one(
+        variant, scenario, 0, loop_env["out_dir"] / exp_name)
+    return row
+
+
+def test_unexpected_clarification_under_a_single_turn_variant_records_truncation(
+    loop_env,
+) -> None:
+    """A single-turn variant that asks an unexpected question still records WHY it stopped.
+
+    The stamp used to require ``clarification_expected``, so this run ended with no
+    terminal state. Nothing downstream could then tell that continuation was forbidden,
+    and the error taxonomy fell through to a memory category.
+
+    **Validates: Requirements 7.8, 7.9**
+    """
+    scenario = _unexpected_clarification_scenario()
+    row = _run_scenario(loop_env, "one_shot", scenario, "exp_unexpected_one_shot")
+
+    assert row["response_type"] == "clarification", row
+    assert row["termination_reason"] == TERMINATION_CONTINUATION_DISABLED, row
+    # The trace's final record carries the same reason, which is what the metrics read.
+    trace = [
+        json.loads(line)
+        for line in (Path(row["run_dir"]) / "dialogue_trace.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert trace[-1]["termination_reason"] == TERMINATION_CONTINUATION_DISABLED
+
+
+def test_a_variant_that_may_continue_does_not_claim_truncation(loop_env) -> None:
+    """The stamp is not applied to a condition that WAS allowed to continue.
+
+    Otherwise every unanswered clarification would look like a forbidden continuation,
+    and the truncation category would absorb genuine clarification-quality failures.
+
+    **Validates: Requirements 7.8, 7.9**
+    """
+    scenario = _unexpected_clarification_scenario()
+    row = _run_scenario(loop_env, "full", scenario, "exp_unexpected_full")
+
+    assert row["termination_reason"] != TERMINATION_CONTINUATION_DISABLED, row
+
+
+def test_every_single_turn_run_that_asks_records_a_terminal_state(loop_env) -> None:
+    """No single-turn run ends on a clarification without a recorded reason.
+
+    This is the invariant the error taxonomy depends on: its fallback path (classify by
+    the scenario's expectation) is what mislabelled these runs, so the primary signal
+    must never be absent for them.
+
+    **Validates: Requirements 7.8, 7.9**
+    """
+    for index, scenario in enumerate((_unexpected_clarification_scenario(),
+                                      _scenario(_E2E_SLOTS, _DIVERGENCE_TURNS))):
+        row = _run_scenario(loop_env, "one_shot", scenario, f"exp_terminal_{index}")
+        if row["response_type"] == "clarification":
+            assert row["termination_reason"] == TERMINATION_CONTINUATION_DISABLED, row
+        else:
+            assert row["termination_reason"], row

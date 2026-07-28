@@ -154,6 +154,33 @@ def discover_experiment_dir(runs_root: str | Path, experiment_id: str | None = N
     return candidates[-1]
 
 
+def model_call_identities(bundles) -> list[dict]:
+    """Which (provider, model) actually answered, read off ``model_calls.jsonl``.
+
+    The report used to print ``cfg.llm.provider`` under the heading "model", so a hybrid
+    run was documented as having used the model ``remote`` -- the transport, not the
+    model. The model name is not in the config at all (it comes from the environment), so
+    the only authoritative source is the recorded calls themselves.
+
+    Returns one row per distinct ``(provider, model)`` with its call count and how many
+    of those calls failed, ordered by call count descending. Empty for a deterministic
+    experiment, which correctly makes no calls.
+    """
+    counts: dict[tuple[str, str], dict] = {}
+    for bundle in bundles:
+        for call in _read_jsonl(bundle.path / "model_calls.jsonl"):
+            if not isinstance(call, dict):
+                continue
+            key = (str(call.get("provider") or "unknown"),
+                   str(call.get("model") or "unknown"))
+            row = counts.setdefault(key, {"provider": key[0], "model": key[1],
+                                          "calls": 0, "failed_calls": 0})
+            row["calls"] += 1
+            if (call.get("response_metadata") or {}).get("failed"):
+                row["failed_calls"] += 1
+    return sorted(counts.values(), key=lambda r: (-r["calls"], r["model"]))
+
+
 def load_bundles(experiment_dir: str | Path) -> list[RunBundle]:
     """Walk {variant}/{scenario_id}/{run_index}/ and load every run bundle."""
     exp = Path(experiment_dir)

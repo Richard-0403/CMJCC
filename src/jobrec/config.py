@@ -48,6 +48,15 @@ class ContextConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     explicit_constraint_orchestration: bool = True
     hard_constraint_unknown_default: UnknownPolicy = UnknownPolicy.FAIL
+    #: INERT. Nothing reads this. Expiry policy is decided in one place only --
+    #: ``JobContextAgent`` always emits a hard ``not_expired`` constraint whose unknown
+    #: policy is PASS -- and this key cannot change that.
+    #:
+    #: It is kept rather than deleted because every archived run bundle embeds the
+    #: ``resolved_config.yaml`` it ran under, and ``AppConfig`` forbids extra fields:
+    #: dropping the field makes every previously archived experiment fail to load and so
+    #: fail to replay (verified -- 210/210 runs errored on exactly this). Reproducibility
+    #: of the frozen evidence outranks tidiness here.
     expired_job_policy: str = "fail"
 
 

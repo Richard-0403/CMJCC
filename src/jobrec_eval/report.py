@@ -56,6 +56,31 @@ def _fmt(x, nd=3):
     return str(x)
 
 
+#: Below this, a p-value is printed in scientific notation instead of being rounded.
+#: Fixed 3-decimal rounding printed ``0.000`` for everything smaller, which reads as
+#: exactly zero -- a p-value that cannot exist. Real values here reached 4.66e-10, and
+#: an exact test's p also cannot be distinguished from a borderline 0.0004 once rounded.
+_P_SCIENTIFIC_BELOW = 0.001
+
+
+def _fmt_p(value) -> str:
+    """A p-value as text: never ``0.000``, never a bare zero."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "N/A"
+    try:
+        p = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if p < 0:
+        return _fmt(p)
+    if p == 0.0:
+        # Genuinely zero cannot come out of these tests; say so rather than print 0.
+        return "<1e-300"
+    if p < _P_SCIENTIFIC_BELOW:
+        return f"{p:.2e}"
+    return f"{p:.3f}"
+
+
 #: Small counts spelled as words, matching the prose style of the template.
 _NUMBER_WORDS = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
                  6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten"}
@@ -224,6 +249,33 @@ def _overall_delta_bullet(row: dict | None) -> str:
     return phrase if pairs is None else f"{phrase}, n={pairs} paired scenarios"
 
 
+#: The dialogue-baseline comparisons §5.x reports, as ``(metric, label, other)``.
+_BASELINE_BULLETS = (
+    ("ndcg_at_5", "NDCG@5", "profile_only"),
+    ("ndcg_at_5", "NDCG@5", "one_shot"),
+    ("task_success", "Task success", "profile_only"),
+    ("task_success", "Task success", "one_shot"),
+)
+
+
+def _baseline_delta_bullets(overall: list[dict]) -> str:
+    """§5.x bullets, restricted to comparisons the run actually contains.
+
+    These were three hardcoded bullets, so an analysis whose variant set omitted a
+    baseline printed ``N/A`` for it -- a claim that the comparison was attempted and
+    yielded nothing, when it was never in scope. A comparison that is absent is now
+    absent, and one that IS present but not estimable still prints its reason.
+    """
+    by_key = {(r.get("metric"), r.get("other")): r for r in overall or []}
+    lines = [f"- {label}, full vs {other}: {_overall_delta_bullet(by_key[(metric, other)])}."
+             for metric, label, other in _BASELINE_BULLETS
+             if (metric, other) in by_key]
+    if not lines:
+        return ("_This analysis contains no dialogue-baseline variant, so there is no "
+                "full-vs-baseline comparison to report._")
+    return "\n".join(lines)
+
+
 def _contrib_table(df: pd.DataFrame, subset: str, family: str = "primary") -> str:
     """Render one Δ table for a scenario ``subset`` within one outcome ``family``.
 
@@ -252,9 +304,40 @@ def _contrib_table(df: pd.DataFrame, subset: str, family: str = "primary") -> st
         eff = f"{_fmt(r.get('effect_size'))} ({r.get('effect_type')})" if r.get("effect_size") is not None else "N/A"
         lines.append(
             f"| {r['metric']} | {_fmt(r['base_mean'])} | {_fmt(r['other_mean'])} | "
-            f"{_fmt(r['delta'])} | {ci} | {_fmt(r.get('p_value'))} | {_fmt(r.get('p_value_holm'))} | "
+            f"{_fmt(r['delta'])} | {ci} | {_fmt_p(r.get('p_value'))} | "
+            f"{_fmt_p(r.get('p_value_holm'))} | "
             f"{eff} | {int(r['n_pairs'])} |")
+    note = _estimand_note(sub)
+    if note:
+        lines += ["", note]
     return "\n".join(lines)
+
+
+def _estimand_note(sub: pd.DataFrame) -> str:
+    """Disclose the estimand behind the ``task_success`` row, and the rate beside it.
+
+    Every cell of that row (mean, Δ, CI, p, effect, n) describes the scenario-level
+    binary collapsed by majority vote over repeats -- the pre-registered estimand. The
+    success RATE over repeats is a different quantity; it is printed here rather than
+    silently occupying the mean and Δ cells, which is what it used to do while the p-value
+    and n described the binaries.
+    """
+    if "metric" not in sub.columns:
+        return ""
+    rows = sub[sub["metric"] == "task_success"]
+    if rows.empty:
+        return ""
+    row = rows.iloc[0]
+    note = ("`task_success` is the **scenario-level binary** (repeats collapsed by "
+            "majority vote, even-repeat ties → 0) in every column of its row, including "
+            "the Δ and the CI.")
+    base_rate, other_rate = row.get("base_repeat_mean"), row.get("other_repeat_mean")
+    if base_rate is not None and not pd.isna(base_rate):
+        note += (f" For reference, the mean success RATE over repeats is "
+                 f"{_fmt(base_rate)} (full) vs {_fmt(other_rate)} "
+                 f"(Δ {_fmt(row.get('repeat_mean_delta'))}); that is a different "
+                 f"estimand and is not what the test above was computed on.")
+    return note
 
 
 def _compliance_cell(row) -> str:
@@ -344,7 +427,8 @@ def _clarification_efficiency_table(eff_rows: list[dict], clar_rows: list[dict])
         return "_No clarification-efficiency data._"
     clar_by_variant = {r["variant"]: r for r in clar_rows or []}
     cols = ["variant", "MedTurns", "IQR(Q1-Q3)", "NecRecall", "NecAsked", "UnnecAsked",
-            "NecMissed", "RepeatGuard", "Abandoned", "AnsweredRate", "EffScore", "n"]
+            "NecMissed", "RepeatGuard", "Abandoned", "AnsweredRate",
+            "Tier res/aband/skip", "MedEff", "MeanEff", "n(runs)"]
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     by_variant = {r["variant"]: r for r in eff_rows}
     for v in _ordered_variants(by_variant):
@@ -352,14 +436,36 @@ def _clarification_efficiency_table(eff_rows: list[dict], clar_rows: list[dict])
         c = clar_by_variant.get(v, {})
         iqr = (f"{_fmt(r.get('iqr_response_turns'), 2)} "
                f"({_fmt(r.get('q1_response_turns'), 2)}-{_fmt(r.get('q3_response_turns'), 2)})")
+        tiers = (f"{_fmt(_count(r.get('tier_resolved')))}/"
+                 f"{_fmt(_count(r.get('tier_abandoned')))}/"
+                 f"{_fmt(_count(r.get('tier_skipped')))}")
         lines.append(
             f"| {v} | {_fmt(r.get('median_response_turns'), 2)} | {iqr} | "
             f"{_fmt(c.get('necessary_recall'))} | {_fmt(r.get('necessary_asked'))} | "
             f"{_fmt(r.get('unnecessary_asked'))} | {_fmt(r.get('necessary_missed'))} | "
             f"{_fmt(c.get('repeated'))} | {_fmt(r.get('asked_unresolved'))} | "
-            f"{_fmt(c.get('answered_rate'))} | {_fmt(r.get('efficiency_score'), 2)} | "
+            f"{_fmt(c.get('answered_rate'))} | {tiers} | "
+            f"{_fmt(r.get('median_efficiency_score'), 2)} | "
+            f"{_fmt(r.get('efficiency_score'), 2)} | "
             f"{_fmt(r.get('runs'))} |")
+    lines += ["", _EFFICIENCY_SCALE_NOTE]
     return "\n".join(lines)
+
+
+#: How to read the efficiency columns. Without this the mean invites a magnitude
+#: interpretation it cannot support: on a scale whose skip penalty is 1e6, one skipped run
+#: in twenty produces a variant mean near -50000, which says nothing about "how
+#: inefficient" the variant is -- only that some runs fell into the worst tier.
+_EFFICIENCY_SCALE_NOTE = (
+    "`Tier res/aband/skip` counts runs by efficiency TIER: asked-and-resolved, "
+    "asked-then-abandoned, and necessary-clarification-skipped. This is the primary "
+    "reading. `MedEff` is the median score (where the typical run sits) and `MeanEff` "
+    "the mean. **`MeanEff` is a penalty scale, not a rate**: the skip tier costs 1e6 and "
+    "the abandon tier 1e3, so a five-figure mean encodes the SHARE of runs in the worst "
+    "tier, not a magnitude of inefficiency. Compare variants on the tier counts and the "
+    "median; use the mean only for the ordering it guarantees (resolved > abandoned > "
+    "skipped)."
+)
 
 
 def _count(value) -> int | None:
@@ -465,7 +571,7 @@ def _pairing_provenance_table(overall: list[dict]) -> str:
             f"| full vs {r.get('other')} | {_fmt(r.get('scenario_count'))} | "
             f"{_fmt(r.get('total_run_count'))} | {_fmt(r.get('repeats_per_scenario'))} | "
             f"{_fmt(r.get('valid_pairs'))} | {_fmt(r.get('discordant_pairs'))} | "
-            f"{_fmt(r.get('n_pairs'))} | {_fmt(r.get('p_value'))} |")
+            f"{_fmt(r.get('n_pairs'))} | {_fmt_p(r.get('p_value'))} |")
     return "\n".join(lines)
 
 
@@ -773,6 +879,125 @@ def _relevance_label_appendix(data: dict) -> str:
     return "\n".join(lines)
 
 
+def _md_table(rows: list[dict], columns: list[tuple[str, str]],
+              empty: str, nd: int = 3) -> str:
+    """A markdown table of ``rows`` restricted to ``columns`` as ``(key, header)`` pairs."""
+    if not rows:
+        return empty
+    head = "| " + " | ".join(header for _key, header in columns) + " |"
+    sep = "|" + "---|" * len(columns)
+    lines = [head, sep]
+    for row in rows:
+        lines.append("| " + " | ".join(
+            _fmt(row.get(key), nd) for key, _header in columns) + " |")
+    return "\n".join(lines)
+
+
+#: Columns rendered for each of the three pipeline-stage tables. These metrics were
+#: computed and written to ``metrics/*.csv`` on every run but appeared NOWHERE in the
+#: report, so the retrieval stage, the ranking features' contributions and the
+#: rule-vs-model extraction split were all invisible to a reader of the analysis.
+_RETRIEVAL_COLUMNS = [
+    ("variant", "variant"), ("retrieval_runs", "runs w/ retrieval"),
+    ("mean_initial_pool_size", "mean recalled"), ("mean_pool_size", "mean pool"),
+    ("mean_retrieval_score", "mean score"), ("fallback_rate", "full-catalog fallback"),
+    ("median_retrieval_latency_ms", "median lat(ms)"),
+    ("recall_at_pool", "recall@pool"), ("relevant_job_coverage", "relevant coverage"),
+    ("retrieval_error_rate", "retr err"), ("ranking_error_rate", "rank err"),
+]
+
+_TOPK_COLUMNS = [
+    ("feature", "ranking feature"), ("mean_weight", "mean weight"),
+    ("mean_normalized_score", "mean norm score"),
+    ("mean_contribution", "mean contribution"),
+    ("contribution_share", "share of total"), ("inactive_jobs", "inactive jobs"),
+    ("dominant_explanation_code", "dominant explanation"),
+]
+
+_EXTRACTION_COLUMNS = [
+    ("variant", "variant"), ("fields", "fields"), ("rule_share", "rule share"),
+    ("llm_share", "model share"), ("repaired_fields", "repaired"),
+    ("rule_fallback_fields", "rule fallback"), ("unresolved_fields", "unresolved"),
+    ("schema_failure_rate", "schema failure"), ("fallback_rate", "fallback rate"),
+]
+
+
+def _pipeline_stage_sections(data: dict) -> str:
+    """Render the retrieval / top-k / extraction-source tables (§5.6).
+
+    All three come from tables the pipeline already wrote; only the rendering was
+    missing. The top-k table is shown for the ``full`` variant at variant scope, because
+    the per-rank breakdown is five times longer and adds nothing a reader can act on --
+    the CSV carries it.
+    """
+    retrieval = list(data.get("retrieval_metrics") or [])
+    topk_all = list(data.get("topk_contribution") or [])
+    extraction = [r for r in (data.get("extraction_source_metrics") or [])
+                  if str(r.get("scope")) == "variant"]
+
+    topk = [r for r in topk_all
+            if str(r.get("scope")) == "variant" and str(r.get("variant")) == "full"]
+    topk.sort(key=lambda r: (r.get("contribution_share") or 0.0), reverse=True)
+
+    parts = [
+        "**Retrieval layer.** Pool sizes, retrieval scores and the empty-recall "
+        "fallback, per variant. `recall@pool` and `relevant coverage` are computed "
+        "against the automatic-oracle label universe in both relevance modes; they read "
+        "`N/A` when no labelled scenario returned a pool to score.",
+        "",
+        _md_table(retrieval, _RETRIEVAL_COLUMNS,
+                  "_No retrieval metrics available._"),
+        "",
+        "Source: `metrics/retrieval_metrics.csv`.",
+        "",
+        "**Ranking-feature contributions (variant `full`, top-k results).** `share of "
+        "total` is the feature's mean contribution divided by the mean total score, so "
+        "a feature with weight 0 or no applicable jobs contributes 0 by construction "
+        "rather than by failing.",
+        "",
+        _md_table(topk, _TOPK_COLUMNS,
+                  "_No top-k contribution data available._"),
+        "",
+        "Source: `metrics/topk_contribution.csv` (also carries the per-rank breakdown "
+        "and the other variants).",
+        "",
+        "**Extraction source.** How each variant's constraint fields were obtained. "
+        "Under the deterministic backend `rule share` is 1.0 by construction and the "
+        "model columns are 0; under a hybrid backend this table is where the model's "
+        "share, its schema-repair rate and its fallbacks to the rule extractor are read.",
+        "",
+        _md_table(extraction, _EXTRACTION_COLUMNS,
+                  "_No extraction-source metrics available._"),
+        "",
+        "Source: `metrics/extraction_source_metrics.csv` (also carries the "
+        "per-scenario-type scope).",
+    ]
+    return "\n".join(parts)
+
+
+def _backend_identity_line(data: dict) -> str:
+    """Provider and the model(s) that actually answered, kept distinct (§1).
+
+    The report used to print the configured PROVIDER under the label "model", so a
+    hybrid run appeared to have used a model called ``remote``. The provider is a
+    transport chosen by config; the model name only exists in the recorded calls, so it
+    is reported from there or not at all.
+    """
+    provider = data.get("llm_provider") or data.get("llm_model") or "unknown"
+    identities = list(data.get("model_call_identities") or [])
+    if not identities:
+        return (f"provider `{provider}`, no model calls recorded (the deterministic "
+                f"backend makes none, so no model answered any request);")
+    parts = []
+    for row in identities:
+        failed = row.get("failed_calls") or 0
+        suffix = f", {failed} failed" if failed else ""
+        parts.append(f"`{row.get('model')}` via `{row.get('provider')}` "
+                     f"({row.get('calls')} calls{suffix})")
+    return (f"provider `{provider}`; model(s) actually used, read from "
+            f"`model_calls.jsonl`: " + "; ".join(parts) + ";")
+
+
 def _error_taxonomy_table(rows: list[dict]) -> str:
     if not rows:
         return "_No task failures to categorize._"
@@ -860,7 +1085,8 @@ def generate_markdown(data: dict, plots_rel: str = "../plots") -> str:
 - Experiment `{exp['experiment_id']}` — {exp['scenario_count']} scenarios ×
   {len(exp['variants'])} variants × {exp['repeat_count']} repeat(s) =
   {exp['run_count']} runs. Reference date {exp['reference_date']}.
-- Run mode: **{data.get('llm_mode', 'deterministic')}** (model: {data.get('llm_model', 'mock-deterministic')}); config/catalog/prompt hashes frozen.
+- Run mode: **{data.get('llm_mode', 'deterministic')}**; {_backend_identity_line(data)}
+  config/catalog/prompt hashes frozen.
 - Headline (full variant, scenario-mean, with the denominator `n` each mean was taken
   over — they differ between metrics, see §5): {_headline_metrics(full)}.
 - {_relevance_source_line(data)}
@@ -925,9 +1151,7 @@ variants; the ranking columns are comparable only between variants whose `n` agr
 
 ### 5.x Full vs dialogue baselines (relevance & task success)
 
-- NDCG@5, full vs profile_only: {_overall_delta_bullet(ocmp('ndcg_at_5','profile_only'))}.
-- NDCG@5, full vs one_shot: {_overall_delta_bullet(ocmp('ndcg_at_5','one_shot'))}.
-- Task success, full vs profile_only: {_overall_delta_bullet(ocmp('task_success','profile_only'))}.
+{_baseline_delta_bullets(overall)}
 
 `n` is the number of scenarios paired between the two variants, i.e. the scenarios on
 which both returned a comparable value; a scenario the other variant abandoned forms no
@@ -965,6 +1189,14 @@ Clarification precision / recall by variant:
 
 {_pr_table(data.get('clarification_metrics', []), [('precision','Precision'), ('recall','Recall'), ('useful','Useful'), ('expected_clarification','Expected')])}
 
+**Unit of the counts in both tables above: RUNS, not scenarios.** `TP`, `Expected` and
+`Useful` count runs, so with `r` repeats per scenario an expectation held by `s` scenarios
+appears as `s × r`. That is why an `Expected` of 126 over 42 scenarios is three repeats of
+each, not 126 distinct scenarios — the precision and recall values themselves are
+unaffected (numerator and denominator scale together), but the counts must not be read as
+scenario evidence. Every statistical test in §6 and §8 pairs at the SCENARIO level
+instead; see the analysis-unit note in §8.
+
 ### 5.4 Clarification efficiency and response-turn distribution
 
 `response_turns` is interpreted **jointly with task success, never on its own**: asking
@@ -1001,6 +1233,10 @@ score), `metrics/clarification_metrics.csv` (recall, repeated-slot activations),
 
 {_relevance_comparison_section(data)}
 
+### 5.6 Retrieval layer, top-k sensitivity and extraction source
+
+{_pipeline_stage_sections(data)}
+
 ## 6. Ablation Analysis
 
 Each ablation isolates a single framework mechanism (candidate memory or
@@ -1030,6 +1266,7 @@ All scenarios:
 
 ![Memory delta NDCG]({plots_rel}/memory_delta_ndcg_at_5.png)
 ![Memory delta task]({plots_rel}/memory_delta_task_success.png)
+![Memory delta HCSR]({plots_rel}/memory_delta_hcsr.png)
 
 ### 6.2 Job-Context Contribution: Full vs No-Context
 
@@ -1048,6 +1285,7 @@ All scenarios:
 
 ![Context delta HCSR]({plots_rel}/context_delta_hcsr.png)
 ![Context delta task]({plots_rel}/context_delta_task_success.png)
+![Context delta NDCG]({plots_rel}/context_delta_ndcg_at_5.png)
 
 ### 6.3 Process-measure contributions (secondary outcome family)
 

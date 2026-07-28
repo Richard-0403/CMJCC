@@ -55,11 +55,21 @@ class FeatureFlags:
     """Resolved behaviour switches for one run."""
 
     variant: ExperimentVariant
+    #: True in EVERY variant. The candidate profile is the shared input all conditions
+    #: see, so no ablation removes it: the field records that fact rather than switching
+    #: anything, and the variant matrix therefore has SIX switches that vary, not seven.
+    #: Reported here because an ablation table listing seven flags implies seven degrees
+    #: of freedom.
     use_profile: bool
     use_current_turn: bool
     use_multi_turn_continuation: bool
     use_prior_dialogue: bool
     use_persistent_memory: bool
+    #: Whether a confirmed update is written back to persistent memory. Across the five
+    #: VARIANTS this equals ``use_persistent_memory and use_current_turn``, so the
+    #: variant matrix alone cannot distinguish its contribution -- it becomes an
+    #: independent switch only through ``memory.persist_confirmed_updates``, which
+    #: :meth:`from_config` now honours.
     persist_confirmed_updates: bool
     explicit_constraint_orchestration: bool
 
@@ -105,6 +115,14 @@ class FeatureFlags:
                      "persist_confirmed_updates": False}
         if not config.memory.use_prior_dialogue:
             flags = {**flags, "use_prior_dialogue": False}
+        # ``memory.persist_confirmed_updates`` was the ONE memory key with no effect: it
+        # was declared in every experiment config (``false`` in three of them) and read
+        # nowhere, so a reader could reasonably believe it configured the write-back that
+        # it did not. It restricts like its neighbours now. This changes no current
+        # result, because each config's value already equals the value its variant
+        # resolves to -- restriction is a no-op on all six shipped configs.
+        if not config.memory.persist_confirmed_updates:
+            flags = {**flags, "persist_confirmed_updates": False}
         if not config.memory.use_multi_turn_continuation:
             flags = {**flags, "use_multi_turn_continuation": False}
         if not config.context.explicit_constraint_orchestration:

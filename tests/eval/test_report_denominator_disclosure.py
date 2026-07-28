@@ -234,7 +234,17 @@ def test_dialogue_baseline_bullets_survive_a_comparison_without_a_pair_count():
 
     assert "NDCG@5, full vs one_shot: Δ=+0.005" in section
     assert "n=" not in section
-    assert "NDCG@5, full vs profile_only: N/A." in section
+    # A comparison the analysis does not contain is ABSENT, not printed as "N/A". The
+    # bullets used to be hardcoded, so omitting a baseline from the variant set claimed
+    # the comparison had been attempted and had yielded nothing.
+    assert "profile_only" not in section
+
+
+def test_section_5x_says_so_when_no_dialogue_baseline_was_run():
+    """With no baseline comparison at all the section explains the absence."""
+    section = _section(generate_markdown(_report_data(overall_comparisons=[])), "### 5.x")
+    assert "no dialogue-baseline variant" in section
+    assert "N/A." not in section
 
 
 # ------------------------------------------------------ defect 2: §7 variant coverage

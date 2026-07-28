@@ -41,14 +41,33 @@ def dcg(grades: list[int]) -> float:
     return sum((2 ** g - 1) / math.log2(i + 2) for i, g in enumerate(grades))
 
 
+def ranking_is_defined(all_grades_desc: list[int], k: int = 5) -> bool:
+    """Whether a ranking metric is DEFINED for this scenario's label universe.
+
+    It is not when the oracle grades nothing in the whole catalog relevant to the
+    scenario: there is no attainable ideal ranking, so a system cannot rank well or
+    badly. :func:`ndcg_at_k` has always returned ``None`` in that case, but
+    :func:`precision_at_k` and :func:`mean_graded_relevance` used to return 0 -- which
+    is not a measurement, it is arithmetic on an empty target. The three metrics were
+    therefore averaged over DIFFERENT sets of scenarios while being presented side by
+    side as if they described the same runs. This predicate is the one definition all
+    three now share.
+    """
+    return dcg(sorted(all_grades_desc, reverse=True)[:k]) > 0
+
+
 def ndcg_at_k(ranked_grades: list[int], all_grades_desc: list[int], k: int = 5) -> float | None:
-    ideal = dcg(sorted(all_grades_desc, reverse=True)[:k])
-    if ideal == 0:
+    if not ranking_is_defined(all_grades_desc, k):
         return None  # no relevant items exist -> N/A (do not silently set 0)
-    return dcg(ranked_grades[:k]) / ideal
+    return dcg(ranked_grades[:k]) / dcg(sorted(all_grades_desc, reverse=True)[:k])
 
 
 def precision_at_k(ranked_grades: list[int], k: int, threshold: int, returned: int) -> float | None:
+    """Precision@k over the returned list.
+
+    Callers must gate this on :func:`ranking_is_defined`: nothing in the arguments can
+    tell whether a 0 means "ranked badly" or "there was nothing to rank".
+    """
     if returned == 0:
         return None
     denom = min(returned, k)
@@ -57,6 +76,7 @@ def precision_at_k(ranked_grades: list[int], k: int, threshold: int, returned: i
 
 
 def mean_graded_relevance(ranked_grades: list[int]) -> float | None:
+    """Mean graded relevance of the returned list. Gate as for :func:`precision_at_k`."""
     if not ranked_grades:
         return None
     return float(np.mean(ranked_grades))
@@ -280,8 +300,11 @@ class MetricsComputer:
         grades = [self.grade.get((b.scenario_id, jid), 0) for jid in selected]
         returned = len(selected)
 
-        # ranking metrics (N/A for correct no-match / no returns)
-        if returned == 0:
+        # ranking metrics (N/A for correct no-match / no returns, and N/A when the
+        # scenario has no relevant item in the whole label universe -- see
+        # ``ranking_is_defined``. All THREE share that gate: previously only NDCG did,
+        # so the three columns silently had different denominators.)
+        if returned == 0 or not ranking_is_defined(self._ideal(b.scenario_id), self.top_k):
             ndcg = prec = mgr = None
         else:
             ndcg = ndcg_at_k(grades, self._ideal(b.scenario_id), self.top_k)
@@ -319,7 +342,12 @@ class MetricsComputer:
                     traced += 1
             hcsr = float(np.mean(eligible_flags)) if eligible_flags else None
             mvc = float(np.mean(violations)) if violations else None
-            unknown_hard_rate = (unknown_hard / applicable_hard) if applicable_hard else 0.0
+            # N/A, NOT 0.0, when no hard constraint was applicable: with an empty
+            # denominator there is no share to report, and 0.0 reads as "nothing was
+            # unknown" -- the strongest possible claim -- on the basis of no observation
+            # at all. It also drags the variant mean towards 0 for free. Every other rate
+            # in this method already follows the None-on-empty-denominator convention.
+            unknown_hard_rate = (unknown_hard / applicable_hard) if applicable_hard else None
             expired_rate = expired / returned
             trace_complete = traced / returned
 
@@ -334,12 +362,17 @@ class MetricsComputer:
         valid = sum(1 for h in b.handoffs if h.get("validation_passed") and h.get("status") == "completed")
         handoff_success = (valid / att) if att else None
 
-        # decision-log completeness (successful runs should log all core stages)
-        core_stages = {"understanding", "context_built"}
-        logged_stages = {log.get("stage") for log in b.evidence_log}
-        dlc = 1.0 if core_stages.issubset(logged_stages | {"understanding", "context_built"}) else 0.0
-        dlc = len(b.evidence_log) > 0 and all(log.get("status") == "success" for log in b.evidence_log)
-        dlc = 1.0 if dlc else (1.0 if not b.evidence_log and response_type == "error" else 0.0)
+        # Decision-log completeness: every logged stage succeeded. An EMPTY log counts as
+        # complete only for an error response, where there was nothing to log.
+        #
+        # Three dead lines used to sit here: a `core_stages.issubset(logged | core_stages)`
+        # test that is true for any input by construction, and the two locals feeding it.
+        # Its result was overwritten on the next line, so it never reached a number -- it
+        # only made the metric look as though stage coverage was being checked.
+        all_stages_ok = (bool(b.evidence_log)
+                         and all(log.get("status") == "success" for log in b.evidence_log))
+        dlc = 1.0 if (all_stages_ok
+                      or (not b.evidence_log and response_type == "error")) else 0.0
 
         turn_count = len([t for t in ((b.dialogue_state or {}).get("turns", []))
                           if t.get("speaker") == "candidate"]) or None

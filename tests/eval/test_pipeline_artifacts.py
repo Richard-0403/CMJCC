@@ -78,11 +78,19 @@ def test_clarification_efficiency_csv_is_written_with_the_turn_distribution(pipe
     # ``asked_unresolved`` sits next to ``efficiency_score``: the score now carries an
     # unresolved-dialogue penalty, so the count of abandoned dialogues has to be readable
     # beside it (R7.4/R7.5).
+    # ``median_efficiency_score`` and the three tier counts sit next to the mean because
+    # the mean of a tiered penalty scale is not a magnitude: with a 1e6 skip penalty a
+    # single skipped run drags a variant mean into five figures, which reads as severity
+    # when it only encodes the SHARE of runs in the worst tier.
     assert list(table.columns) == [
         "variant", "runs", "necessary_asked", "necessary_missed", "unnecessary_asked",
-        "asked_unresolved", "efficiency_score", "response_turns_n",
+        "asked_unresolved", "efficiency_score", "median_efficiency_score",
+        "tier_resolved", "tier_abandoned", "tier_skipped", "response_turns_n",
         "median_response_turns", "q1_response_turns", "q3_response_turns",
         "iqr_response_turns"]
+    # The tiers partition the runs exactly, so no run is uncounted or double counted.
+    assert (table["tier_resolved"] + table["tier_abandoned"]
+            + table["tier_skipped"] == table["runs"]).all()
     assert set(table["variant"]) == set(VARIANTS)
     # The deterministic runs all carry a dialogue trace, so the distribution is populated.
     assert (table["response_turns_n"] > 0).all()

@@ -128,6 +128,19 @@ def aggregate_scenario_success(run_metrics: pd.DataFrame, variant: str,
     return binary
 
 
+#: What a comparison row's ``base_mean``/``other_mean``/``delta``/CI/p/effect describe.
+#: Recorded per row so a reader never has to infer it -- the two estimands are NOT
+#: interchangeable and a row that silently mixed them is unreadable.
+#:
+#: * :data:`ESTIMAND_SCENARIO_MEAN` -- each scenario's metric averaged over its repeats,
+#:   then paired across variants (continuous metrics).
+#: * :data:`ESTIMAND_BINARY` -- each scenario collapsed to ONE binary success by majority
+#:   vote over repeats (even-repeat ties resolve to 0), then paired. This is the
+#:   pre-registered estimand for task success, and now the ONLY one its row reports.
+ESTIMAND_SCENARIO_MEAN = "scenario_mean_over_repeats"
+ESTIMAND_BINARY = "scenario_binary_majority_vote"
+
+
 def _paired(scenario_variant: pd.DataFrame, metric: str, base: str, other: str):
     piv = scenario_variant.pivot_table(index="scenario_id", columns="variant", values=metric)
     if base not in piv.columns or other not in piv.columns:
@@ -154,9 +167,6 @@ def compare(scenario_variant: pd.DataFrame, run_metrics: pd.DataFrame, metric: s
     }
     if n == 0:
         return result
-    diffs = base_vals - other_vals
-    mean_diff, lo, hi = paired_bootstrap_ci(diffs, iterations, seed)
-    result.update({"delta": mean_diff, "ci_low": lo, "ci_high": hi})
 
     if metric == "task_success":
         # Scenario-level McNemar: collapse repeats to ONE binary per scenario
@@ -188,19 +198,43 @@ def compare(scenario_variant: pd.DataFrame, run_metrics: pd.DataFrame, metric: s
         result["valid_pairs"] = valid_pairs
         # Task-success pairs at the SCENARIO level (R6.3).
         result["n_pairs"] = valid_pairs
+        result["estimand"] = ESTIMAND_BINARY
+        # The FRACTIONAL view (each scenario's success RATE across repeats), kept under
+        # its own names. It used to be what ``base_mean``/``other_mean``/``delta``/the CI
+        # reported while the p-value, the effect size and ``n_pairs`` described the
+        # collapsed binaries -- two different estimands printed as one row, differing by
+        # a visible amount (0.9778 vs 1.0000 on a mean, 0.1825 vs 0.1905 on a delta) and
+        # with an ``n`` that belonged to neither. The row now reports the pre-registered
+        # binary estimand throughout; the rate stays available beside it.
+        result["base_repeat_mean"] = float(np.mean(base_vals))
+        result["other_repeat_mean"] = float(np.mean(other_vals))
+        result["repeat_mean_delta"] = float(np.mean(base_vals - other_vals))
 
         if valid_pairs:
             base_arr = paired.iloc[:, 0].to_numpy()
             other_arr = paired.iloc[:, 1].to_numpy()
+            binary_diffs = (base_arr - other_arr).astype(float)
+            result["base_mean"] = float(np.mean(base_arr))
+            result["other_mean"] = float(np.mean(other_arr))
+            mean_diff, lo, hi = paired_bootstrap_ci(binary_diffs, iterations, seed)
+            result.update({"delta": mean_diff, "ci_low": lo, "ci_high": hi})
             mc = mcnemar(base_arr, other_arr)
             result["p_value"] = mc["p_value"]
-            result["effect_size"] = rank_biserial((base_arr - other_arr).astype(float))
+            result["effect_size"] = rank_biserial(binary_diffs)
             result["effect_type"] = "rank_biserial"
             result["mcnemar"] = mc
             result["discordant_pairs"] = mc["n_discordant"]
         else:
+            # No validly paired scenario: the binary estimand is undefined, so no mean,
+            # delta or CI is reported for it (the fractional columns above still are).
+            result.update({"base_mean": None, "other_mean": None,
+                           "delta": None, "ci_low": None, "ci_high": None})
             result["discordant_pairs"] = 0
     else:
+        diffs = base_vals - other_vals
+        mean_diff, lo, hi = paired_bootstrap_ci(diffs, iterations, seed)
+        result.update({"delta": mean_diff, "ci_low": lo, "ci_high": hi})
+        result["estimand"] = ESTIMAND_SCENARIO_MEAN
         result["p_value"] = wilcoxon_p(base_vals, other_vals)
         dz = cohens_dz(diffs)
         if dz is not None:

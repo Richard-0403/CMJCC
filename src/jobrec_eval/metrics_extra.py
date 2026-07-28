@@ -378,9 +378,39 @@ def clarification_efficiency_per_run(run_metrics: pd.DataFrame) -> pd.Series:
 #: report reads for its median/IQR figures.
 _CLARIFICATION_EFFICIENCY_COLUMNS = [
     "variant", "runs", "necessary_asked", "necessary_missed", "unnecessary_asked",
-    "asked_unresolved", "efficiency_score", "response_turns_n", "median_response_turns",
-    "q1_response_turns", "q3_response_turns", "iqr_response_turns",
+    "asked_unresolved", "efficiency_score", "median_efficiency_score",
+    "tier_resolved", "tier_abandoned", "tier_skipped", "response_turns_n",
+    "median_response_turns", "q1_response_turns", "q3_response_turns",
+    "iqr_response_turns",
 ]
+
+#: Tier boundaries on the penalty scale. The score is deliberately tiered three orders of
+#: magnitude apart (see :func:`clarification_efficiency_per_run`), so a run's tier is
+#: recoverable from its score alone.
+_TIER_SKIPPED_BELOW = -_SKIP_PENALTY / 2
+_TIER_ABANDONED_BELOW = -_UNRESOLVED_PENALTY / 2
+
+
+def _efficiency_tiers(efficiencies: pd.Series) -> dict[str, int | None]:
+    """Run counts per efficiency TIER: resolved, abandoned, skipped.
+
+    The per-variant MEAN of a tiered penalty scale is not interpretable as a score: with
+    a skip penalty of 1e6, a single skipped run drags a variant's mean to five figures
+    (an observed -47620.5), which reads as a magnitude when it is really "about 4.8% of
+    runs skipped a necessary clarification". The tier counts say that directly, and the
+    median says where the typical run sits; both are reported alongside the mean rather
+    than replacing it, so nothing already cited disappears.
+    """
+    if not len(efficiencies):
+        return {"tier_resolved": None, "tier_abandoned": None, "tier_skipped": None}
+    skipped = int((efficiencies < _TIER_SKIPPED_BELOW).sum())
+    abandoned = int(((efficiencies >= _TIER_SKIPPED_BELOW)
+                     & (efficiencies < _TIER_ABANDONED_BELOW)).sum())
+    return {
+        "tier_resolved": int(len(efficiencies)) - skipped - abandoned,
+        "tier_abandoned": abandoned,
+        "tier_skipped": skipped,
+    }
 
 #: Per-run dialogue turn count the response-turn distribution is computed from. Deliberately
 #: NOT falling back to ``turn_count``: the distribution describes how many turns the
@@ -486,6 +516,9 @@ def clarification_efficiency(run_metrics: pd.DataFrame) -> pd.DataFrame:
             "unnecessary_asked": unnecessary_asked,
             "asked_unresolved": asked_unresolved,
             "efficiency_score": float(efficiencies.mean()) if len(efficiencies) else None,
+            "median_efficiency_score": (float(efficiencies.median())
+                                        if len(efficiencies) else None),
+            **_efficiency_tiers(efficiencies),
             "response_turns_n": len(turns),
             "median_response_turns": _median(turns),
             "q1_response_turns": q1,

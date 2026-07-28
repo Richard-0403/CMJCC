@@ -20,6 +20,11 @@ memory:
 context:
   explicit_constraint_orchestration: true
   hard_constraint_unknown_default: fail
+  # INERT: read by nothing. Expiry is always enforced as a hard not_expired constraint
+  # (see JobContextAgent). Kept only because archived run bundles embed a resolved config
+  # containing it, and AppConfig forbids extra fields -- removing it would make every
+  # archived experiment unreplayable. Do not add behaviour to it; delete it only together
+  # with a migration for the archives.
   expired_job_policy: fail
 
 retrieval:
