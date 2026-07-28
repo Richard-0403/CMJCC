@@ -100,6 +100,30 @@ def _finish_reason(data: Any) -> str | None:
     return None
 
 
+def _content_of(data: Any) -> str:
+    """The first choice's message content, as an :class:`LLMError` on any other shape.
+
+    ``data["choices"][0]["message"]["content"]`` used to be indexed directly and outside
+    every exception handler. Gateways routinely return HTTP 200 with an error envelope, a
+    content-filter verdict, or an empty ``choices`` list; each of those raises
+    ``KeyError`` / ``IndexError`` / ``TypeError``, none of which is an ``LLMError``, so it
+    would bypass the bounded retry AND the rule-extractor fallback and abort a
+    multi-hundred-call experiment outright. Raising ``LLMError`` puts these on the same
+    degrade-this-one-run path as a timeout.
+    """
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not isinstance(choices, list) or not choices:
+        keys = ", ".join(sorted(data)[:6]) if isinstance(data, dict) else type(data).__name__
+        raise LLMError(f"remote model response carried no choices (keys: {keys})")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, str):
+        raise LLMError(
+            f"remote model response carried no message content "
+            f"({type(content).__name__})")
+    return content
+
+
 def _extract_json(text: str) -> dict | None:
     """Parse a JSON object from a model response, tolerating code fences/prose."""
     try:
@@ -160,7 +184,22 @@ class RemoteLLMProvider:
         with httpx.Client(timeout=self.timeout) as client:
             resp = client.post(f"{self.base_url}/chat/completions", headers=headers, json=body)
             resp.raise_for_status()
-            return resp.json()
+            try:
+                payload = resp.json()
+            except ValueError as exc:
+                # A 200 whose body is not JSON -- an HTML error page from a proxy, a
+                # truncated response. ``json.JSONDecodeError`` is a ``ValueError``, NOT an
+                # httpx error, so without this it escapes every handler below, escapes the
+                # bounded retry (which only catches ``LLMError``) and escapes the
+                # rule-extractor fallback: one malformed reply would abort the whole
+                # experiment mid-flight and force a complete re-run.
+                raise LLMInvalidJSON(
+                    f"remote model returned a non-JSON body (HTTP {resp.status_code})"
+                ) from exc
+        if not isinstance(payload, dict):
+            raise LLMInvalidJSON(
+                f"remote model returned {type(payload).__name__}, expected a JSON object")
+        return payload
 
     def _request_params(self, body: dict[str, Any]) -> dict[str, Any]:
         """Request parameters exactly as they were sent on the successful attempt.
@@ -236,7 +275,7 @@ class RemoteLLMProvider:
             metadata["finish_reason"] = reason
         if retry_reason is not None:
             metadata["retry_reason"] = retry_reason
-        return data["choices"][0]["message"]["content"], latency_ms, metadata
+        return _content_of(data), latency_ms, metadata
 
     def complete_json(self, prompt: str, *, purpose: str) -> tuple[dict, LLMCallRecord]:
         raw, latency, metadata = self._chat(

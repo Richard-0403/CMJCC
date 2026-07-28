@@ -427,3 +427,98 @@ def test_the_bundle_writer_threads_the_retention_config_to_disk(
     assert rows[0]["response_metadata"]["total_tokens"] == 150
     assert "prompt" not in rows[0]
     assert ("raw_response" in rows[0]) is save_raw
+
+
+# ---------------------------------------------------------------------------
+# Malformed-but-successful responses must degrade ONE call, never abort a batch.
+#
+# Everything below used to escape the provider as a non-``LLMError``: a
+# ``json.JSONDecodeError`` from ``resp.json()`` and a ``KeyError``/``IndexError``/
+# ``TypeError`` from indexing ``data["choices"][0]["message"]["content"]``, both outside
+# any handler. ``retry_call`` only catches ``LLMError`` and the orchestrator's fallback to
+# the rule extractor only catches ``LLMError``, so one such reply would propagate out of
+# the whole experiment loop -- discarding every run already completed in a multi-hour
+# hybrid batch. Gateways return exactly these shapes with HTTP 200: HTML error pages,
+# error envelopes, content-filter verdicts and empty choice lists.
+# ---------------------------------------------------------------------------
+
+#: HTTP-200 bodies a real gateway can return instead of a chat completion.
+_MALFORMED_PAYLOADS = [
+    pytest.param({}, id="empty-object"),
+    pytest.param({"error": {"message": "quota exceeded", "code": "rate_limit"}},
+                 id="error-envelope-with-200"),
+    pytest.param({"choices": []}, id="empty-choices"),
+    pytest.param({"choices": [{}]}, id="choice-without-message"),
+    pytest.param({"choices": [{"message": {}}]}, id="message-without-content"),
+    pytest.param({"choices": [{"message": {"content": None}}]}, id="null-content"),
+    pytest.param({"choices": "not-a-list"}, id="choices-not-a-list"),
+    pytest.param({"choices": ["not-a-dict"]}, id="choice-not-a-dict"),
+    pytest.param([{"choices": []}], id="top-level-list"),
+]
+
+
+@pytest.mark.parametrize("payload", _MALFORMED_PAYLOADS)
+def test_malformed_success_payload_raises_llm_error(monkeypatch, payload) -> None:
+    """Every malformed HTTP-200 shape surfaces as ``LLMError``, not as a raw builtin.
+
+    ``LLMError`` is the contract the bounded retry and the rule-extractor fallback are
+    written against; anything else bypasses both.
+
+    **Validates: Requirements 10.4, 10.5, 11.1**
+    """
+    provider = _provider(monkeypatch)
+    monkeypatch.setattr(provider, "_post", lambda body: payload)
+
+    with pytest.raises(LLMError):
+        provider.complete_json(PROMPT, purpose="intent_extraction")
+
+
+def test_non_json_body_on_a_200_raises_llm_error(monkeypatch) -> None:
+    """An HTML error page returned with HTTP 200 is an ``LLMError``, not a ValueError.
+
+    ``json.JSONDecodeError`` is a ``ValueError`` and not an httpx error, so it matched
+    none of the provider's handlers.
+
+    **Validates: Requirements 10.4, 10.5**
+    """
+    provider = _provider(monkeypatch)
+    request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
+
+    def _client_post(*_args, **_kwargs) -> httpx.Response:
+        return httpx.Response(200, request=request, text="<html>gateway timeout</html>")
+
+    monkeypatch.setattr(httpx.Client, "post", _client_post)
+
+    with pytest.raises(LLMError):
+        provider.complete_json(PROMPT, purpose="intent_extraction")
+
+
+def test_malformed_payload_falls_back_to_the_rule_extractor(monkeypatch, tmp_path) -> None:
+    """A run whose every attempt returns a malformed body still COMPLETES on rules.
+
+    This is the property that matters for a long batch: the turn degrades, the run
+    finishes, and the experiment keeps going.
+
+    **Validates: Requirements 10.4, 10.5**
+    """
+    monkeypatch.setenv(API_KEY_ENV, FAKE_KEY)
+    config = load_config("configs/hybrid_vectorengine.yaml", base_dir="configs")
+    service = AppService(config, CATALOG_PATH)
+    candidate = service.create_candidate(
+        {"candidate_id": "c-malformed", "skills": ["Python"], "years_experience": 2})
+    session_id = service.create_session(candidate.candidate_id, "full")
+    orchestrator, _store = service._orchestrator_for(session_id, "full")
+    # The real remote provider, with a transport that always returns an error envelope.
+    monkeypatch.setattr(orchestrator.provider, "_post",
+                        lambda body: {"error": {"message": "upstream unavailable"}})
+
+    result = service.process_turn(
+        session_id, "I want a data analyst role in Kuala Lumpur, at least RM4000.")
+
+    assert result.run_record.success is True
+    assert result.extracted_preferences.preferences
+    assert all(p.metadata["extraction_method"] == "rule"
+               for p in result.extracted_preferences.preferences)
+    # Every spent attempt is recorded, so the degradation is auditable.
+    assert result.model_calls, "the failed attempts left no record"
+    assert all(c.metadata.get("failed") for c in result.model_calls)

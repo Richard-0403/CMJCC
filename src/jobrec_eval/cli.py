@@ -517,6 +517,11 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
             "scenario_count": len(scenarios),
             "repeat_count": repeats,
             "run_count": len(run_metrics),
+            # Carried from the runner so an incomplete experiment cannot be reported as a
+            # complete one: a run that crashed produces no bundle, so it is missing from
+            # every table below without anything else saying so.
+            "expected_run_count": runner_manifest.get("expected_run_count"),
+            "crashed_run_count": runner_manifest.get("crashed_run_count") or 0,
             "bootstrap_iterations": bootstrap_iters,
             "bootstrap_seed": bootstrap_seed,
             "eval_version": EVAL_VERSION,

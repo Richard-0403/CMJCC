@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -51,6 +52,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: allowed to continue; this one records that continuation was never permitted, which is
 #: a property of the experiment condition rather than of the user or of the dialogue.
 TERMINATION_CONTINUATION_DISABLED = "continuation_disabled"
+
+logger = logging.getLogger(__name__)
 
 
 def load_scenarios(path: str | Path) -> list[dict]:
@@ -106,10 +109,38 @@ class ExperimentRunner:
         failures: list[dict] = []
         repeat = self.config.experiment.repeat_count
 
+        crashed: list[dict] = []
         for variant in variants:
             for scenario in self.scenarios:
                 for run_index in range(repeat):
-                    row, failure = self._run_one(variant, scenario, run_index, exp_dir)
+                    try:
+                        row, failure = self._run_one(variant, scenario, run_index, exp_dir)
+                    except Exception as exc:  # noqa: BLE001 - see the note below
+                        # One run must not destroy the batch. An unhandled exception used
+                        # to abort this loop, so neither runs_index.csv, nor failures.csv,
+                        # nor the manifest, nor checksums were ever written: a single
+                        # malformed model reply hundreds of calls into a multi-hour hybrid
+                        # experiment discarded every completed run with it.
+                        #
+                        # The crash is recorded, never swallowed: it lands in
+                        # failures.csv, it is counted in the manifest as
+                        # ``crashed_run_count``, and the run contributes NO bundle -- so
+                        # the analysis's run count is visibly short of
+                        # variants x scenarios x repeats. Only the exception class is
+                        # recorded; a message can quote the request.
+                        logger.error(
+                            "run crashed and was skipped: variant=%s scenario=%s repeat=%s "
+                            "error=%s", variant, scenario["scenario_id"], run_index,
+                            type(exc).__name__,
+                        )
+                        crash = {
+                            "run_id": "", "variant": variant,
+                            "scenario_id": scenario["scenario_id"],
+                            "failure_code": f"runner_exception:{type(exc).__name__}",
+                        }
+                        failures.append(crash)
+                        crashed.append({**crash, "repeat_index": run_index})
+                        continue
                     index_rows.append(row)
                     if failure:
                         failures.append(failure)
@@ -135,6 +166,12 @@ class ExperimentRunner:
             "scenario_count": len(self.scenarios),
             "repeat_count": repeat,
             "run_count": len(index_rows),
+            # Runs that raised and produced no bundle. Recorded so an experiment can
+            # never be cited as complete while it is short of
+            # ``len(variants) * scenario_count * repeat_count`` runs.
+            "expected_run_count": len(variants) * len(self.scenarios) * repeat,
+            "crashed_run_count": len(crashed),
+            "crashed_runs": crashed,
             "config_hash": self.config.config_hash(),
             "catalog_hash": snapshot["catalog_hash"],
             "scenarios_hash": snapshot["scenarios_hash"],

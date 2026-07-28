@@ -1032,6 +1032,39 @@ def _pipeline_stage_sections(data: dict) -> str:
     return "\n".join(parts)
 
 
+def _completeness_line(data: dict) -> str:
+    """A loud §1 bullet when the experiment is short of the runs it planned.
+
+    A crashed run leaves no bundle, so it is simply absent from every table -- the
+    aggregate silently describes fewer runs than the design. The count comes from the
+    runner's manifest, so this cannot be forgotten by whoever reads the tables.
+    """
+    exp = data.get("experiment") or {}
+    crashed = _count(exp.get("crashed_run_count")) or 0
+    actual = _count(exp.get("run_count"))
+    expected = _count(exp.get("expected_run_count"))
+    if expected is None:
+        # A manifest written before the runner recorded it (an analysis re-run over older
+        # bundles) still has the design, so derive the count rather than printing "n/a".
+        variants = exp.get("variants") or []
+        scenarios = _count(exp.get("scenario_count"))
+        repeats = _count(exp.get("repeat_count"))
+        if variants and scenarios and repeats:
+            expected = len(variants) * scenarios * repeats
+    if expected is None or actual is None:
+        return (f"- Completeness: {actual if actual is not None else 'an unknown number of'} "
+                f"runs are analysed; the planned run count could not be determined from "
+                f"the manifest, so completeness is NOT established here.")
+    if not crashed and expected == actual:
+        return ("- Completeness: every planned run produced a bundle "
+                f"({actual} of {expected}).")
+    return (f"- **INCOMPLETE EXPERIMENT: {crashed} run(s) crashed and produced no "
+            f"bundle**, so {actual} of {expected} planned runs are analysed below. Every "
+            f"aggregate is computed over the runs that survived; see `failures.csv` in "
+            f"the run-bundle directory for the affected variant/scenario pairs. Do not "
+            f"cite these figures as covering the full design.")
+
+
 def _backend_identity_line(data: dict) -> str:
     """Provider and the model(s) that actually answered, kept distinct (§1).
 
@@ -1144,6 +1177,7 @@ def generate_markdown(data: dict, plots_rel: str = "../plots") -> str:
   {exp['run_count']} runs. Reference date {exp['reference_date']}.
 - Run mode: **{data.get('llm_mode', 'deterministic')}**; {_backend_identity_line(data)}
   config/catalog/prompt hashes frozen.
+{_completeness_line(data)}
 - Headline (full variant, scenario-mean, with the denominator `n` each mean was taken
   over — they differ between metrics, see §5): {_headline_metrics(full)}.
 - {_relevance_source_line(data)}
