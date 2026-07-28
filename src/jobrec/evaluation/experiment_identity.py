@@ -245,6 +245,7 @@ def experiment_id(
     scenario_ids: list[str],
     config_hash: str,
     identity: dict[str, Any] | None = None,
+    scenarios_fingerprint: str | None = None,
 ) -> str:
     """The content-addressed experiment id: ``exp-<12 hex>``.
 
@@ -260,11 +261,19 @@ def experiment_id(
     invalidate the run, and re-running an expensive batch looks mandatory when re-running
     the analysis over saved bundles is both sufficient and correct. The analysis identity
     is recorded separately in the manifests.
+
+    ``scenarios_fingerprint`` is a digest of the scenarios' CONTENT, not just their ids.
+    Without it, editing a scenario -- its turns, its expectations, or the authoritative
+    reference the relevance oracle grades against -- left the id unchanged, so two
+    genuinely different experiments collided on one identity and the overwrite guard read
+    the second as a re-run of the first. The scenario ids are kept alongside it so a
+    changed SET is still distinguishable from changed CONTENT when reading the inputs.
     """
     identity = identity or code_identity()
     return "exp-" + stable_hash({
         "variants": list(variants),
         "scenarios": list(scenario_ids),
+        "scenarios_fingerprint": scenarios_fingerprint,
         "config": config_hash,
         # Only the fields that describe the code that can affect a RUN.
         "code": {

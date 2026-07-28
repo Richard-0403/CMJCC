@@ -56,6 +56,49 @@ TERMINATION_CONTINUATION_DISABLED = "continuation_disabled"
 logger = logging.getLogger(__name__)
 
 
+class UndeclaredClarificationAnswerError(RuntimeError):
+    """A clarification-dependent scenario does not declare what the candidate answers.
+
+    Raised BEFORE any run starts. Without a declaration the simulated user answers from a
+    global default table, so a scenario's answer -- and therefore what the relevance oracle
+    grades it against -- came from a constant in the evaluation harness rather than from the
+    scenario. Two scenarios asking for different things were answered identically, and
+    nothing forced the harness's answer and the oracle's reference to agree.
+
+    Failing here rather than mid-batch is deliberate: this is a property of the inputs, and
+    a multi-hour run must not spend anything before it is checked.
+    """
+
+
+def assert_clarification_answers_declared(scenarios: list[dict]) -> None:
+    """Every ``clarification_expected`` scenario must declare an answer for each of its
+    ``acceptable_slots``.
+
+    Scenarios that do NOT expect a clarification are exempt: a variant may still ask one
+    unexpectedly (a memory-ablated condition re-asking a forgotten slot), and that ask is
+    the finding rather than a gap in the scenario, so the default table stays available for
+    it.
+    """
+    missing: list[str] = []
+    for scenario in scenarios:
+        if not scenario.get("clarification_expected"):
+            continue
+        slots = list(scenario.get("acceptable_slots") or [])
+        if not slots:
+            continue
+        declared = ((scenario.get("reference") or {}).get("clarification_answer") or {})
+        absent = [slot for slot in slots if declared.get(slot) in (None, "", [], {})]
+        if absent:
+            missing.append(
+                f"{scenario.get('scenario_id')}: no reference.clarification_answer for "
+                f"{absent}")
+    if missing:
+        raise UndeclaredClarificationAnswerError(
+            "clarification-dependent scenarios must declare the answer the candidate "
+            "gives, so the simulated user and the relevance oracle read the SAME value "
+            "instead of a harness default:\n  - " + "\n  - ".join(missing))
+
+
 def load_scenarios(path: str | Path) -> list[dict]:
     path = Path(path)
     scenarios: list[dict] = []
@@ -93,12 +136,19 @@ class ExperimentRunner:
         write raises
         :class:`~jobrec.evaluation.experiment_identity.ExperimentOverwriteError`.
         """
+        # Input gate, before a single run is spent (R33.1).
+        assert_clarification_answers_declared(self.scenarios)
         identity = code_identity()
         exp_id = experiment_id(
             variants=variants,
             scenario_ids=[s["scenario_id"] for s in self.scenarios],
             config_hash=self.config.config_hash(),
             identity=identity,
+            # The scenarios' CONTENT, so editing a scenario -- notably the authoritative
+            # reference the oracle grades against, or a declared clarification answer the
+            # simulated user feeds back -- yields a new experiment instead of colliding
+            # with the old one on the same id.
+            scenarios_fingerprint=stable_hash(self.scenarios),
         )
         exp_dir = self.out_dir / exp_id
         # Never silently replace a complete experiment (R16/R17 reproducibility freeze).

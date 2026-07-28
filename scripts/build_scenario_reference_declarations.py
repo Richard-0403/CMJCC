@@ -63,6 +63,49 @@ _FIELD_MARKERS: dict[str, tuple[str, ...]] = {
 #: -- so a constraint on it is not something the candidate stated.
 _PROFILE_ONLY_EXCLUSIONS = ("work_authorizations",)
 
+#: Values the seeded reference gets WRONG, corrected here rather than by hand so that
+#: re-running ``--write`` reproduces the corrected declaration instead of reverting it.
+#: Keyed by ``(scenario_id, field) -> (value, reason)``.
+#:
+#: Both entries are the same rule-extractor limitation: it takes only the first alternative
+#: out of a disjunction, so "remote or hybrid" became ``["remote"]`` and the reference
+#: silently asserted the candidate had ruled hybrid out. This is precisely what a declared
+#: reference is for -- the utterance says both are acceptable, so both belong in the
+#: reference regardless of what the extractor managed to read.
+_VALUE_CORRECTIONS: dict[tuple[str, str], tuple[Any, str]] = {
+    ("SC-A-03", "work_modes"): (
+        ["remote", "hybrid"],
+        'utterance says "remote or hybrid"; the extractor kept only the first alternative',
+    ),
+    ("SC-D-08", "work_modes"): (
+        ["remote", "hybrid"],
+        'utterance says "Remote or hybrid"; the extractor kept only the first alternative',
+    ),
+}
+
+#: Unknown-handling policy, resolved explicitly per field instead of being inherited from
+#: config at grading time. Whether a job that does not STATE a value fails, passes or
+#: triggers a clarification changes eligibility and therefore changes grades, so it is
+#: policy and belongs in the frozen reference. These values reproduce what
+#: ``JobContextAgent`` resolves today, so declaring them changes no number -- what changes
+#: is that the policy is now an input a reader can inspect and the fingerprint covers.
+_UNKNOWN_POLICY_HARD = "fail"
+_UNKNOWN_POLICY_SOFT = "pass"
+_UNKNOWN_POLICY_OVERRIDES = {"work_authorizations": "clarify"}
+
+#: The harness's current answer for a slot the profile does not pin. Mirrors
+#: ``jobrec_eval.simulated_user._DEFAULTS`` so the drafted declaration reproduces today's
+#: behaviour exactly; the point of declaring it is that it becomes reviewable and
+#: scenario-specific, not that it changes on day one.
+_HARNESS_DEFAULTS: dict[str, Any] = {
+    "target_roles": "data analyst",
+    "preferred_locations": "Kuala Lumpur",
+    "work_modes": "hybrid",
+    "salary_currency": "MYR",
+    "salary_min": 4000,
+    "experience_level": "junior",
+}
+
 
 def _clauses(turns: list[str]) -> list[str]:
     """Utterances split into clauses, lowercased.
@@ -174,11 +217,30 @@ def build(scenarios: list[dict], references: dict[str, dict]) -> tuple[list[dict
         # also removes three outliers the extractor produced with nothing in the wording to
         # justify them (preferred_locations hard in SC-B-04 and SC-D-09 while soft in
         # eighteen comparable scenarios; work_modes hard in SC-D-12 alone).
+        constraint_fields = sorted({c["field_name"] for c in constraints} - {"not_expired"})
         rubric_hard: list[str] = []
-        for field in sorted({c["field_name"] for c in constraints} - {"not_expired"}):
+        for field in constraint_fields:
             if _cue_evidence(field, clauses)["verdict"] == "hard":
                 rubric_hard.append(field)
         declaration["hard"] = rubric_hard
+
+        # --- corrected values ------------------------------------------------
+        for (target_id, field), (value, reason) in _VALUE_CORRECTIONS.items():
+            if target_id != scenario_id:
+                continue
+            declaration[field] = value
+            findings.append({
+                "scenario_id": scenario_id, "kind": "value_corrected",
+                "detail": f"{field}: {active.get(field)} -> {value} ({reason})",
+            })
+
+        # --- unknown-handling policy, made explicit --------------------------
+        declaration["unknown"] = {
+            field: _UNKNOWN_POLICY_OVERRIDES.get(
+                field, _UNKNOWN_POLICY_HARD if field in rubric_hard
+                else _UNKNOWN_POLICY_SOFT)
+            for field in constraint_fields
+        }
 
         # A constraint the candidate never mentioned is not part of the reference. It would
         # otherwise enter the constraint bundle and be counted as "applicable" in the
@@ -218,6 +280,35 @@ def build(scenarios: list[dict], references: dict[str, dict]) -> tuple[list[dict
                               f"via {evidence['hard'] or evidence['soft']}{quoted}",
                 })
 
+        # --- clarification answers ------------------------------------------
+        # EVERY clarification-dependent scenario must declare what the candidate answers.
+        # The runner refuses to start otherwise, because the alternative is the simulated
+        # user answering from a global default table -- which is how two scenarios asking
+        # for different things came to be answered identically, with nothing forcing the
+        # harness's answer and the oracle's reference to agree.
+        #
+        # Seeded from what the harness would ALREADY have answered (profile value first,
+        # then the domain default), so the drafted declaration reproduces current behaviour
+        # and every value is flagged for confirmation rather than quietly invented.
+        if scenario.get("clarification_expected") and scenario.get("acceptable_slots"):
+            answers: dict[str, Any] = {}
+            for slot in scenario["acceptable_slots"]:
+                profile_value = scenario.get("profile", {}).get(
+                    "skills" if slot == "skills_have" else slot)
+                if isinstance(profile_value, list) and profile_value:
+                    answers[slot] = profile_value[0]
+                elif profile_value not in (None, [], {}):
+                    answers[slot] = profile_value
+                elif slot in _HARNESS_DEFAULTS:
+                    answers[slot] = _HARNESS_DEFAULTS[slot]
+            if answers:
+                declaration["clarification_answer"] = answers
+                findings.append({
+                    "scenario_id": scenario_id, "kind": "clarification_answer_drafted",
+                    "detail": f"{answers} (seeded from the harness's current behaviour -- "
+                              f"CONFIRM each value; the oracle grades against it)",
+                })
+
         if any(cue in " ".join(clauses) for cue in ("some kind of", "of some sort")):
             # The vagueness IS the scenario. The reference must not silently resolve it, so
             # the initial role is marked unspecified and the scenario declares what the
@@ -227,15 +318,12 @@ def build(scenarios: list[dict], references: dict[str, dict]) -> tuple[list[dict
             # intended finding; a broad "any data role is relevant" set would instead have
             # rewarded not asking.
             declaration["role_scope"] = "unspecified_until_clarified"
-            declaration["clarification_answer"] = {
-                "target_roles": (declaration.get("target_roles") or [None])[0]}
             findings.append({
-                "scenario_id": scenario_id, "kind": "ambiguous_role_needs_declared_answer",
-                "detail": f"utterance is deliberately vague about the role; drafted "
-                          f"role_scope=unspecified_until_clarified with "
-                          f"clarification_answer="
-                          f"{declaration['clarification_answer']['target_roles']!r} "
-                          f"(seeded from the harness default -- CONFIRM or change it)",
+                "scenario_id": scenario_id, "kind": "ambiguous_role_marked_unspecified",
+                "detail": f"utterance is deliberately vague about the role; marked "
+                          f"role_scope=unspecified_until_clarified, graded against the "
+                          f"declared clarification answer "
+                          f"{declaration.get('clarification_answer', {}).get('target_roles')!r}",
             })
 
         for field in declaration.get("excluded", []):

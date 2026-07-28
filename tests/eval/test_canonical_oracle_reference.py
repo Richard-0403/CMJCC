@@ -44,7 +44,7 @@ from jobrec_eval.oracle_reference import (
     CANONICAL_ORACLE_VERSION,
     CANONICAL_REPEATS,
     CANONICAL_VARIANT,
-    DERIVATION_SYSTEM_PASS,
+    DERIVATION_DECLARED,
     StaleCanonicalOracleError,
     build_canonical_references,
     canonical_config,
@@ -302,10 +302,12 @@ def test_analysis_records_the_canonical_reference_provenance(ablation_only_run) 
         (out / "report" / "analysis_report_data.json").read_text(encoding="utf-8"))
     canon = data["relevance_source"]["canonical_reference"]
     assert canon["inputs_fingerprint"] == artifact["inputs_fingerprint"]
-    # The subset carries no declared reference yet, so its scenarios fall back to the
-    # system-derived pass -- and the provenance says so by name rather than calling the
-    # result "canonical" and leaving the reader to assume it was declared.
-    assert canon["derivation"] == DERIVATION_SYSTEM_PASS
+    # Every scenario in the subset declares its authoritative reference, so nothing falls
+    # back to reading the system's own extraction. This is the property the whole exercise
+    # is for, so it is asserted rather than merely reported.
+    assert canon["derivation"] == DERIVATION_DECLARED
+    assert canon["system_derived_scenarios"] == []
+    assert canon["declared_scenario_count"] == canon["scenario_count"]
     assert canon["scenarios_without_reference"] == []
 
 

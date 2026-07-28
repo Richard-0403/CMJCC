@@ -18,10 +18,13 @@ task 10.2 but does not implement the loop, the dialogue trace, or scoring.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from typing import Any
 
 from .scenarios import Scenario
+
+logger = logging.getLogger(__name__)
 
 # Per-field fallback values used when a scenario declares a slot answerable (via
 # ``acceptable_slots``) but the profile does not pin a concrete value. These are the
@@ -146,8 +149,32 @@ class SimulatedUser:
         if val is not None:
             return val
         if field in self.acceptable_slots:
+            if self._expects_clarification():
+                # An official run can never get here: the runner refuses to start when a
+                # clarification-dependent scenario has no declared answer
+                # (``assert_clarification_answers_declared``). Reaching it means a direct
+                # ``_run_one`` call in a test, so say so rather than answering from a
+                # global table as though the scenario had specified it.
+                logger.warning(
+                    "simulated user answering %r from the global default table: scenario "
+                    "%r expects a clarification but declares no "
+                    "reference.clarification_answer for it",
+                    field, self._scenario_id(),
+                )
             return _DEFAULTS.get(field)
         return None
+
+    def _expects_clarification(self) -> bool:
+        scenario = self.scenario
+        if isinstance(scenario, Mapping):
+            return bool(scenario.get("clarification_expected"))
+        return bool(getattr(scenario, "clarification_expected", False))
+
+    def _scenario_id(self) -> str:
+        scenario = self.scenario
+        value = (scenario.get("scenario_id") if isinstance(scenario, Mapping)
+                 else getattr(scenario, "scenario_id", None))
+        return str(value or "<unknown>")
 
     def _declared_answer(self, field: str) -> Any:
         """The scenario's declared clarification answer for ``field``, if it has one."""
