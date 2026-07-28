@@ -1,0 +1,17 @@
+report_section,metric_name,source_file
+3.1,data_quality,data_quality_report.json
+5,variant_summary,metrics/variant_summary.csv
+5.4,clarification_efficiency,metrics/clarification_efficiency.csv
+6.1,memory_contribution,metrics/memory_contribution.csv
+6.2,context_contribution,metrics/context_contribution.csv
+6.3,secondary_contribution,metrics/memory_contribution.csv
+7,scenario_type_summary,metrics/scenario_type_summary.csv
+8,paired_comparisons,statistics/paired_comparisons.csv
+5.5,relevance_source_comparison,metrics/relevance_source_comparison.csv
+5.6,retrieval_metrics,metrics/retrieval_metrics.csv
+5.6,topk_contribution,metrics/topk_contribution.csv
+5.6,extraction_source_metrics,metrics/extraction_source_metrics.csv
+9,error_taxonomy,metrics/error_taxonomy.csv
+9.x,relevance_labels,normalized/relevance_labels.csv
+10.1,failure_metrics,metrics/failure_metrics.csv
+5,canonical_reference,manifests/canonical_oracle.json

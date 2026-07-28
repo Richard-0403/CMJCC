@@ -1,0 +1,5 @@
+metric,source,numerator,denominator,value
+failure_detection_rate,run_metrics,0,0,
+recovery_success_rate,run_metrics,0,0,
+grounding_rate,run_bundles,241,241,1.0
+handoff_success_rate,run_bundles,50,50,1.0

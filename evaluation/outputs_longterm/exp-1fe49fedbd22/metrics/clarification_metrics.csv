@@ -1,0 +1,3 @@
+variant,runs,clarifications,expected_clarification,useful,asked_clarifications,necessary_asked,unnecessary_asked,answered,repeated,precision,recall,necessary_recall,useful_rate,unnecessary_rate,repeated_question_rate,answered_rate
+full,5,0,0,0,0,0,0,0,0,,,,,,,
+no_memory,5,0,0,0,0,0,0,0,0,,,,,,,

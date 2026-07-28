@@ -1,0 +1,17 @@
+metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,estimand,subset,p_value_holm,scenario_count,total_run_count,repeats_per_scenario,valid_pairs,base_repeat_mean,other_repeat_mean,repeat_mean_delta,mcnemar,discordant_pairs,family
+ndcg_at_5,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+hcsr,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+task_success,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,,0.0,rank_biserial,scenario_binary_majority_vote,all,,5.0,10.0,1.0,5.0,1.0,1.0,0.0,"{'full_only': 0, 'other_only': 0, 'n_discordant': 0, 'p_value': None}",0.0,primary
+grounding,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_memory,5,0.0,0.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+turn_count,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+ndcg_at_5,full,no_memory,4,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+hcsr,full,no_memory,4,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+task_success,full,no_memory,4,1.0,1.0,0.0,0.0,0.0,,0.0,rank_biserial,scenario_binary_majority_vote,memory_dependent,,4.0,8.0,1.0,4.0,1.0,1.0,0.0,"{'full_only': 0, 'other_only': 0, 'n_discordant': 0, 'p_value': None}",0.0,primary
+grounding,full,no_memory,4,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_memory,4,0.0,0.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+turn_count,full,no_memory,4,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+response_turns,full,no_memory,5,2.2,2.2,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_memory,5,-2.2,-2.2,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,secondary
+response_turns,full,no_memory,4,2.25,2.25,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_memory,4,-2.25,-2.25,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,secondary

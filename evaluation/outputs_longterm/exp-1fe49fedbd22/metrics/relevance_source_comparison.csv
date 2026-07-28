@@ -1,0 +1,7 @@
+variant,metric,oracle,human,delta,n_oracle,n_human
+full,ndcg_at_5,1.0,,,5,
+full,precision_at_5,1.0,,,5,
+full,mean_graded_relevance,3.0,,,5,
+no_memory,ndcg_at_5,1.0,,,5,
+no_memory,precision_at_5,1.0,,,5,
+no_memory,mean_graded_relevance,3.0,,,5,

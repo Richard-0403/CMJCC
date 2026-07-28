@@ -1,0 +1,51 @@
+primary_outcomes:
+- ndcg_at_5
+- hcsr
+- task_success
+- grounding
+- mean_violation_count
+- turn_count
+secondary_outcomes:
+- response_turns
+- clarification_efficiency
+primary_comparisons:
+- - full
+  - profile_only
+- - full
+  - one_shot
+- - full
+  - no_memory
+- - full
+  - no_context
+confidence_level: 0.95
+bootstrap_iterations: 5000
+bootstrap_seed: 2026
+binary_relevance_threshold: 2
+p_value_adjustment: holm
+p_value_adjustment_scope: within each outcome family, ablation and subset
+outcome_families:
+- primary
+- secondary
+analysis_unit: scenario_id
+repeat_index_role: stability and variance analysis only, never an independent sample
+binary_task_success_pairing: scenario-level (repeats collapsed by majority vote; even-repeat
+  ties -> 0)
+relevance_source: automatic_oracle
+relevance_source_flag: oracle
+relevance_metrics_from_source:
+- ndcg_at_5
+- precision_at_5
+- mean_graded_relevance
+relevance_oracle_version: 1.0.0
+canonical_reference_version: 2.0.0
+canonical_reference_derivation: canonical_pass
+canonical_reference_condition:
+  variant: full
+  repeats: 1
+  llm_mode: deterministic
+canonical_reference_inputs_fingerprint: c34758de02dac89ae607b6afb7ccb0d5c4d6b02e71e1d5c64a7a5c956f39b5f4
+canonical_reference_fingerprint: 1828a69b189853c68590bb403b0e52bd4bca0f56e7acb6158223ceb5a0373f72
+canonical_reference_artifact: manifests/canonical_oracle.json
+retrieval_recall_relevance_source: automatic_oracle
+human_relevance_labels: null
+relevance_source_comparison: metrics/relevance_source_comparison.csv

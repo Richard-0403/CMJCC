@@ -1,0 +1,4 @@
+metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,estimand,scenario_count,total_run_count,repeats_per_scenario,valid_pairs,base_repeat_mean,other_repeat_mean,repeat_mean_delta,mcnemar,discordant_pairs
+ndcg_at_5,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,,,,,,,,,
+task_success,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,,0.0,rank_biserial,scenario_binary_majority_vote,5.0,10.0,1.0,5.0,1.0,1.0,0.0,"{'full_only': 0, 'other_only': 0, 'n_discordant': 0, 'p_value': None}",0.0
+hcsr,full,no_memory,5,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,,,,,,,,,

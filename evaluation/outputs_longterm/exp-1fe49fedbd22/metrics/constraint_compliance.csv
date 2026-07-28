@@ -1,0 +1,5 @@
+variant,constraint_field,pass,fail,unknown,applicable,compliance,unknown_rate
+full,not_expired,25,0,0,25,1.0,0.0
+full,salary_min,25,0,0,25,1.0,0.0
+no_memory,not_expired,25,0,0,25,1.0,0.0
+no_memory,salary_min,25,0,0,25,1.0,0.0

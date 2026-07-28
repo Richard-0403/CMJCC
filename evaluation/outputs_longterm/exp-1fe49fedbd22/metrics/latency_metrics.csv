@@ -1,0 +1,15 @@
+variant,component,median_ms,p95_ms,mean_ms,n
+full,explanation,0.613,0.9733999999999999,0.7162,5
+full,filtering,2.001,2.3008,2.1005999999999996,5
+full,intent_extraction,0.319,0.3766,0.3256,5
+full,memory_merge,0.381,0.6756,0.45439999999999997,5
+full,ranking,9.19,11.3096,9.3766,5
+full,retrieval,4.533,5.6518,4.7456000000000005,5
+full,total,18.328,20.572,18.3532,5
+no_memory,explanation,0.557,0.6214,0.5603999999999999,5
+no_memory,filtering,1.844,2.5856,1.8616,5
+no_memory,intent_extraction,0.312,0.4008,0.3276,5
+no_memory,memory_merge,0.324,0.3618,0.3284,5
+no_memory,ranking,7.674,9.5544,8.035599999999999,5
+no_memory,retrieval,4.333,4.5116,4.3284,5
+no_memory,total,16.165,18.3946,16.0416,5

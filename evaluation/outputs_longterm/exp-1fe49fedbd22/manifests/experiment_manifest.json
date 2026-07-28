@@ -1,0 +1,45 @@
+{
+  "experiment_id": "exp-1fe49fedbd22",
+  "experiment_dir": "evaluation\\outputs_longterm\\_runs\\exp-1fe49fedbd22",
+  "variants": [
+    "full",
+    "no_memory"
+  ],
+  "scenario_count": 5,
+  "repeat_count": 1,
+  "run_count": 10,
+  "config_hash": "098a2e8381f70784f69059eca5a2f66fa60a8a109001e6ac60cc3ce3aad59f1b",
+  "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+  "scenarios_hash": "4e90353a1b95a3a6b8eb25f258f8db3b4dacd00f13b4f9fa946b9f02bb8621c1",
+  "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+  "created_at": "2026-07-28T16:02:23.629636+00:00",
+  "code_version": "0.1.0",
+  "commit_hash": "67e8e34ea03151450ffc0a95586ea16a13cf4a88",
+  "git_dirty": true,
+  "source_fingerprint": "9eee255c2c6031e629d84e360f7e0f4e97fecdbcd41125d2c5185bc9a5249028",
+  "artifacts": {
+    "resolved_config": "resolved_config.yaml",
+    "catalog": "catalog.jsonl",
+    "scenarios": "scenarios.jsonl"
+  },
+  "run_manifests": [
+    "full\\SC-LT-01\\0\\run_manifest.json",
+    "full\\SC-LT-02\\0\\run_manifest.json",
+    "full\\SC-LT-03\\0\\run_manifest.json",
+    "full\\SC-LT-04\\0\\run_manifest.json",
+    "full\\SC-LT-05\\0\\run_manifest.json",
+    "no_memory\\SC-LT-01\\0\\run_manifest.json",
+    "no_memory\\SC-LT-02\\0\\run_manifest.json",
+    "no_memory\\SC-LT-03\\0\\run_manifest.json",
+    "no_memory\\SC-LT-04\\0\\run_manifest.json",
+    "no_memory\\SC-LT-05\\0\\run_manifest.json"
+  ],
+  "eval_version": "0.1.0",
+  "oracle_version": "1.0.0",
+  "analysis_code_identity": {
+    "code_version": "0.1.0",
+    "commit_hash": "67e8e34ea03151450ffc0a95586ea16a13cf4a88",
+    "git_dirty": true,
+    "source_fingerprint": "9eee255c2c6031e629d84e360f7e0f4e97fecdbcd41125d2c5185bc9a5249028"
+  }
+}

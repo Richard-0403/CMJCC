@@ -1,0 +1,11 @@
+scenario_id,variant,scenario_type,difficulty,memory_dependency,context_dependency,ndcg_at_5,precision_at_5,mean_graded_relevance,hcsr,mean_violation_count,unknown_hard_rate,expired_rate,trace_completeness,grounding,handoff_success,decision_log_completeness,turn_count,response_turns,total_latency_ms,task_success,partial_task_score,grounded_claim_count,clarification_efficiency
+SC-LT-01,full,long_term_memory,medium,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,19.976,1.0,1.0,23.0,-2.0
+SC-LT-01,no_memory,long_term_memory,medium,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,16.665,1.0,1.0,25.0,-2.0
+SC-LT-02,full,long_term_memory,medium,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,17.021,1.0,1.0,25.0,-2.0
+SC-LT-02,no_memory,long_term_memory,medium,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,18.827,1.0,1.0,25.0,-2.0
+SC-LT-03,full,long_term_memory,hard,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,3.0,20.721,1.0,1.0,18.0,-3.0
+SC-LT-03,no_memory,long_term_memory,hard,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,3.0,13.523,1.0,1.0,23.0,-3.0
+SC-LT-04,full,long_term_memory,hard,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,18.328,1.0,1.0,26.0,-2.0
+SC-LT-04,no_memory,long_term_memory,hard,high,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,15.028,1.0,1.0,26.0,-2.0
+SC-LT-05,full,long_term_memory,medium,none,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,15.72,1.0,1.0,25.0,-2.0
+SC-LT-05,no_memory,long_term_memory,medium,none,medium,1.0,1.0,3.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,2.0,16.165,1.0,1.0,25.0,-2.0

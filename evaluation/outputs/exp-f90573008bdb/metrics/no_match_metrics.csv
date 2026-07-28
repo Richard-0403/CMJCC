@@ -1,0 +1,6 @@
+variant,no_match_returned,no_match_expected,true_no_match,precision,recall,f1
+full,5,5,5,1.0,1.0,1.0
+no_context,0,5,0,,0.0,
+no_memory,5,5,5,1.0,1.0,1.0
+one_shot,5,5,5,1.0,1.0,1.0
+profile_only,0,5,0,,0.0,

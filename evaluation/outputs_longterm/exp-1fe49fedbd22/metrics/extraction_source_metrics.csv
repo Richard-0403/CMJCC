@@ -1,0 +1,5 @@
+scope,variant,scenario_type,runs,fields,rule_fields,llm_fields,rule_share,llm_share,normalized_fields,repaired_fields,rule_fallback_fields,unresolved_fields,hybrid_runs,hybrid_fields,schema_failure_rate,fallback_rate
+variant,full,(all),5,18,18,0,1.0,0.0,18,0,0,0,0,0,,
+variant,no_memory,(all),5,18,18,0,1.0,0.0,18,0,0,0,0,0,,
+variant_scenario_type,full,long_term_memory,5,18,18,0,1.0,0.0,18,0,0,0,0,0,,
+variant_scenario_type,no_memory,long_term_memory,5,18,18,0,1.0,0.0,18,0,0,0,0,0,,
