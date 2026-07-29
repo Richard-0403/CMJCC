@@ -36,15 +36,41 @@ The hybrid manifest records git_dirty=true and it is left as recorded -- the his
 - `provenance.json` machine-readable identity for both experiments
 - `checksums.json` a manifest over THIS release
 
+## Errata
+
+`ERRATA.md` carries the corrections that apply to the frozen reports in this
+release. The reports themselves are left byte-for-byte as they were generated;
+the errata are recorded alongside rather than edited in.
+
 ## Verifying
 
+There are two levels, and they use different mechanisms.
+
+**This slim release** verifies against `checksums.json` in this directory:
+
 ```
-python -m jobrec_eval.cli verify <analysis dir>     # against the experiment's own checksums
-python -m jobrec_eval.cli replay <run bundle dir>   # recompute every run's key states
+python scripts/verify_final_release.py
+```
+
+It recomputes SHA-256 for every recorded path and reports missing, changed and
+unrecorded files. The text here is pinned to LF by `.gitattributes`,
+so the recorded hashes reproduce on any checkout rather than only on the machine
+that built it.
+
+**The full bundle archives** are not covered by that manifest and are not carried
+in git. Verify them in two steps -- first the archive, then its contents:
+
+```
+# 1. the archive itself, against bundle_archives[].sha256 in provenance.json
+python -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" <archive.zip>
+
+# 2. the extracted tree, against the bundle's own checksums.json
+python -m jobrec_eval.cli verify <extracted analysis dir>
+python -m jobrec_eval.cli replay <extracted run bundle dir>
 ```
 
 Recorded results: both trees verified OK; replay reproduced
 210/210 and 378/378 runs with
 0 differences.
 
-Built from `aea5625` by `scripts/build_final_release.py`.
+Built from `1a5db3a` by `scripts/build_final_release.py`.

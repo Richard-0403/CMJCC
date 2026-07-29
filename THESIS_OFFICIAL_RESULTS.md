@@ -99,13 +99,37 @@ job-context 机制的贡献在**两个实验、多个指标上都稳健显著**�
 
 ## 5. 错误分类法
 
-| deterministic（96 个 task 失败） | 数量 | hybrid（152 个） | 数量 |
+| deterministic（98 个 task 失败） | 数量 | hybrid（152 个） | 数量 |
 |---|---|---|---|
 | missing_constraint_enforcement | 35 | missing_constraint_enforcement | 102 |
 | missing_dialogue_evidence | 35 | stale_or_missing_memory | 21 |
 | missing_dialogue_continuation | 16 | other | 20 |
 | stale_or_missing_memory | 9 | no_match_misclassification | 6 |
 | other | 3 | no_context_other | 3 |
+
+deterministic 的分母是 **98**,不是本文件早先写的 96。冻结报告本来就是对的
+(`task-unsuccessful runs: 98`,分变体 full 1 / no_memory 10 / one_shot 17 /
+no_context 35 / profile_only 35),`error_taxonomy.csv` 的百分比列也以 98 为分母
+(35 / 98 = 35.7%)。这是本文件的转录错误,已记入 `final_release/ERRATA.md` E-1。
+
+## 5.1 no-match 场景的表述范围
+
+`no_match_metrics.csv` 中 full / no_memory / one_shot 三个变体的 no-match
+precision / recall / F1 均为 **1.000**,分母 `no_match_expected = 5`。这个算术结论成立,
+但**不能**据此说这 5 个场景都是硬约束联合不可满足。其中 2 个不是:
+
+| 场景 | data-quality 告警 | 满足硬约束的 job |
+|---|---|---|
+| `SC-E-02` | `no_match_scenario_constraint_satisfiable` | 5 个(job-0021、job-0086、job-0089、job-0094、job-0169) |
+| `SC-E-04` | 同上 | 1 个(job-0012) |
+
+这些 job 全部落在请求的角色族之外。两个场景的类型标签是 `multiple_hard` 而非 `no_match` ——
+只有 3 个场景是 `no_match` 类型,这就是报告的场景类型计数写 `no_match 3`、而 no-match 指标
+分母是 5 的原因。报告的 data-quality 段落已如实列出 `no_match_scenario_constraint_satisfiable 2`。
+
+**正确表述**:同时应用目标角色范围和硬约束后,不存在合格且相关的职位。
+
+详见 `final_release/ERRATA.md` E-2。
 
 ## 6. 表格与产物路径
 
@@ -129,6 +153,37 @@ job-context 机制的贡献在**两个实验、多个指标上都稳健显著**�
 完整 bundle 归档（含 `normalized/`、model-call 记录、脱敏 raw responses）在 `dist/`，
 **不入普通 git**；文件名、大小、SHA-256 与包含范围记录在 `provenance.json` 的 `bundle_archives`。
 
+正式勘误记录在 `final_release/ERRATA.md`。冻结的 `analysis_report.md` **不作修改**，
+保持生成时的逐字节原状，勘误另行记录而非事后改写。
+
+## 6.1 两级验证方法
+
+slim release 与完整 bundle 用的是不同机制,不要混用。
+
+**slim release** —— 对 `final_release/checksums.json` 验证:
+
+```
+python scripts/verify_final_release.py
+```
+
+覆盖 **100** 个文件（含每个实验各自的 `checksums.json`，以及 `ERRATA.md`），双向检查:
+记录的文件是否都在且未变，磁盘上的文件是否都被记录。`final_release/` 的文本由
+`.gitattributes` 锁定为 LF，所以记录的哈希在任何平台检出后都成立，而不只在构建它的机器上成立。
+
+**完整 bundle** 不在上述 manifest 覆盖范围内，也不入 git。分两步验证 —— 先验归档本身，再验其内容:
+
+```
+# 1. 归档本身，对 provenance.json 的 bundle_archives[].sha256
+Get-FileHash dist\CMJCC_deterministic_exp-e748800507ef.zip -Algorithm SHA256
+Get-FileHash dist\CMJCC_hybrid_exp-6db1e87daed5.zip        -Algorithm SHA256
+
+# 2. 解压后的树，对 bundle 自带的 checksums.json，用项目自身的 verifier
+python -m jobrec_eval.cli verify <解压后的 analysis 目录>
+python -m jobrec_eval.cli replay <解压后的 run bundle 目录>
+```
+
+第 2 步分别覆盖 **5305**（deterministic）和 **9505**（hybrid）个受校验文件。
+
 ## 7. 允许的表述
 
 - job-context 机制的贡献在两个实验上**稳健显著**（Holm 校正后仍显著）。
@@ -139,6 +194,7 @@ job-context 机制的贡献在**两个实验、多个指标上都稳健显著**�
 - 差异归因于**受控原型实例化下的特定机制**，不主张对任何外部框架的普遍优越性。
 - deterministic 与 hybrid 的差异**只来自后端**（相同 commit 与 execution fingerprint）。
 - `full` 在 deterministic 上**不是满分**（HCSR 0.9838、task_success 0.9762），SC-D-02 是主要失败案例。
+- no-match 场景可写为：**同时应用目标角色范围和硬约束后，不存在合格且相关的职位**。
 
 ## 8. 禁止的表述
 
@@ -151,17 +207,29 @@ job-context 机制的贡献在**两个实验、多个指标上都稳健显著**�
 - ❌ 把 hybrid 的 `git_dirty=true` 解释为代码被修改。
 - ❌ 引用长期记忆验证集 `exp-1fe49fedbd22` 的 NDCG / HCSR / 任何排序质量数字（见 §10）。
 - ❌ 引用 §9 列出的任何被取代实验。
+- ❌ 把 5 个 no-match 场景**整体**概括为"硬约束联合不可满足" —— `SC-E-02` 与 `SC-E-04`
+  的 no-match 来自角色族不匹配,不是约束不可满足（见 §5.1）。引用冻结报告中
+  "Correct no-match (SC-E-02)" 案例时必须带上这一限定。
+- ❌ 引用 deterministic task 失败数为 96 —— 正确值是 **98**（见 §5）。
 
 ## 9. 被取代、不可引用的实验
 
-| experiment id | 原因 |
-|---|---|
-| `exp-87aec1bc99dc` | 早于 v3 declared oracle |
-| `exp-197f6aacc171` | 早于 v3 declared oracle |
-| `exp-06cc34defe39` | 早于 v3 declared oracle |
-| `exp-f90573008bdb` | 仅可作为可复现性证据，**不得用于结果** |
-| `exp-8793b18de5b2` | 修复前产物，保留作历史 |
-| `exp-515b63d6a656`、`exp-301060a1899d` | 过程中间产物 |
+7 个,与 `final_release/provenance.json` 的 `superseded_and_not_citable` 和
+`superseded_details` 逐项一致。
+
+| experiment id | 原因 | 当前存储状态 |
+|---|---|---|
+| `exp-87aec1bc99dc` | 早于 v3 declared oracle | release v1 后已清理;报告目录可从 tag `cmjcc-thesis-release-v1` 取回,run 树不可 |
+| `exp-197f6aacc171` | 早于 v3 declared oracle | 同上;其 runs zip 未被跟踪,不可恢复 |
+| `exp-06cc34defe39` | 早于 v3 declared oracle | release v1 后已清理;run 树与 runs zip 均未跟踪,**不可恢复** |
+| `exp-f90573008bdb` | 仅可作为可复现性证据，**不得用于结果** | **保留在盘**,replay diff 在 `artifacts/reports/` |
+| `exp-8793b18de5b2` | 修复前产物 | release v1 后已清理,连同 `test_results/`;两者均可从 tag `cmjcc-thesis-release-v1` 取回 |
+| `exp-515b63d6a656` | 过程中间产物 | 不在盘上,未保留任何树或归档 |
+| `exp-301060a1899d` | 过程中间产物 | 不在盘上,未保留任何树或归档 |
+
+这三个早于 v3 oracle 的实验**在结构上没有对比价值**,不只是"旧":它们的分数来自继承了被评估系统
+自身 soft/hard 判断的旧 oracle,而这正是 v3 要消除的混淆。拿它们与正式实验对比等于比较两套不同的
+ground truth。
 
 ## 10. 长期记忆验证集 `exp-1fe49fedbd22`
 

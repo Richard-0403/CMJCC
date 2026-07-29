@@ -34,8 +34,12 @@ def main() -> int:
         elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             changed.append(rel)
 
+    # Exclude only the release-level manifest, which cannot record its own hash. Matching
+    # on the bare filename would also skip the per-experiment checksums.json files nested
+    # under each experiment, and those are release content: excluding them here as well as
+    # in the builder made the gap invisible, since neither side ever mentioned them.
     on_disk = {p.relative_to(ROOT).as_posix() for p in ROOT.rglob("*")
-               if p.is_file() and p.name != MANIFEST}
+               if p.is_file() and p != manifest_path}
     unrecorded = sorted(on_disk - set(recorded))
 
     print(f"recorded {len(recorded)} | missing {len(missing)} | changed {len(changed)} "

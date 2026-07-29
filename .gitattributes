@@ -1,0 +1,13 @@
+# Targeted line-ending policy for the citable release tree.
+#
+# final_release/checksums.json records a SHA-256 per file, computed over the bytes
+# on disk. Without an explicit policy those bytes depend on the checkout platform:
+# with core.autocrlf=true the working tree receives CRLF while the blob holds LF,
+# so 75 of the 99 recorded hashes did not reproduce on an LF checkout. Pinning the
+# text in this tree to LF makes the manifest hold on every platform.
+#
+# Scope is deliberately narrow. Nothing outside final_release/ is byte-verified,
+# so the rest of the repository is left to the user's core.autocrlf setting.
+
+final_release/**             text eol=lf
+final_release/**/*.png       binary
