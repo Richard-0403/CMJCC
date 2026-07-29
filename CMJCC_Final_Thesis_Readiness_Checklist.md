@@ -1,5 +1,28 @@
 # CMJCC 最终论文准备清单
 
+> # ⛔ 本清单正文的实验 id 与数值均已被取代 — 先读这一节
+>
+> 正文写于 **canonical oracle v3.0.0（声明式参考答案）之前**，当时相关性标签由系统自己的抽取器产生。**唯一可引用的正式实验对：**
+>
+> | 角色 | experiment id | 规模 | 验证 |
+> |---|---|---|---|
+> | 主实验（deterministic，五变体） | **`exp-e748800507ef`** | 210/210，crashed 0 | verify OK；replay 210/210，0 diff |
+> | 补充鲁棒性验证（hybrid，真实 LLM） | **`exp-6db1e87daed5`** | 378/378，crashed 0 | verify OK；replay 378/378，0 diff |
+>
+> - `commit_hash` `f7970b81f653`、`execution_fingerprint` `f3ef9775f6b6d08a`，**两者完全相同**。
+> - canonical oracle **v3.0.0，42/42 declared，0 system-derived**（`inputs_fingerprint b66a395e…`，`reference_fingerprint be950e06…`）。
+> - hybrid：622 次模型调用、0 失败、3,031,744 tokens、耗时 88.9 分钟（其中 86.6 分钟为 API 等待，占 97.4%）。
+>
+> **作废的 id**：`exp-197f6aacc171`、`exp-06cc34defe39`、`exp-87aec1bc99dc`、`exp-f90573008bdb`（仅可复现性证据）、`exp-8793b18de5b2`、`exp-515b63d6a656`、`exp-301060a1899d`。
+>
+> **归档口径已变更**：不再有 `final_release/deterministic_runs/`、`final_release/hybrid_runs/` 或 `dist/*.zip`。现在是**精简且已入库**的 `final_release/`（100 文件、4.11 MB）：报告、metrics/statistics 表、图、manifests、audit、各实验自身的 `checksums.json`、不含 bundle 的 run 溯源、以及冻结输入。`normalized/`（约 9 MB）与 run bundle（约 80 MB）刻意不入库，可从 bundle 再生。用 `python scripts/build_final_release.py --write` 重建。
+>
+> **数值一律以 `final_release/` 为准。** 已知变化：full NDCG@5 0.9585→**0.9115**、P@5 0.9743→**0.9581**、HCSR 1.000→**0.9838**、task_success 1.000→**0.9762**（`full` 不再满分，集中于 SC-D-02）。hybrid 记忆效应 Holm 0.0469→**0.188，不再显著**。
+>
+> **正文中"仍待用户拍板"的那条已解决**：hybrid 的 `AttributeError: 'list' object has no attribute 'strip'` 是字段 arity 缺陷，已修复（`field_validation` 的 arity 契约 + `cmjcc` 消费端），本轮 hybrid `invalid_runs = 0`、`crashed 0`。
+
+---
+
 > 目的：完成代码、评测与实验归档后，正式定稿 Chapter 5–7。  
 > 当前判断：框架主体与**代码层评测修正（第 1–7、14、16 项）已完成并通过测试**；**人工标注的工具与人工标签指标通路（第 10、11 项的机器部分）已完成并端到端验证**；**deterministic 主实验与 hybrid 补充鲁棒性验证已在同一份代码上双双跑完（第 8、9 项），真实 PostgreSQL 套件已真跑通过（第 12 项），perf 与 mypy 已补齐（第 13 项），replay 与 checksums 已在正式产物上复验（第 15、16 项），两组产物已归档并打包（第 17 项的归档部分）**。剩余工作是真人标注这一趟、代码冻结与 Chapter 3 改写。  
 > 状态基准：本次核查发生在**LLM 调用记账补齐 + deterministic 与 hybrid 双实验重跑之后**。`[x]` 表示已在代码、测试或正式产物上验证；`[ ]` 表示尚未完成，并在各节 **状态** 中写明还差什么。  

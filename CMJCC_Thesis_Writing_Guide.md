@@ -1,5 +1,52 @@
 # CMJCC 论文写作指导（第 5–7 章）
 
+> # ⛔ 本文档正文中的实验 id 与全部数值均已被取代 — 先读这一节
+>
+> 正文（第 0 节及以下）写于 **canonical oracle v3.0.0（声明式参考答案）之前**。当时的相关性标签由**系统自己的抽取器**产生，因此正文里的每一个 NDCG / P@5 / MGR / HCSR / task_success / 显著性数值都**不得直接引用**。
+>
+> **唯一可引用的正式实验对：**
+>
+> | 角色 | experiment id | 规模 |
+> |---|---|---|
+> | 主实验（deterministic，五变体） | **`exp-e748800507ef`** | 210 runs（5 × 42 × 1），crashed 0 |
+> | 补充鲁棒性验证（hybrid，真实 LLM） | **`exp-6db1e87daed5`** | 378 runs（3 × 42 × 3），crashed 0 |
+>
+> 两者 `commit_hash` 与 `execution_fingerprint` **完全相同**（`f7970b81f653` / `f3ef9775f6b6d08a`），所以 deterministic 与 hybrid 的差异**只来自后端**。
+>
+> **数值请一律以 `final_release/` 为准**，不要用正文数字。`final_release/README.md` 与 `final_release/provenance.json` 是权威来源；`final_release/checksums.json` 可自校验。
+>
+> **正文提到的以下 id 全部作废**：`exp-197f6aacc171`、`exp-06cc34defe39`、`exp-87aec1bc99dc`（均早于 v3 oracle）、`exp-f90573008bdb`（仅作可复现性证据）、`exp-8793b18de5b2`、`exp-515b63d6a656`、`exp-301060a1899d`。
+>
+> ## 已知被 v3 oracle 改变的关键数值
+>
+> | 指标 | 正文（旧 oracle） | **正式（v3 declared oracle）** |
+> |---|---|---|
+> | full NDCG@5 | 0.9585 | **0.9115** |
+> | full P@5 | 0.9743 | **0.9581** |
+> | full HCSR | 1.000 | **0.9838** |
+> | full task_success | 1.000 | **0.9762** |
+>
+> `full` **不再是满分**，原因集中在 **SC-D-02**（HCSR 0.4、task_success 0）：其话语 "onsite **only**" 使 `work_modes` 成为硬约束（允许集 `{onsite, hybrid}`），而系统自身将其判为 soft，返回的 5 个 job 只有 2 个满足。**这类缺陷是自派生 oracle 结构上无法发现的**——旧 oracle 继承了系统自己的 soft 判断。
+>
+> ## hybrid 记忆结论必须改写
+>
+> | 子集 | Δ task_success | p | **p(Holm)** | n |
+> |---|---|---|---|---|
+> | all | 0.143 | 0.031 | **0.188** | 42 |
+> | memory_dependent | **0.375** | 0.031 | **0.188** | 16 |
+>
+> 正文若写"记忆效应显著"（旧 Holm 0.0469）**必须删除**。正确表述：**方向一致、效应量可观（记忆依赖场景 Δ=0.375），但 Holm 校正后不显著**。
+>
+> ## hybrid manifest 的 `git_dirty=true` 如何解释
+>
+> 该标记**如实保留、未篡改**。它**不表示** hybrid 用了被修改的代码：其 `commit_hash` 与 `execution_fingerprint` 与 deterministic **逐字符相同**。置位原因是运行时 `git status` 非空，而非空仅因为 deterministic 刚写出当时未被追踪的分析目录——**产出一个正式产物会让下一个看起来 dirty**。这些目录现已 gitignore，可引用子集改为提交在 `final_release/`，该成因不会再出现。详见 `final_release/provenance.json` 的 `git_dirty_note`。
+>
+> ## 仍然成立的正文内容
+>
+> 口径类约束（生存者偏差、grounding=1.000 的正确解释、ActiveSearchState 措辞、LLM 延迟 caveat、no-match 定义、禁止表述清单）**依然有效**——它们讲的是"怎么写才成立"，与 oracle 版本无关。**只有数值和 id 作废。**
+
+---
+
 > 目的：把"写错就站不住"的表述约束集中到一处。本文档记录的是**已决定的口径**与**已核实的事实**，不是建议清单。
 > 依据产物：**主实验 `exp-197f6aacc171`**（deterministic，五变体，210 runs，0 system_error，0 invalid_runs）与**补充鲁棒性验证 `exp-06cc34defe39`**（hybrid，真实 LLM，378 runs，`invalid_runs = 1`）。两者 `source_fingerprint` 相同，四棵目录树 `cli verify` 均 OK。
 > 适用范围：Chapter 3 方法描述、Chapter 5 结果、Chapter 6 讨论、Chapter 7 结论。
