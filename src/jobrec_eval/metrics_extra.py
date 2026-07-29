@@ -32,10 +32,11 @@ def _as_bool(value) -> bool:
 def per_constraint_compliance(computer, bundles) -> pd.DataFrame:
     """Compliance of recommended jobs per hard-constraint field, per variant.
 
-    Evaluated against the authoritative (full-variant) constraints, so an
-    ablation that skips filtering is measured against the true constraints.
-    Compliance_c = pass / applicable; `unknown` is tallied separately (never a
-    pass).
+    Evaluated against the authoritative constraints declared in the scenario's own
+    canonical-oracle reference (v3.0.0), not against any variant's recorded state,
+    so an ablation that skips filtering is measured against the declared
+    constraints. Compliance_c = pass / applicable; `unknown` is tallied separately
+    (never a pass).
     """
     tally: dict[tuple[str, str], dict[str, int]] = {}
     for b in bundles:
@@ -890,7 +891,9 @@ def extraction_source_metrics(bundles, scenarios=None) -> pd.DataFrame:
 # catalog, how much of the relevant material it actually reached (Recall@pool), and how
 # long it took -- with retrieval errors reported SEPARATELY from ranking errors (R14.2).
 # The inputs are each bundle's ``retrieval_results.json`` (written by
-# ``jobrec.evaluation.exporters``) and the relevance oracle in ``relevance.py``.
+# ``jobrec.evaluation.exporters``) and the graded labels that ``relevance.py`` derives
+# from the declared canonical oracle in ``oracle_reference.py`` -- the reference itself
+# is declared per scenario, not built from the bundles being measured.
 
 #: Handoff contract emitted by the retrieval stage; a failed one is a retrieval error.
 _RETRIEVAL_CONTRACT = "RetrievalOutcome"

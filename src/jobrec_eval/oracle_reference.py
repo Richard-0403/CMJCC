@@ -1,13 +1,13 @@
 """The CANONICAL scenario-level reference the relevance oracle grades against.
 
-Why this module exists
-----------------------
+Why this module exists (history -- none of this is the current behaviour)
+------------------------------------------------------------------------
 The oracle needs, per scenario, an authoritative constraint bundle (which jobs are
 hard-eligible) plus the stated search intent (target roles, skills). Those used to be
-lifted out of the experiment's own run bundles: :func:`jobrec_eval.relevance.build_references`
-kept the FIRST ``full``-variant bundle it happened to encounter, i.e. repeat 0 of the
-condition under evaluation. Three problems followed from that, all of which reach the
-reported numbers:
+lifted out of the experiment's own run bundles: the since-removed
+``jobrec_eval.relevance.build_references`` kept the FIRST ``full``-variant bundle it
+happened to encounter, i.e. repeat 0 of the condition under evaluation. Three problems
+followed from that, all of which reached the reported numbers:
 
 1. **Construct validity.** The labels a system is scored against were produced by that
    same system's best-equipped condition. A variant was effectively graded on how
@@ -26,29 +26,45 @@ inputs. Two rejected alternatives, for the record: a majority vote across repeat
 system-derived, and undefined at 1 repeat), and failing loudly when repeats disagree
 (which would leave the hybrid experiment unanalysable).
 
+Current behaviour: the reference is DECLARED
+-------------------------------------------
+Each scenario carries its own authoritative reference (field, value, hard/soft strength,
+unknown handling) under :data:`DECLARATION_KEY` as a reviewed input, and this module maps
+that declaration through the constraint machinery. The extractor is never consulted.
+Canonical oracle v3.0.0 as used by the official experiment pair is **42/42 declared, 0
+system-derived**, so the reference is a pure function of the frozen scenario file and the
+catalog: independent of variant, of repeat, and of which backend produced the runs being
+scored. The two official experiments therefore share one yardstick.
+
+The earlier derivation ran the scenario through the deterministic ``full`` pipeline and
+read that run's ``JobContextState`` / ``ActiveSearchState``, which made the constraint
+VALUES and, critically, the hard/soft STRENGTHS an extractor decision rather than a
+declared fact -- ``ActiveSearchState.hard_constraint_fields`` is the system's judgement.
+That dependency was real, not theoretical: the deterministic and the hybrid extractor
+disagreed about the strength of ``preferred_locations`` / ``work_modes`` on three
+scenarios (SC-D-07, SC-D-09, SC-D-10), and a hard violation forces grade 0, so which
+extractor read the utterance decided a large part of the label universe. Declaring the
+reference removes that class of error rather than stabilising it, and it is what let
+SC-D-02 surface a genuine defect: the system rates ``work_modes`` soft where the
+utterance says ``only``, which a self-derived oracle cannot see because it inherits the
+same judgement.
+
+:data:`DERIVATION_SYSTEM_PASS` remains as a legacy fallback for scenarios with no
+declaration. It is not used by the official pair, and any experiment whose oracle records
+that derivation must not be cited for relevance, HCSR or ranking quality -- the long-term
+memory validation set is in exactly that position and is scoped to engineering claims
+only.
+
 What is still a threat -- read this before citing the oracle
 -----------------------------------------------------------
-The derivation below runs the scenario through the deterministic ``full`` pipeline and
-reads that run's ``JobContextState`` / ``ActiveSearchState``. So the reference's constraint
-VALUES and, critically, its hard/soft STRENGTHS are the system's own extractor reading the
-utterance -- ``ActiveSearchState.hard_constraint_fields`` is an extractor decision, not a
-declared fact. The circular dependency is therefore **stabilised, not eliminated**: this
-module removes variant privilege, repeat luck and cross-experiment divergence, and it
-freezes the result so it cannot drift; it does not make the reference independent of the
-system under evaluation.
+A declared reference is **not human annotation**. The declarations are the author's
+reading of each utterance, and the comparison machinery (constraint evaluation, grading)
+is shared with the system under evaluation. So the oracle is a transparent, frozen,
+variant-independent proxy -- not an independent ground truth. Cite it that way, and keep
+it in the construct-validity threats.
 
-That the residual dependency is real, not theoretical, is visible in the data: the
-deterministic and the hybrid extractor disagreed about the strength of
-``preferred_locations`` / ``work_modes`` on three scenarios (SC-D-07, SC-D-09, SC-D-10),
-and a hard violation forces grade 0 -- so which extractor read the utterance decided a
-large part of the label universe. That is exactly why the reference must not be taken from
-the run being scored, and equally why the current derivation is not the end state.
-
-The end state is a DECLARED reference: each scenario carrying its authoritative
-constraints (field, value, strength) as a reviewed input, with this module mapping the
-declaration through the constraint machinery and never through the extractor. Because the
-oracle is applied at ANALYSIS time over saved bundles, that change costs an analysis
-re-run, never an experiment re-run.
+Because the oracle is applied at ANALYSIS time over saved bundles, changing it costs an
+analysis re-run, never an experiment re-run.
 """
 
 from __future__ import annotations

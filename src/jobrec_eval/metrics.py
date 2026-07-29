@@ -3,10 +3,13 @@
 Design choices per the evaluation guide:
 - Analysis unit is the scenario; run-level metrics aggregate to
   scenario x variant, then to variant.
-- HCSR / violations are recomputed against the *authoritative* hard constraints
-  (the full variant's JobContextState for that scenario) so an ablation that
-  skips filtering (no_context) is scored against the true constraints, not its
-  own pass-through eligibility.
+- HCSR / violations are recomputed against the *authoritative* hard constraints,
+  taken from the declared canonical oracle (v3.0.0): the ``job_context`` of the
+  scenario's own reference, built by ``oracle_reference`` from the frozen scenario
+  file rather than lifted from any variant's recorded state. So an ablation that
+  skips filtering (no_context) is scored against the declared constraints, not its
+  own pass-through eligibility -- and the yardstick does not shift with the variant
+  or the repeat being scored.
 - Explicit policies: correct no-match => ranking metrics N/A (not 0); empty
   recommendation => HCSR N/A; unknown hard checks are NOT counted as pass.
 - Grounding uses the system's claim validator output (supported/total factual).
@@ -437,9 +440,9 @@ class MetricsComputer:
     def _recommendation_ok(response_type, returned, hcsr, grounded) -> bool:
         """The recommendation quality bar: returns, no hard violation, grounded rationale.
 
-        HCSR is recomputed against the authoritative constraints, so ``None`` (no
-        reference context) never passes; grounding requires at least one supported
-        factual claim.
+        HCSR is recomputed against the declared reference constraints, so ``None``
+        (the scenario has no declared reference context) never passes; grounding
+        requires at least one supported factual claim.
         """
         return bool(response_type == _ACTION_RECOMMENDATION and returned > 0
                     and hcsr is not None and hcsr >= 1.0 and grounded > 0)
