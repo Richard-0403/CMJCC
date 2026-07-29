@@ -1,3 +1,0 @@
-variant,no_match_returned,no_match_expected,true_no_match,precision,recall,f1
-full,2,2,2,1.0,1.0,1.0
-no_context,0,2,0,,0.0,

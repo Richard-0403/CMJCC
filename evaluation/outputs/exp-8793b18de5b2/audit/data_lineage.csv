@@ -1,6 +1,0 @@
-report_section,metric_name,source_file
-5,variant_summary,metrics/variant_summary.csv
-6.1,memory_contribution,metrics/memory_contribution.csv
-6.2,context_contribution,metrics/context_contribution.csv
-8,paired_comparisons,statistics/paired_comparisons.csv
-9.x,relevance_labels,normalized/relevance_labels.csv

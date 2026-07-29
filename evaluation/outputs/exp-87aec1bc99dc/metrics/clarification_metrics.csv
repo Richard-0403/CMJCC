@@ -1,6 +1,0 @@
-variant,runs,clarifications,expected_clarification,useful,asked_clarifications,necessary_asked,unnecessary_asked,answered,repeated,precision,recall,necessary_recall,useful_rate,unnecessary_rate,repeated_question_rate,answered_rate
-full,42,7,7,7,7,7,0,7,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0
-no_context,42,7,7,7,7,7,0,7,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0
-no_memory,42,16,7,7,16,7,9,9,0,0.4375,1.0,1.0,0.4375,0.5625,0.0,0.5625
-one_shot,42,16,7,7,16,7,9,2,0,0.4375,1.0,1.0,0.4375,0.5625,0.0,0.125
-profile_only,42,14,7,7,14,7,7,14,9,0.5,1.0,1.0,0.5,0.5,0.6428571428571429,1.0

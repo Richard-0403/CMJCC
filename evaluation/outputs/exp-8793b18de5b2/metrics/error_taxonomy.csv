@@ -1,4 +1,0 @@
-error_category,count,percentage,most_affected_variant
-missing_constraint_enforcement (ablation),87,38.7,no_context
-missing_dialogue_evidence (baseline),84,37.3,profile_only
-stale_or_missing_memory (ablation),54,24.0,no_memory

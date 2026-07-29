@@ -1,6 +1,0 @@
-variant,no_match_returned,no_match_expected,true_no_match,precision,recall,f1
-full,15,15,15,1.0,1.0,1.0
-no_context,0,15,0,,0.0,
-no_memory,15,15,15,1.0,1.0,1.0
-one_shot,15,15,15,1.0,1.0,1.0
-profile_only,0,15,0,,0.0,
