@@ -1,0 +1,4 @@
+variant,no_match_returned,no_match_expected,true_no_match,precision,recall,f1
+full,18,15,14,0.7777777777777778,0.9333333333333333,0.8484848484848485
+no_context,0,15,0,,0.0,
+no_memory,17,15,15,0.8823529411764706,1.0,0.9375

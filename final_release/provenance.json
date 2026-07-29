@@ -1,0 +1,88 @@
+{
+  "code_identity_matches_across_the_pair": true,
+  "excluded_from_this_release": {
+    "normalized_tables": "regenerable from the run bundles; ~9 MB across the pair",
+    "run_bundles": "shipped as a standalone archive; ~80 MB"
+  },
+  "experiments": {
+    "deterministic": {
+      "analysis_fingerprint": "b94a4ec39ca14a18069eae90b997ed0bfd64fe80b2c3ec04e5c1f3b38aa4e306",
+      "canonical_oracle": {
+        "declared_scenario_count": 42,
+        "derivation": "declared",
+        "inputs_fingerprint": "b66a395e6ee59e613c6b2a6172b78c4f22dd6d1a8c7e9851e3b527ade78b9adb",
+        "reference_fingerprint": "be950e066a514acb38f22c0646065c08331788b557b0543a1bb089b8837dfdb0",
+        "system_derived_scenario_count": 0,
+        "version": "3.0.0"
+      },
+      "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+      "code_version": "0.1.0",
+      "commit_hash": "f7970b81f653efb7c96748e39b48c5d3eeda889c",
+      "config": "configs/experiment_full.yaml",
+      "config_hash": "098a2e8381f70784f69059eca5a2f66fa60a8a109001e6ac60cc3ce3aad59f1b",
+      "crashed_run_count": 0,
+      "created_at": "2026-07-28T20:34:54.162307+00:00",
+      "execution_fingerprint": "f3ef9775f6b6d08ac614631e3c5e08cf89b6cb6d286fa25099c4f05d5cecb206",
+      "expected_run_count": 210,
+      "experiment_id": "exp-e748800507ef",
+      "git_dirty": false,
+      "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+      "repeats": 1,
+      "run_count": 210,
+      "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+      "source_fingerprint": "f4813d7b5d2041b570551050f27501dba1924b632b4516e5c87cb751cf5fca74",
+      "variants": [
+        "full",
+        "profile_only",
+        "one_shot",
+        "no_memory",
+        "no_context"
+      ]
+    },
+    "hybrid": {
+      "analysis_fingerprint": "b94a4ec39ca14a18069eae90b997ed0bfd64fe80b2c3ec04e5c1f3b38aa4e306",
+      "canonical_oracle": {
+        "declared_scenario_count": 42,
+        "derivation": "declared",
+        "inputs_fingerprint": "b66a395e6ee59e613c6b2a6172b78c4f22dd6d1a8c7e9851e3b527ade78b9adb",
+        "reference_fingerprint": "be950e066a514acb38f22c0646065c08331788b557b0543a1bb089b8837dfdb0",
+        "system_derived_scenario_count": 0,
+        "version": "3.0.0"
+      },
+      "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+      "code_version": "0.1.0",
+      "commit_hash": "f7970b81f653efb7c96748e39b48c5d3eeda889c",
+      "config": "configs/hybrid_vectorengine.yaml",
+      "config_hash": "f2406871013c57e242b7a14451a0f8fd12a8b5f6a545a742224c1b9b6f1ffa8d",
+      "crashed_run_count": 0,
+      "created_at": "2026-07-28T22:12:35.849706+00:00",
+      "execution_fingerprint": "f3ef9775f6b6d08ac614631e3c5e08cf89b6cb6d286fa25099c4f05d5cecb206",
+      "expected_run_count": 378,
+      "experiment_id": "exp-6db1e87daed5",
+      "git_dirty": true,
+      "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+      "repeats": 3,
+      "run_count": 378,
+      "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+      "source_fingerprint": "f4813d7b5d2041b570551050f27501dba1924b632b4516e5c87cb751cf5fca74",
+      "variants": [
+        "full",
+        "no_memory",
+        "no_context"
+      ]
+    }
+  },
+  "git_dirty_note": "The hybrid manifest records git_dirty=true and it is left as recorded -- the history is not rewritten to make it look clean. It does NOT mean the hybrid run used modified code: its commit_hash and execution_fingerprint are identical to the deterministic run's (commit f7970b81f653, execution fingerprint f3ef9775f6b6d08a). The flag is set because git status was non-empty at run time, and it was non-empty only because the deterministic run had just written its analysis tree into evaluation/outputs/, which was untracked at the time. In other words, producing one official artifact made the next one look dirty. Those output trees are now gitignored and the citable subset is committed here instead, so the flag cannot be produced this way again.",
+  "official_pair": [
+    "exp-e748800507ef",
+    "exp-6db1e87daed5"
+  ],
+  "superseded_and_not_citable": [
+    "exp-8793b18de5b2",
+    "exp-f90573008bdb",
+    "exp-197f6aacc171",
+    "exp-06cc34defe39",
+    "exp-87aec1bc99dc"
+  ],
+  "superseded_note": "Earlier experiments remain on disk as history. exp-87aec1bc99dc and exp-197f6aacc171 predate the declared canonical oracle (v3.0.0) and exp-06cc34defe39 predates it too, so their grade-derived numbers are not comparable with the official pair. exp-f90573008bdb is citable only as reproducibility evidence, never for results."
+}

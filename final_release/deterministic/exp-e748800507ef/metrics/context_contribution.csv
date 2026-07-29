@@ -1,0 +1,17 @@
+metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,estimand,subset,p_value_holm,scenario_count,total_run_count,repeats_per_scenario,valid_pairs,base_repeat_mean,other_repeat_mean,repeat_mean_delta,mcnemar,discordant_pairs,family
+ndcg_at_5,full,no_context,37,0.9114730966608259,0.7384888644562306,0.1729842322045955,0.11223507694327464,0.24042613219789097,2.3479214438188723e-05,0.8511922794352497,cohens_dz,scenario_mean_over_repeats,all,7.043764331456617e-05,,,,,,,,,,primary
+hcsr,full,no_context,37,0.9837837837837837,0.7081081081081082,0.27567567567567564,0.2054054054054054,0.35135135135135126,1.6504660549359354e-06,1.2369518994827728,cohens_dz,scenario_mean_over_repeats,all,8.252330274679677e-06,,,,,,,,,,primary
+task_success,full,no_context,42,0.9761904761904762,0.16666666666666666,0.8095238095238095,0.6904761904761905,0.9285714285714286,1.1641532182693481e-10,1.0,rank_biserial,scenario_binary_majority_vote,all,6.984919309616089e-10,42.0,84.0,1.0,42.0,0.9761904761904762,0.16666666666666666,0.8095238095238095,"{'full_only': 34, 'other_only': 0, 'n_discordant': 34, 'p_value': 1.1641532182693481e-10}",34.0,primary
+grounding,full,no_context,42,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_context,37,0.016216216216216217,0.3621621621621622,-0.3459459459459459,-0.4864864864864864,-0.23243243243243247,1.8632821096811738e-06,-0.8793426851215924,cohens_dz,scenario_mean_over_repeats,all,8.252330274679677e-06,,,,,,,,,,primary
+turn_count,full,no_context,42,1.5,1.5,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+ndcg_at_5,full,no_context,10,0.877970027091604,0.6479534139955303,0.23001661309607382,0.09338818367153837,0.40815420005471054,0.009765625,0.8562933929264673,cohens_dz,scenario_mean_over_repeats,context_dependent,0.029296875,,,,,,,,,,primary
+hcsr,full,no_context,10,1.0,0.5,0.5,0.37999999999999995,0.64,0.001953125,2.1213203435596424,cohens_dz,scenario_mean_over_repeats,context_dependent,0.009765625,,,,,,,,,,primary
+task_success,full,no_context,15,1.0,0.0,1.0,1.0,1.0,6.103515625e-05,1.0,rank_biserial,scenario_binary_majority_vote,context_dependent,0.0003662109375,15.0,30.0,1.0,15.0,1.0,0.0,1.0,"{'full_only': 15, 'other_only': 0, 'n_discordant': 15, 'p_value': 6.103515625e-05}",15.0,primary
+grounding,full,no_context,15,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,context_dependent,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_context,10,0.0,0.7,-0.7,-1.0800000000000003,-0.42000000000000004,0.001953125,-1.2004900959975617,cohens_dz,scenario_mean_over_repeats,context_dependent,0.009765625,,,,,,,,,,primary
+turn_count,full,no_context,15,1.3333333333333333,1.3333333333333333,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,context_dependent,1.0,,,,,,,,,,primary
+response_turns,full,no_context,42,1.5,1.5,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_context,42,-1.5,-1.5,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,secondary
+response_turns,full,no_context,15,1.3333333333333333,1.3333333333333333,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,context_dependent,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_context,15,-1.3333333333333333,-1.3333333333333333,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,context_dependent,1.0,,,,,,,,,,secondary

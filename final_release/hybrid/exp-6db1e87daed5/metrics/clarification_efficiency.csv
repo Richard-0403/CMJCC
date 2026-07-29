@@ -1,0 +1,4 @@
+variant,runs,necessary_asked,necessary_missed,unnecessary_asked,asked_unresolved,efficiency_score,median_efficiency_score,tier_resolved,tier_abandoned,tier_skipped,response_turns_n,median_response_turns,q1_response_turns,q3_response_turns,iqr_response_turns
+full,126,15,6,0,0,-47620.5,-1.0,120,0,6,126,1.0,1.0,2.0,1.0
+no_context,126,15,6,0,0,-47620.5,-1.0,120,0,6,126,1.0,1.0,2.0,1.0
+no_memory,126,15,6,21,21,-47787.333333333336,-1.0,99,21,6,126,1.0,1.0,2.0,1.0

@@ -1,0 +1,10 @@
+experiment:
+  variant: full
+
+memory:
+  enabled: true
+  use_prior_dialogue: true
+  persist_confirmed_updates: true
+
+context:
+  explicit_constraint_orchestration: true

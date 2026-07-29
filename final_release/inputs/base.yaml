@@ -1,0 +1,61 @@
+project:
+  name: jobrec-cmjcc
+  environment: local
+  reference_date: "2026-01-01"
+
+experiment:
+  variant: full
+  random_seed: 42
+  top_k: 5
+  retrieval_pool_size: 50
+  repeat_count: 3
+
+memory:
+  enabled: true
+  use_prior_dialogue: true
+  persist_confirmed_updates: true
+  inference_to_long_term: false
+  clarification_confidence_threshold: 0.72
+
+context:
+  explicit_constraint_orchestration: true
+  hard_constraint_unknown_default: fail
+  # INERT: read by nothing. Expiry is always enforced as a hard not_expired constraint
+  # (see JobContextAgent). Kept only because archived run bundles embed a resolved config
+  # containing it, and AppConfig forbids extra fields -- removing it would make every
+  # archived experiment unreplayable. Do not add behaviour to it; delete it only together
+  # with a migration for the archives.
+  expired_job_policy: fail
+
+retrieval:
+  provider: hybrid
+  lexical_weight: 0.45
+  semantic_weight: 0.35
+  structured_weight: 0.20
+
+ranking:
+  missing_feature_policy: renormalize
+  salary_scale: 4000.0
+  weights:
+    role_match: 0.25
+    required_skill_match: 0.25
+    preferred_skill_match: 0.10
+    location_preference: 0.10
+    work_mode_preference: 0.10
+    salary_preference: 0.10
+    experience_fit: 0.07
+    industry_preference: 0.03
+
+llm:
+  mode: deterministic
+  provider: mock
+  extraction_temperature: 0.0
+  response_temperature: 0.2
+  timeout_seconds: 30
+  max_retries: 2
+  save_raw_responses: true
+
+logging:
+  level: INFO
+  format: json
+  redact_candidate_text: false
