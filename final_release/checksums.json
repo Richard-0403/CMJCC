@@ -1,11 +1,12 @@
 {
   "algorithm": "sha256",
-  "file_count": 95,
+  "file_count": 99,
   "files": {
-    "README.md": "e98586c8c9c360be8fe68e087db06f6fff6be9f71b1ecfb278c2bd6addff1bc7",
+    "README.md": "b10bbf534398632d29f28b562f2cb68aa88035d50d87fdaf7955e865a7f63c30",
     "deterministic/exp-e748800507ef/audit/data_lineage.csv": "ee7e4b8d4d6664902d146a537ef8672bd66d6f42bc38d98d701a8603d9f6eb78",
     "deterministic/exp-e748800507ef/audit/invalid_runs.csv": "abb0b83127e39210ee46554c3b92c8c9969899e3c8627e1ef113b84a10b6b4c5",
     "deterministic/exp-e748800507ef/audit/missing_reference_scenarios.csv": "bdaa6bcb8e1fa3f7aaed3ce47f5b4a38db9e48bf7b919fb87e841be9fccac84b",
+    "deterministic/exp-e748800507ef/checksums.json": "d9862a6666dfd8ba27fa4ae64959872a3999bc664a8fa51f45aaceb2f5231e53",
     "deterministic/exp-e748800507ef/data_quality_report.json": "703c2e30f3b7fbc548b229d7a07c875f999d5b59534864b422b06700df80d509",
     "deterministic/exp-e748800507ef/manifests/analysis_plan.yaml": "ab7cb9dfed526303e4a2eef1771d9599dc1efec5d8c0db54b99da1c45c8514f1",
     "deterministic/exp-e748800507ef/manifests/canonical_oracle.json": "68e1999f96397be7c99147132deeac53430cf51a04dc3a74197244c3bfc5a422",
@@ -41,6 +42,7 @@
     "deterministic/exp-e748800507ef/plots/turns_vs_success.png": "6f40163f85f96c76a7e48658e1b159ddad92feab85d06e985423cefa0d82499b",
     "deterministic/exp-e748800507ef/report/analysis_report.md": "a3c142b7dc6020da87cc481f0e2db52d6f3a8e9c790341ca384706e63d3f8b39",
     "deterministic/exp-e748800507ef/report/analysis_report_data.json": "cb588fdf5fd879f0c27838ad6b141cf6089c16adf0a28f298fdeec6d46c1df1c",
+    "deterministic/exp-e748800507ef/run_bundle_provenance/checksums.json": "d65b24c6e2dfadd542426082a0ba070a993a7b258d0c0c8363cfc98c9fd6d1c8",
     "deterministic/exp-e748800507ef/run_bundle_provenance/experiment_manifest.json": "9e14fdc9204375aa28901a69b0ce73dad7225f9a9f6deecb17861270ef40ca1c",
     "deterministic/exp-e748800507ef/run_bundle_provenance/failures.csv": "b5f0889edb993f7ae4c95be40072a22edb1cfc5f3cfb7931d93b7a101c22affb",
     "deterministic/exp-e748800507ef/run_bundle_provenance/resolved_config.yaml": "390087cbce5a7320605e2cdf6074cd7467cb926966f16e65944ce062ef02523e",
@@ -50,6 +52,7 @@
     "hybrid/exp-6db1e87daed5/audit/data_lineage.csv": "ee7e4b8d4d6664902d146a537ef8672bd66d6f42bc38d98d701a8603d9f6eb78",
     "hybrid/exp-6db1e87daed5/audit/invalid_runs.csv": "abb0b83127e39210ee46554c3b92c8c9969899e3c8627e1ef113b84a10b6b4c5",
     "hybrid/exp-6db1e87daed5/audit/missing_reference_scenarios.csv": "bdaa6bcb8e1fa3f7aaed3ce47f5b4a38db9e48bf7b919fb87e841be9fccac84b",
+    "hybrid/exp-6db1e87daed5/checksums.json": "a9e0dc6ac14288d7e3437913054d062d997d21501cca78aa4e6951ac47de295a",
     "hybrid/exp-6db1e87daed5/data_quality_report.json": "703c2e30f3b7fbc548b229d7a07c875f999d5b59534864b422b06700df80d509",
     "hybrid/exp-6db1e87daed5/manifests/analysis_plan.yaml": "ab7cb9dfed526303e4a2eef1771d9599dc1efec5d8c0db54b99da1c45c8514f1",
     "hybrid/exp-6db1e87daed5/manifests/canonical_oracle.json": "68e1999f96397be7c99147132deeac53430cf51a04dc3a74197244c3bfc5a422",
@@ -85,6 +88,7 @@
     "hybrid/exp-6db1e87daed5/plots/turns_vs_success.png": "a901db4e3d3300a39d679ff008235cb93a974ecdfe599c295b0766fad86edd0e",
     "hybrid/exp-6db1e87daed5/report/analysis_report.md": "7fd76c69a4ccd5d14a153d5e76f835b3a1c843facb70cd7cb4b7f0cb35ff2a54",
     "hybrid/exp-6db1e87daed5/report/analysis_report_data.json": "6fa732c07eb05327657280f23fa1bd2f34b7080939fd5f10acbb2c69884a87bc",
+    "hybrid/exp-6db1e87daed5/run_bundle_provenance/checksums.json": "2df035a55b60148146a72cb64ce4f1b202b42a464ac998985b2080cdd4f9f0ab",
     "hybrid/exp-6db1e87daed5/run_bundle_provenance/experiment_manifest.json": "ebc4bfea35abfb3e78fa34de7b774dc55f577e84198a527be587aab270ffef4b",
     "hybrid/exp-6db1e87daed5/run_bundle_provenance/failures.csv": "b5f0889edb993f7ae4c95be40072a22edb1cfc5f3cfb7931d93b7a101c22affb",
     "hybrid/exp-6db1e87daed5/run_bundle_provenance/resolved_config.yaml": "7e530b253ec34c7fc1b024e70a2cbc6037b8fd56af7362f86cb32f575b31b4ac",
@@ -96,6 +100,6 @@
     "inputs/experiment_full.yaml": "c2d23f0bd1b8edeebc73c3ff98756c66d3b3bf5ec2dbd2f6428a014e7669848a",
     "inputs/hybrid_vectorengine.yaml": "71c80c6a31154bc373d6f9fe705603d5eaf01c3bdbbbe76f9ca9ee63d85a9ee5",
     "inputs/scenarios.jsonl": "775f5975d8ecac8d0879871c0d0046955a633a42f0c4f851a1c772a3797d1af4",
-    "provenance.json": "efe552ee26f136b0785ace390633758091ff488946787e08733b1e0632c5115d"
+    "provenance.json": "6ff96f9a18ee738e682dd52304bd35c41d5fc04622fb3bf0a233c07d7715ecbf"
   }
 }

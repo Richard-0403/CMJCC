@@ -1,8 +1,54 @@
 {
+  "bundle_archives": {
+    "archives": {
+      "deterministic": {
+        "analysis_files": 50,
+        "archive": "CMJCC_deterministic_exp-e748800507ef.zip",
+        "audit_problems": [],
+        "checksummed_files_reverified_after_extraction": 5305,
+        "contents": [
+          "runs/ -- every run bundle incl. model_calls.jsonl with redacted raw responses, turn_records.jsonl, run_totals.json, evidence items and log traces, plus the experiment manifest, runs index, failures, resolved config, catalog and scenario snapshots and checksums",
+          "analysis/ -- full analysis tree incl. normalized tables, metrics, statistics, plots, manifests (with the frozen canonical oracle), audit tables, data-quality report and checksums",
+          "audit/replay_diff.json -- recorded replay result",
+          "configs/ -- frozen configuration files",
+          "README.md"
+        ],
+        "member_count": 5312,
+        "run_bundle_files": 5257,
+        "secrets_scan": "clean",
+        "sha256": "dda1468cf5e06c7cf66faf945654675acf93b5b361418e172f5beb607dd2caec",
+        "size_bytes": 7325278,
+        "size_mb": 6.99,
+        "zip_integrity": "ok"
+      },
+      "hybrid": {
+        "analysis_files": 50,
+        "archive": "CMJCC_hybrid_exp-6db1e87daed5.zip",
+        "audit_problems": [],
+        "checksummed_files_reverified_after_extraction": 9505,
+        "contents": [
+          "runs/ -- every run bundle incl. model_calls.jsonl with redacted raw responses, turn_records.jsonl, run_totals.json, evidence items and log traces, plus the experiment manifest, runs index, failures, resolved config, catalog and scenario snapshots and checksums",
+          "analysis/ -- full analysis tree incl. normalized tables, metrics, statistics, plots, manifests (with the frozen canonical oracle), audit tables, data-quality report and checksums",
+          "audit/replay_diff.json -- recorded replay result",
+          "configs/ -- frozen configuration files",
+          "README.md"
+        ],
+        "member_count": 9512,
+        "run_bundle_files": 9457,
+        "secrets_scan": "clean",
+        "sha256": "fc100d6582e46ff4aa62badd2392c3cdb3c696469d2988690250384709aae193",
+        "size_bytes": 14359794,
+        "size_mb": 13.69,
+        "zip_integrity": "ok"
+      }
+    },
+    "location": "dist/ (NOT in version control: too large for ordinary git)",
+    "note": "Each archive holds the complete evidence for one official experiment -- run bundles with model-call records and redacted raw responses, the normalized tables, manifests, the replay audit and the frozen configs. Every archive was audited before its digest was taken: secrets scan for credential VALUES, ZIP integrity, and extraction followed by re-verifying each tree against the checksums.json it carries. A digest over an archive nobody opened would only prove the bytes had not changed since."
+  },
   "code_identity_matches_across_the_pair": true,
   "excluded_from_this_release": {
-    "normalized_tables": "regenerable from the run bundles; ~9 MB across the pair",
-    "run_bundles": "shipped as a standalone archive; ~80 MB"
+    "normalized_tables": "carried in the bundle archives instead",
+    "run_bundles": "carried in the bundle archives instead"
   },
   "experiments": {
     "deterministic": {

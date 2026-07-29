@@ -47,4 +47,4 @@ Recorded results: both trees verified OK; replay reproduced
 210/210 and 378/378 runs with
 0 differences.
 
-Built from `f7970b8` by `scripts/build_final_release.py`.
+Built from `aea5625` by `scripts/build_final_release.py`.
