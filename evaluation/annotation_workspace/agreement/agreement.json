@@ -1,0 +1,111 @@
+{
+  "claims": {
+    "by_claim_type": {
+      "candidate_preference": {
+        "n": 1254,
+        "supported_rate": 0.9952153110047847,
+        "unsupported": 6
+      },
+      "no_match_reason": {
+        "n": 156,
+        "supported_rate": 0.0,
+        "unsupported": 156
+      },
+      "ranking_reason": {
+        "n": 7904,
+        "supported_rate": 0.9615384615384616,
+        "unsupported": 304
+      },
+      "skill_gap": {
+        "n": 1883,
+        "supported_rate": 0.0,
+        "unsupported": 1883
+      }
+    },
+    "confusion_matrix_validator_rows_human_cols": {
+      "validator_0": {
+        "human_0": 0,
+        "human_1": 0
+      },
+      "validator_1": {
+        "human_0": 2349,
+        "human_1": 8848
+      }
+    },
+    "human_supported": 8848,
+    "human_unsupported": 2349,
+    "human_unsupported_rate": 0.20978833616147183,
+    "kappa_degenerate": true,
+    "kappa_degenerate_reason": "The validator predicted the same class (supported) for all 11197 claims, so its predictions carry zero variance. Cohen's kappa is undefined for a constant predictor and the implementation returns 0.000. This is NOT chance-level agreement: raw agreement is 0.7902. The substantive failure is detection, reported as unsupported_detection_rate below.",
+    "n_items": 11197,
+    "raw_agreement_raters": 0.9804411896043583,
+    "raw_validator_vs_human_agreement": 0.7902116638385281,
+    "unsupported_detection_note": "Share of the claims a human adjudicated as unsupported that the validator also marked unsupported. It is 0.0 because the validator never marks anything unsupported.",
+    "unsupported_detection_rate": 0.0,
+    "validator_column_distinct_values": [
+      1
+    ],
+    "validator_flagged_unsupported": 0,
+    "validator_is_constant": true
+  },
+  "forbidden_readings": [
+    "Do NOT report validator_vs_human_kappa = 0.000 as chance-level agreement. It is degenerate: the validator is a constant all-supported predictor.",
+    "Do NOT quote the human ranking metrics as an unbiased effect estimate. The human label universe is the 368 returned pairs, while the oracle grades the whole catalogue, so NDCG's ideal DCG is computed over a different pool. It is an agreement diagnostic."
+  ],
+  "relevance": {
+    "confusion_matrix_oracle_rows_human_cols": {
+      "oracle_0": {
+        "human_0": 137,
+        "human_1": 2,
+        "human_2": 1,
+        "human_3": 0
+      },
+      "oracle_1": {
+        "human_0": 0,
+        "human_1": 1,
+        "human_2": 1,
+        "human_3": 0
+      },
+      "oracle_2": {
+        "human_0": 11,
+        "human_1": 10,
+        "human_2": 32,
+        "human_3": 1
+      },
+      "oracle_3": {
+        "human_0": 26,
+        "human_1": 0,
+        "human_2": 48,
+        "human_3": 98
+      }
+    },
+    "delta_distribution": {
+      "-1": 58,
+      "-2": 11,
+      "-3": 26,
+      "0": 268,
+      "1": 4,
+      "2": 1
+    },
+    "direction_note": "The automatic oracle grades more generously than the adjudicated humans: it is looser on 95 of 368 judged pairs and stricter on only 5. The dominant cause is the salary reading recorded in RUBRIC.md -- the humans require the posting's MINIMUM to clear a stated floor, the oracle accepts an overlapping salary range.",
+    "exact_grade_agreement_oracle_vs_human": 0.7282608695652174,
+    "grade_distribution_human": {
+      "0": 174,
+      "1": 13,
+      "2": 82,
+      "3": 99
+    },
+    "grade_distribution_oracle": {
+      "0": 140,
+      "1": 2,
+      "2": 54,
+      "3": 172
+    },
+    "human_looser_rows": 5,
+    "human_stricter_rows": 95,
+    "identical_rows": 268,
+    "mean_absolute_grade_difference": 0.44565217391304346,
+    "n_items": 368,
+    "raw_agreement_raters": 0.7961956521739131
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "algorithm": "sha256",
+  "file_count": 19,
+  "files": {
+    "README.md": "b42f7a553536453fadeb7988a0dd38f3d213e5c89ba96b66d55f1332ff3ed98c",
+    "RUBRIC.md": "715d0e70a517df028b928b0a873dcf21f5fd1af1218c411a8f837978c5ebf91a",
+    "agreement/agreement.json": "2bd609008b90ee1f999ab37a9db579190c38b4978358e72d088f6b3bf23f064c",
+    "labels/claim_adjudicated.csv": "98d2e917b7ea32addd2624d6b930423d5d45d435c0cc1ec236fb8668d62469b8",
+    "labels/claim_raters.csv": "c8a78584022f1d2e5a15be9a6f06eb847414fecfce295dfa422faa2bd3e2bf9e",
+    "labels/relevance_adjudicated.csv": "453ef613adc77e5ec5e6cfda471fba7f52c390a290fb9378d4fb56d67d126ad4",
+    "labels/relevance_raters.csv": "a6f35a6e558e798c5aee101bdbbf3ebf8574c1b8c30519076831474fd78511fb",
+    "provenance.json": "9fb3a40b9f5be1e2ea481b855caf894e190cf6fe7a896e71fb91f8ace9348d2c",
+    "reference/canonical_oracle_scenarios.json": "7e58653dfae0988afda16c972e519cde44aeaf22c31b8d08e02705285f642e51",
+    "reference/claim_evidence.csv": "4d50b58879d4578661f102affdf1694c0a3b13efeda4c6e2334e7d79054e2631",
+    "reference/claim_texts.csv": "c41d66611a96c4d148ddfa9e13cfd2ff1cd03ddc9a620c695c3c8555f9884677",
+    "reference/claims_deterministic.csv": "0756cf038590961d8e9fb1d787b4de1ee55d48a5332d246bd48a4b3bda829cdd",
+    "reference/claims_hybrid.csv": "7c97d1206f6db39b1563b09e07ea0463d2cc8214686d03ddba4a7b8203e4ff14",
+    "reference/jobs.csv": "0ab0dc3fec5e26c69f9f86771e8abd58086a1d7b5fa0d3618240e9c0c04b5b6d",
+    "reference/jobs.jsonl": "764dd8bb12168790f40454638eec080bb9d3bc03775425c21d990bdfeb602bee",
+    "reference/relevance_labels_oracle.csv": "4604786a06ec033c35806ff0a2f7e8fdaf51576bdac7258995418b30cf853e89",
+    "reference/runs_index_deterministic.csv": "b00e5d4322406685c2d4b2554490353db1e619489d067cfa7a0e2f8efcce2b30",
+    "reference/runs_index_hybrid.csv": "434c5f608c5c70a7f9fe178d9ea44d36216db8910993d99ca3918d8bb4bf9696",
+    "reference/scenarios.jsonl": "571bcec9f2c4c2f80dddbad649661b349842298574a0e13c98e97c23c4ba9dbb"
+  }
+}

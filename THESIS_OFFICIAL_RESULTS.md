@@ -244,3 +244,125 @@ ground truth。
 的检索带入 `hybrid`（其话语从未提及工作模式）；`SC-LT-03` 达到 version 3 且两个持久值都生效；
 `full` 与 `no_memory` **恰好只在 SC-LT-01 与 SC-LT-03 上不同**，说明该验证集对被验证机制敏感、
 在别处不敏感。
+
+## 11. 人工标注结果
+
+标注在正式实验对上完成,**未重跑任何实验** —— oracle 与 claim validator 都是分析时施加的。
+分析输出在 `evaluation/outputs_human/`,封存的 `evaluation/outputs*/` 与两个归档未被写入。
+
+完整可审计证据包:`evaluation/annotation_workspace/`(rater 级标签、adjudicated gold、
+实际施加的 rubric、claim 正文与其证据、provenance、checksums)。
+
+### 11.1 标注规模与信度
+
+| | relevance | claim |
+|---|---|---|
+| 判定单元 | `(scenario_id, job_id)` | `(run_id, claim_id)` |
+| 行数 | **368**(覆盖 42 场景、82 职位) | **11197** |
+| 两位标注者原始一致 | 0.7962 | 0.9804 |
+| 两位标注者 kappa | **0.9364**(quadratic weighted) | **0.9389**(Cohen) |
+| 分歧数 | 75 | 219 |
+| 已裁决 / 遗留 | 75 / **0** | 219 / **0** |
+| 可用 gold | 368(100%) | 11197(100%) |
+
+`adjudication_source = adjudicated_column`。分歧一律显式裁决,**未使用**取平均的
+legacy fallback。
+
+### 11.2 自动 oracle vs 人工(relevance)
+
+oracle-vs-human quadratic weighted kappa = **0.7517**;精确同分率 0.7283;
+平均绝对差 0.4457。方向明确:**oracle 比人工宽松** —— 更宽 95 例、更严 5 例、相同 268 例。
+
+```
+oracle(行) × 人工(列)
+            human 0   1   2   3
+oracle 0        137   2   1   0
+oracle 1          0   1   1   0
+oracle 2         11  10  32   1
+oracle 3         26   0  48  98
+```
+
+`full` 变体在两个后端上的指标变化:
+
+| | deterministic | | | hybrid | | |
+|---|---|---|---|---|---|---|
+| 指标 | oracle | 人工 | Δ | oracle | 人工 | Δ |
+| NDCG@5 | 0.9115 | 0.8745 | **−0.0369** | 0.9145 | 0.8942 | **−0.0203** |
+| P@5 | 0.9581 | 0.7703 | **−0.1878** | 0.9730 | 0.8000 | **−0.1730** |
+| MGR | 2.6959 | 2.0896 | **−0.6063** | 2.7171 | 2.1414 | **−0.5757** |
+
+**NDCG 几乎不动而 P@5 与 MGR 大幅下降**,这是一致的可解释模式:排序**次序**基本正确,
+但人工认为 top-5 中真正相关的更少 —— oracle 高估的是绝对相关性,不是排序能力。
+`no_context` 的 NDCG 变化仅 −0.002(deterministic)/ +0.013(hybrid),
+说明该消融的排序确实差,人工判断予以确认。
+
+分歧主因记录在 `annotation_workspace/RUBRIC.md`:话语中的 "at least RM4000",人工要求职位
+**起薪** `salary_min_monthly_myr ≥ 4000`,而自动 oracle 接受薪资区间与阈值**重叠**即通过。
+
+### 11.3 claim validator:κ = 0 是退化值,不是随机水平一致
+
+**这一条必须按下述方式表述。**
+
+`validator` 列在全部 **11197** 条上取值恒为 `1`(supported),`distinct values = [1]`。
+Cohen's kappa 要求双边都有方差,常量预测器的 kappa 在实质上**无定义**,实现返回
+`0.000`。冻结报告 §4 会照打这个 `0.000`,**不得**据此解读为"一致度不优于随机"。
+
+真实情况:
+
+| 量 | 值 |
+|---|---|
+| validator vs 人工 **原始一致度** | **0.7902** |
+| 人工判定 unsupported | **2349 / 11197 = 20.98%** |
+| validator 标记 unsupported | **0** |
+| **unsupported detection rate** | **0.0** |
+
+```
+validator(行) × 人工(列)
+              human 0    human 1
+validator 0         0          0
+validator 1      2349       8848
+```
+
+validator 的实质缺陷是**检出为零**,而不是一致度低。分类型看,缺陷是结构性的:
+
+| claim_type | n | supported rate(人工) | unsupported |
+|---|---|---|---|
+| `skill_gap` | 1883 | **0.0000** | 1883 |
+| `no_match_reason` | 156 | **0.0000** | 156 |
+| `ranking_reason` | 7904 | 0.9615 | 304 |
+| `candidate_preference` | 1254 | 0.9952 | 6 |
+
+前两类整类判 unsupported,原因是**结构性证据缺口**,不是逐条例外:
+
+- `skill_gap` 文本形如 `Gap: the role requires excel, which is not in your listed skills.`,
+  唯一证据是 `job_posting:required_skills=[...]` —— 只能证明职位要求该技能,
+  **不能**证明它不在候选人技能列表中。支撑该否定性断言所需的候选人技能证据缺失。
+- `no_match_reason` 文本形如 `Your hard requirement on target roles limits the results.`,
+  证据仅证明约束存在,**不能**证明它导致结果受限 —— 因果断言,证据只到相关性。
+
+这为 §8 中"`grounding = 1.000` 是构造使然"提供了量化人工证据。
+
+### 11.4 本节的允许与禁止表述
+
+允许:
+
+- 人工标注者间信度高(relevance weighted κ = 0.9364,claim κ = 0.9389),分歧全部裁决,
+  无遗留。
+- 自动 oracle 与人工的一致度为 weighted κ = **0.7517**,方向是 oracle 系统性更宽松。
+- 排序次序稳健(ΔNDCG@5 = −0.0369 / −0.0203),绝对相关性被高估
+  (ΔP@5 ≈ −0.18,ΔMGR ≈ −0.58)。
+- claim validator 对人工认定的 unsupported claim **检出率为 0**,人工 unsupported 率
+  **20.98%**,原始一致度 0.7902。
+
+禁止:
+
+- ❌ 把 `validator_vs_human_kappa = 0.000` 解释为 chance-level agreement 或
+  "validator 与人工毫无关联" —— 它是**全 1 常量预测**导致的退化值,必须同时给出
+  原始一致度 0.7902、unsupported 率 20.98% 与 detection rate 0.0。
+- ❌ 把人工列的排序指标当作**无偏效应估计**。人工标签只覆盖实际返回的 368 对,
+  而 oracle 评分覆盖全目录,NDCG 的 ideal DCG 因此在不同池上计算;该 Δ 同时混入了
+  标签来源变化与**标签宇宙变化**,只能作为一致性诊断。
+- ❌ 用人工标签解读 retrieval recall。`retrieval_metrics.csv` 在两种模式下**均**使用
+  自动 oracle,因为 recall 需要全目录标签宇宙;这一点记录在
+  `manifests/analysis_plan.yaml` 的 `retrieval_recall_relevance_source`。
+- ❌ 声称人工标注消除了 oracle 的构念效度威胁 —— 它**量化**了该威胁,标注者仍是作者。

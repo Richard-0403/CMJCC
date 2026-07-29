@@ -11,3 +11,8 @@
 
 final_release/**             text eol=lf
 final_release/**/*.png       binary
+
+# Same reasoning for the human-annotation evidence package: it carries its own
+# checksums.json over the bytes on disk, and 9 of its 19 recorded files are copied out of a
+# Windows-produced tree, so without this they arrive as CRLF here and LF elsewhere.
+evaluation/annotation_workspace/**  text eol=lf

@@ -1,0 +1,54 @@
+{
+  "bundles_scanned": 588,
+  "claim_evidence_pairs": 29710,
+  "claim_rows_without_text": 0,
+  "claims": {
+    "agree": 10978,
+    "both_raters": 11197,
+    "disagree": 219,
+    "disagree_adjudicated": 219,
+    "gold_rows": 11197,
+    "no_rater": 0,
+    "one_rater": 0,
+    "out_of_range": 0,
+    "rows": 11197,
+    "unadjudicated": 0
+  },
+  "experiment_re_run": false,
+  "experiments_read": {
+    "deterministic": "exp-e748800507ef",
+    "hybrid": "exp-6db1e87daed5"
+  },
+  "generated_from_commit": "f87f775",
+  "note": "Every input was read from the sealed official pair. No experiment was executed and no sealed artifact was written to.",
+  "relevance": {
+    "agree": 293,
+    "both_raters": 368,
+    "disagree": 75,
+    "disagree_adjudicated": 75,
+    "gold_rows": 368,
+    "no_rater": 0,
+    "one_rater": 0,
+    "out_of_range": 0,
+    "rows": 368,
+    "unadjudicated": 0
+  },
+  "source_label_files": {
+    "evaluation/data/claim_annotations_human.csv": {
+      "bytes": 951842,
+      "sha256": "9be57985f8ffbb1a38af036a219a5f65ae97c30ac4ee323838ee9af0c9196f71"
+    },
+    "evaluation/data/relevance_labels_human.csv": {
+      "bytes": 19745,
+      "sha256": "4e4aed8e3f5927134581735d2bacdcaf6036b1176063a07888ad6ba83010e329"
+    }
+  },
+  "verification": {
+    "claims_gold_complete": true,
+    "claims_unadjudicated_zero": true,
+    "every_claim_row_has_text": true,
+    "no_out_of_range_values": true,
+    "relevance_gold_complete": true,
+    "relevance_unadjudicated_zero": true
+  }
+}

@@ -54,8 +54,24 @@ evaluation/outputs_longterm/_runs/
 evaluation/outputs_longterm/*/
 
 
-# Hybrid (real-LLM) run outputs; curated copies live under test_results/hybrid/
+# Hybrid (real-LLM) run outputs; the citable subset lives under final_release/hybrid/
 evaluation/outputs_hybrid/
+
+
+# Human-labelled analysis output. Same rule as the other experiment output trees: the run
+# bundles are reused, not re-run, and the tree is regenerable from the tracked label files
+# plus the sealed bundles.
+evaluation/outputs_human/
+
+# Local archives of scratch directories. The annotation evidence package itself is tracked
+# below, so a side archive adds nothing but bulk.
+evaluation/*.rar
+
+# NOTE: evaluation/annotation_workspace/ is deliberately NOT ignored. It is the auditable
+# human-annotation evidence package -- rater-level labels, adjudicated gold, the rubric
+# actually applied, claim text with its evidence, provenance and a checksum manifest.
+# Ignoring only part of it would break its own self-verification, so it is tracked whole
+# or not at all.
 
 
 # final_release/ IS tracked: it is the slim, citable subset -- the reports, the metric and

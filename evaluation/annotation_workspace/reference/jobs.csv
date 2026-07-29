@@ -1,0 +1,201 @@
+job_id,title,company,role_family,experience_level,city,country,work_mode,salary_min,salary_currency,salary_period,salary_min_monthly_myr,is_active,application_deadline
+job-0000,Intern Data Scientist,Merlion Data,data scientist,intern,Kuala Lumpur,Malaysia,remote,1500.0,MYR,month,1500.0,True,2026-04-15
+job-0001,Entry Data Analyst,Penang Analytics,data analyst,entry,Penang,Malaysia,onsite,3000.0,MYR,month,3000.0,False,2025-12-01
+job-0002,Mid Data Scientist,Straits Digital,data scientist,mid,Johor Bahru,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-01-22
+job-0003,Mid Data Scientist,Batik Cloud,data scientist,mid,Singapore,Singapore,onsite,,,unknown,,True,2026-03-22
+job-0004,Entry Data Analyst,Straits Digital,data analyst,entry,Johor Bahru,Malaysia,onsite,,,unknown,,True,
+job-0005,Entry Product Analyst,Hibiscus Labs,product analyst,entry,Johor Bahru,Malaysia,onsite,3000.0,MYR,month,3000.0,False,2025-12-17
+job-0006,Intern Sales Analyst,Penang Analytics,sales analyst,intern,Penang,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-01-19
+job-0007,Junior Business Analyst,Batik Cloud,business analyst,junior,Penang,Malaysia,hybrid,4000.0,MYR,month,4000.0,True,2026-04-16
+job-0008,Senior Business Analyst,KualaSoft,business analyst,senior,Cyberjaya,Malaysia,onsite,12000.0,MYR,month,12000.0,True,
+job-0009,Senior Software Engineer,Acme Data,software engineer,senior,Cyberjaya,Malaysia,remote,,,unknown,,True,
+job-0010,Mid Product Analyst,KualaSoft,product analyst,mid,Penang,Malaysia,unspecified,7000.0,MYR,month,7000.0,False,2025-11-25
+job-0011,Entry Product Analyst,Selangor Systems,product analyst,entry,Singapore,Singapore,onsite,2700.0,SGD,month,9450.0,True,2026-02-26
+job-0012,Mid Data Analyst,Merlion Data,data analyst,mid,Kuala Lumpur,Malaysia,hybrid,7000.0,MYR,month,7000.0,True,2026-02-13
+job-0013,Junior Software Engineer,Merlion Data,software engineer,junior,Cyberjaya,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-03-27
+job-0014,Intern Data Analyst,Nusantara Tech,data analyst,intern,Penang,Malaysia,onsite,,,unknown,,True,
+job-0015,Senior Data Scientist,Straits Digital,data scientist,senior,Singapore,Singapore,unspecified,10800.0,SGD,month,37800.0,True,2026-01-23
+job-0016,Intern Data Scientist,Penang Analytics,data scientist,intern,Kuala Lumpur,Malaysia,unspecified,1500.0,MYR,month,1500.0,False,2025-12-21
+job-0017,Junior Business Analyst,Merlion Data,business analyst,junior,Cyberjaya,Malaysia,hybrid,,,unknown,,True,2026-04-24
+job-0018,Entry Sales Analyst,KualaSoft,sales analyst,entry,Penang,Malaysia,unspecified,3000.0,MYR,month,3000.0,True,2026-01-18
+job-0019,Mid Product Analyst,Merlion Data,product analyst,mid,Singapore,Singapore,unspecified,6300.0,SGD,month,22050.0,True,
+job-0020,Mid Data Engineer,Nusantara Tech,data engineer,mid,Singapore,Singapore,hybrid,6300.0,SGD,month,22050.0,True,
+job-0021,Senior Data Engineer,Penang Analytics,data engineer,senior,Kuala Lumpur,Malaysia,onsite,12000.0,MYR,month,12000.0,True,2026-02-13
+job-0022,Junior Data Scientist,Acme Data,data scientist,junior,Cyberjaya,Malaysia,remote,,,unknown,,True,
+job-0023,Entry Data Engineer,KualaSoft,data engineer,entry,Singapore,Singapore,remote,2700.0,SGD,month,9450.0,True,2026-02-11
+job-0024,Intern Data Scientist,Selangor Systems,data scientist,intern,Penang,Malaysia,remote,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0025,Junior Business Analyst,Selangor Systems,business analyst,junior,Singapore,Singapore,unspecified,3600.0,SGD,month,12600.0,True,2026-04-02
+job-0026,Mid Business Analyst,KualaSoft,business analyst,mid,Singapore,Singapore,unspecified,6300.0,SGD,month,22050.0,True,
+job-0027,Intern Business Analyst,Acme Data,business analyst,intern,Johor Bahru,Malaysia,remote,,,unknown,,False,2025-11-02
+job-0028,Senior Product Analyst,KualaSoft,product analyst,senior,Cyberjaya,Malaysia,hybrid,,,unknown,,True,2026-01-31
+job-0029,Mid Sales Analyst,Hibiscus Labs,sales analyst,mid,Penang,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-01-15
+job-0030,Entry Sales Analyst,Selangor Systems,sales analyst,entry,Penang,Malaysia,onsite,3000.0,MYR,month,3000.0,True,2026-01-19
+job-0031,Junior Data Analyst,Orchid AI,data analyst,junior,Penang,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-04-21
+job-0032,Intern Product Analyst,Penang Analytics,product analyst,intern,Cyberjaya,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0033,Junior Data Engineer,Selangor Systems,data engineer,junior,Kuala Lumpur,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-04-10
+job-0034,Senior Data Engineer,Batik Cloud,data engineer,senior,Johor Bahru,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,2026-03-07
+job-0035,Mid Data Engineer,Nusantara Tech,data engineer,mid,Penang,Malaysia,onsite,7000.0,MYR,month,7000.0,True,2026-01-01
+job-0036,Intern Business Analyst,Nusantara Tech,business analyst,intern,Kuala Lumpur,Malaysia,hybrid,,,unknown,,True,2026-01-01
+job-0037,Mid Software Engineer,Nusantara Tech,software engineer,mid,Penang,Malaysia,hybrid,7000.0,MYR,month,7000.0,False,2025-11-08
+job-0038,Mid Data Engineer,Hibiscus Labs,data engineer,mid,Kuala Lumpur,Malaysia,hybrid,,,unknown,,True,2026-01-28
+job-0039,Mid Data Scientist,Merlion Data,data scientist,mid,Cyberjaya,Malaysia,remote,7000.0,MYR,month,7000.0,False,2025-12-10
+job-0040,Intern Software Engineer,KualaSoft,software engineer,intern,Johor Bahru,Malaysia,hybrid,1500.0,MYR,month,1500.0,True,2026-01-28
+job-0041,Mid Software Engineer,Batik Cloud,software engineer,mid,Johor Bahru,Malaysia,unspecified,7000.0,MYR,month,7000.0,True,2026-04-19
+job-0042,Junior Product Analyst,Hibiscus Labs,product analyst,junior,Cyberjaya,Malaysia,unspecified,4000.0,MYR,month,4000.0,False,2025-12-13
+job-0043,Junior Software Engineer,Batik Cloud,software engineer,junior,Cyberjaya,Malaysia,hybrid,4000.0,MYR,month,4000.0,True,
+job-0044,Mid Data Scientist,Orchid AI,data scientist,mid,Penang,Malaysia,unspecified,7000.0,MYR,month,7000.0,True,2026-03-10
+job-0045,Intern Sales Analyst,Penang Analytics,sales analyst,intern,Cyberjaya,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-02-24
+job-0046,Entry Business Analyst,Hibiscus Labs,business analyst,entry,Kuala Lumpur,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-02-07
+job-0047,Entry Sales Analyst,Straits Digital,sales analyst,entry,Johor Bahru,Malaysia,onsite,3000.0,MYR,month,3000.0,True,2026-01-01
+job-0048,Entry Data Engineer,Nusantara Tech,data engineer,entry,Kuala Lumpur,Malaysia,remote,,,unknown,,True,2026-01-01
+job-0049,Junior Data Engineer,Hibiscus Labs,data engineer,junior,Kuala Lumpur,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-02-26
+job-0050,Senior Data Engineer,Penang Analytics,data engineer,senior,Cyberjaya,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,2026-04-30
+job-0051,Senior Data Engineer,Orchid AI,data engineer,senior,Cyberjaya,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-02-07
+job-0052,Entry Data Engineer,Penang Analytics,data engineer,entry,Kuala Lumpur,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-04-18
+job-0053,Junior Data Analyst,Hibiscus Labs,data analyst,junior,Penang,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0054,Mid Data Scientist,Merlion Data,data scientist,mid,Johor Bahru,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-01-26
+job-0055,Senior Product Analyst,KualaSoft,product analyst,senior,Singapore,Singapore,remote,,,unknown,,False,2025-12-09
+job-0056,Intern Data Analyst,Acme Data,data analyst,intern,Singapore,Singapore,remote,1350.0,SGD,month,4725.0,True,
+job-0057,Intern Business Analyst,Acme Data,business analyst,intern,Johor Bahru,Malaysia,unspecified,1500.0,MYR,month,1500.0,True,2026-03-25
+job-0058,Senior Data Analyst,Selangor Systems,data analyst,senior,Cyberjaya,Malaysia,hybrid,12000.0,MYR,month,12000.0,True,2026-03-08
+job-0059,Entry Sales Analyst,KualaSoft,sales analyst,entry,Penang,Malaysia,remote,3000.0,MYR,month,3000.0,True,2026-01-20
+job-0060,Entry Data Analyst,Penang Analytics,data analyst,entry,Johor Bahru,Malaysia,remote,3000.0,MYR,month,3000.0,True,2026-04-08
+job-0061,Senior Data Analyst,Acme Data,data analyst,senior,Penang,Malaysia,hybrid,,,unknown,,False,2025-12-23
+job-0062,Mid Data Analyst,Hibiscus Labs,data analyst,mid,Johor Bahru,Malaysia,unspecified,,,unknown,,True,2026-03-15
+job-0063,Junior Data Scientist,Batik Cloud,data scientist,junior,Singapore,Singapore,remote,3600.0,SGD,month,12600.0,True,2026-01-01
+job-0064,Senior Software Engineer,Hibiscus Labs,software engineer,senior,Cyberjaya,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-01-01
+job-0065,Intern Product Analyst,Straits Digital,product analyst,intern,Penang,Malaysia,remote,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0066,Junior Product Analyst,Merlion Data,product analyst,junior,Kuala Lumpur,Malaysia,unspecified,,,unknown,,False,2025-12-27
+job-0067,Junior Data Engineer,Selangor Systems,data engineer,junior,Singapore,Singapore,unspecified,3600.0,SGD,month,12600.0,True,2026-03-22
+job-0068,Senior Data Scientist,Nusantara Tech,data scientist,senior,Penang,Malaysia,hybrid,12000.0,MYR,month,12000.0,True,2026-02-08
+job-0069,Junior Data Scientist,Straits Digital,data scientist,junior,Singapore,Singapore,remote,3600.0,SGD,month,12600.0,True,2026-03-10
+job-0070,Mid Product Analyst,Batik Cloud,product analyst,mid,Johor Bahru,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-02-18
+job-0071,Senior Product Analyst,Straits Digital,product analyst,senior,Singapore,Singapore,unspecified,10800.0,SGD,month,37800.0,True,2026-04-10
+job-0072,Mid Data Scientist,KualaSoft,data scientist,mid,Cyberjaya,Malaysia,unspecified,,,unknown,,False,2025-11-16
+job-0073,Intern Sales Analyst,KualaSoft,sales analyst,intern,Cyberjaya,Malaysia,onsite,1500.0,MYR,month,1500.0,False,2025-12-01
+job-0074,Intern Data Scientist,Hibiscus Labs,data scientist,intern,Johor Bahru,Malaysia,unspecified,,,unknown,,True,2026-01-01
+job-0075,Junior Data Scientist,Nusantara Tech,data scientist,junior,Penang,Malaysia,onsite,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0076,Intern Product Analyst,KualaSoft,product analyst,intern,Johor Bahru,Malaysia,remote,1500.0,MYR,month,1500.0,True,2026-03-24
+job-0077,Entry Data Engineer,Acme Data,data engineer,entry,Cyberjaya,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-04-06
+job-0078,Junior Software Engineer,Straits Digital,software engineer,junior,Singapore,Singapore,remote,3600.0,SGD,month,12600.0,True,2026-04-29
+job-0079,Junior Data Engineer,Selangor Systems,data engineer,junior,Singapore,Singapore,remote,,,unknown,,True,2026-04-27
+job-0080,Junior Sales Analyst,KualaSoft,sales analyst,junior,Penang,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-04-17
+job-0081,Mid Sales Analyst,Orchid AI,sales analyst,mid,Kuala Lumpur,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-02-17
+job-0082,Senior Sales Analyst,Hibiscus Labs,sales analyst,senior,Johor Bahru,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-04-26
+job-0083,Entry Data Analyst,Nusantara Tech,data analyst,entry,Penang,Malaysia,unspecified,,,unknown,,False,2025-12-04
+job-0084,Junior Software Engineer,Nusantara Tech,software engineer,junior,Johor Bahru,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,
+job-0085,Junior Data Engineer,Straits Digital,data engineer,junior,Singapore,Singapore,hybrid,3600.0,SGD,month,12600.0,True,2026-04-10
+job-0086,Mid Product Analyst,Merlion Data,product analyst,mid,Kuala Lumpur,Malaysia,onsite,7000.0,MYR,month,7000.0,True,2026-02-27
+job-0087,Intern Data Scientist,Orchid AI,data scientist,intern,Cyberjaya,Malaysia,unspecified,,,unknown,,True,2026-04-09
+job-0088,Junior Data Analyst,Hibiscus Labs,data analyst,junior,Singapore,Singapore,remote,3600.0,SGD,month,12600.0,True,
+job-0089,Senior Data Scientist,Batik Cloud,data scientist,senior,Kuala Lumpur,Malaysia,onsite,12000.0,MYR,month,12000.0,True,2026-01-27
+job-0090,Entry Sales Analyst,Selangor Systems,sales analyst,entry,Johor Bahru,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-01-01
+job-0091,Intern Data Scientist,Acme Data,data scientist,intern,Penang,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0092,Mid Data Scientist,Batik Cloud,data scientist,mid,Singapore,Singapore,onsite,6300.0,SGD,month,22050.0,True,2026-04-20
+job-0093,Senior Data Scientist,Straits Digital,data scientist,senior,Johor Bahru,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,
+job-0094,Mid Data Scientist,Batik Cloud,data scientist,mid,Kuala Lumpur,Malaysia,onsite,7000.0,MYR,month,7000.0,True,2026-03-31
+job-0095,Intern Data Analyst,Straits Digital,data analyst,intern,Singapore,Singapore,hybrid,1350.0,SGD,month,4725.0,True,2026-04-26
+job-0096,Entry Product Analyst,Orchid AI,product analyst,entry,Cyberjaya,Malaysia,onsite,3000.0,MYR,month,3000.0,True,2026-04-16
+job-0097,Intern Data Scientist,Straits Digital,data scientist,intern,Cyberjaya,Malaysia,remote,,,unknown,,True,
+job-0098,Senior Data Engineer,Merlion Data,data engineer,senior,Penang,Malaysia,hybrid,12000.0,MYR,month,12000.0,True,2026-04-29
+job-0099,Senior Sales Analyst,Selangor Systems,sales analyst,senior,Singapore,Singapore,onsite,10800.0,SGD,month,37800.0,True,2026-01-01
+job-0100,Entry Sales Analyst,Merlion Data,sales analyst,entry,Singapore,Singapore,unspecified,2700.0,SGD,month,9450.0,True,
+job-0101,Junior Business Analyst,Nusantara Tech,business analyst,junior,Johor Bahru,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0102,Intern Data Scientist,Penang Analytics,data scientist,intern,Johor Bahru,Malaysia,unspecified,1500.0,MYR,month,1500.0,True,2026-02-14
+job-0103,Senior Data Scientist,Acme Data,data scientist,senior,Cyberjaya,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-01-01
+job-0104,Junior Sales Analyst,Straits Digital,sales analyst,junior,Johor Bahru,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-01-27
+job-0105,Intern Sales Analyst,Batik Cloud,sales analyst,intern,Cyberjaya,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-03-06
+job-0106,Intern Software Engineer,Orchid AI,software engineer,intern,Johor Bahru,Malaysia,hybrid,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0107,Senior Software Engineer,KualaSoft,software engineer,senior,Cyberjaya,Malaysia,onsite,12000.0,MYR,month,12000.0,True,2026-02-22
+job-0108,Entry Product Analyst,Nusantara Tech,product analyst,entry,Penang,Malaysia,onsite,3000.0,MYR,month,3000.0,True,2026-01-01
+job-0109,Senior Data Scientist,Nusantara Tech,data scientist,senior,Singapore,Singapore,remote,,,unknown,,True,2026-01-01
+job-0110,Senior Product Analyst,Nusantara Tech,product analyst,senior,Kuala Lumpur,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-02-16
+job-0111,Senior Software Engineer,Hibiscus Labs,software engineer,senior,Penang,Malaysia,remote,12000.0,MYR,month,12000.0,True,
+job-0112,Mid Business Analyst,Orchid AI,business analyst,mid,Cyberjaya,Malaysia,hybrid,7000.0,MYR,month,7000.0,True,2026-04-20
+job-0113,Senior Data Analyst,Batik Cloud,data analyst,senior,Cyberjaya,Malaysia,remote,12000.0,MYR,month,12000.0,True,
+job-0114,Entry Data Scientist,Straits Digital,data scientist,entry,Johor Bahru,Malaysia,remote,,,unknown,,True,2026-01-01
+job-0115,Mid Data Engineer,Merlion Data,data engineer,mid,Johor Bahru,Malaysia,hybrid,7000.0,MYR,month,7000.0,False,2025-11-14
+job-0116,Junior Product Analyst,KualaSoft,product analyst,junior,Penang,Malaysia,hybrid,4000.0,MYR,month,4000.0,True,2026-01-28
+job-0117,Junior Data Scientist,KualaSoft,data scientist,junior,Singapore,Singapore,hybrid,3600.0,SGD,month,12600.0,True,2026-04-09
+job-0118,Senior Software Engineer,Hibiscus Labs,software engineer,senior,Johor Bahru,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,
+job-0119,Junior Sales Analyst,Batik Cloud,sales analyst,junior,Cyberjaya,Malaysia,unspecified,,,unknown,,False,2025-11-06
+job-0120,Junior Sales Analyst,KualaSoft,sales analyst,junior,Singapore,Singapore,onsite,3600.0,SGD,month,12600.0,True,2026-01-26
+job-0121,Entry Data Analyst,Merlion Data,data analyst,entry,Cyberjaya,Malaysia,remote,,,unknown,,True,2026-03-02
+job-0122,Intern Business Analyst,KualaSoft,business analyst,intern,Johor Bahru,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0123,Mid Sales Analyst,KualaSoft,sales analyst,mid,Cyberjaya,Malaysia,onsite,,,unknown,,True,2026-02-07
+job-0124,Intern Data Analyst,Hibiscus Labs,data analyst,intern,Penang,Malaysia,unspecified,1500.0,MYR,month,1500.0,True,2026-04-28
+job-0125,Mid Product Analyst,Nusantara Tech,product analyst,mid,Kuala Lumpur,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-01-01
+job-0126,Mid Sales Analyst,Orchid AI,sales analyst,mid,Kuala Lumpur,Malaysia,unspecified,,,unknown,,True,2026-01-13
+job-0127,Senior Sales Analyst,Hibiscus Labs,sales analyst,senior,Johor Bahru,Malaysia,hybrid,12000.0,MYR,month,12000.0,False,2025-12-16
+job-0128,Mid Data Analyst,Orchid AI,data analyst,mid,Kuala Lumpur,Malaysia,remote,7000.0,MYR,month,7000.0,True,
+job-0129,Intern Product Analyst,Orchid AI,product analyst,intern,Penang,Malaysia,remote,1500.0,MYR,month,1500.0,True,
+job-0130,Mid Data Scientist,Orchid AI,data scientist,mid,Cyberjaya,Malaysia,remote,,,unknown,,True,2026-03-15
+job-0131,Entry Data Engineer,Batik Cloud,data engineer,entry,Singapore,Singapore,remote,2700.0,SGD,month,9450.0,True,2026-01-01
+job-0132,Junior Data Analyst,Straits Digital,data analyst,junior,Singapore,Singapore,unspecified,3600.0,SGD,month,12600.0,True,
+job-0133,Senior Business Analyst,Orchid AI,business analyst,senior,Cyberjaya,Malaysia,onsite,12000.0,MYR,month,12000.0,True,2026-01-01
+job-0134,Mid Data Scientist,Straits Digital,data scientist,mid,Johor Bahru,Malaysia,remote,7000.0,MYR,month,7000.0,True,2026-02-26
+job-0135,Entry Data Analyst,Selangor Systems,data analyst,entry,Cyberjaya,Malaysia,unspecified,,,unknown,,True,2026-04-20
+job-0136,Entry Data Analyst,Orchid AI,data analyst,entry,Kuala Lumpur,Malaysia,unspecified,3000.0,MYR,month,3000.0,True,
+job-0137,Junior Data Engineer,KualaSoft,data engineer,junior,Johor Bahru,Malaysia,hybrid,4000.0,MYR,month,4000.0,True,
+job-0138,Entry Business Analyst,Merlion Data,business analyst,entry,Penang,Malaysia,unspecified,3000.0,MYR,month,3000.0,True,2026-04-23
+job-0139,Mid Product Analyst,KualaSoft,product analyst,mid,Cyberjaya,Malaysia,unspecified,7000.0,MYR,month,7000.0,False,2025-12-23
+job-0140,Senior Software Engineer,Batik Cloud,software engineer,senior,Johor Bahru,Malaysia,hybrid,,,unknown,,False,2025-11-17
+job-0141,Intern Sales Analyst,Merlion Data,sales analyst,intern,Singapore,Singapore,hybrid,1350.0,SGD,month,4725.0,True,
+job-0142,Junior Business Analyst,Batik Cloud,business analyst,junior,Singapore,Singapore,onsite,3600.0,SGD,month,12600.0,True,
+job-0143,Intern Data Analyst,Merlion Data,data analyst,intern,Singapore,Singapore,remote,1350.0,SGD,month,4725.0,True,2026-04-02
+job-0144,Mid Sales Analyst,Hibiscus Labs,sales analyst,mid,Johor Bahru,Malaysia,unspecified,7000.0,MYR,month,7000.0,True,2026-03-13
+job-0145,Junior Sales Analyst,Orchid AI,sales analyst,junior,Johor Bahru,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0146,Entry Software Engineer,Straits Digital,software engineer,entry,Penang,Malaysia,onsite,3000.0,MYR,month,3000.0,True,
+job-0147,Entry Business Analyst,Merlion Data,business analyst,entry,Cyberjaya,Malaysia,unspecified,3000.0,MYR,month,3000.0,True,2026-03-02
+job-0148,Intern Data Analyst,Selangor Systems,data analyst,intern,Johor Bahru,Malaysia,unspecified,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0149,Junior Data Scientist,Orchid AI,data scientist,junior,Cyberjaya,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0150,Senior Sales Analyst,Orchid AI,sales analyst,senior,Singapore,Singapore,onsite,10800.0,SGD,month,37800.0,True,2026-02-23
+job-0151,Entry Data Analyst,KualaSoft,data analyst,entry,Johor Bahru,Malaysia,unspecified,3000.0,MYR,month,3000.0,True,
+job-0152,Junior Data Engineer,Acme Data,data engineer,junior,Singapore,Singapore,remote,3600.0,SGD,month,12600.0,True,2026-03-24
+job-0153,Junior Data Engineer,Batik Cloud,data engineer,junior,Kuala Lumpur,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,
+job-0154,Senior Business Analyst,Acme Data,business analyst,senior,Singapore,Singapore,unspecified,10800.0,SGD,month,37800.0,True,2026-04-10
+job-0155,Entry Data Scientist,KualaSoft,data scientist,entry,Cyberjaya,Malaysia,unspecified,,,unknown,,False,2025-12-24
+job-0156,Entry Product Analyst,Selangor Systems,product analyst,entry,Cyberjaya,Malaysia,remote,3000.0,MYR,month,3000.0,True,
+job-0157,Junior Data Engineer,Hibiscus Labs,data engineer,junior,Penang,Malaysia,remote,4000.0,MYR,month,4000.0,False,2025-11-13
+job-0158,Senior Data Analyst,KualaSoft,data analyst,senior,Singapore,Singapore,unspecified,,,unknown,,True,2026-02-24
+job-0159,Mid Product Analyst,Selangor Systems,product analyst,mid,Johor Bahru,Malaysia,unspecified,7000.0,MYR,month,7000.0,True,2026-03-23
+job-0160,Senior Data Analyst,KualaSoft,data analyst,senior,Penang,Malaysia,hybrid,12000.0,MYR,month,12000.0,False,2025-12-21
+job-0161,Mid Data Scientist,Acme Data,data scientist,mid,Cyberjaya,Malaysia,hybrid,7000.0,MYR,month,7000.0,True,2026-02-16
+job-0162,Mid Business Analyst,KualaSoft,business analyst,mid,Penang,Malaysia,onsite,,,unknown,,True,2026-03-15
+job-0163,Senior Data Engineer,KualaSoft,data engineer,senior,Kuala Lumpur,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-03-15
+job-0164,Entry Product Analyst,Selangor Systems,product analyst,entry,Cyberjaya,Malaysia,remote,3000.0,MYR,month,3000.0,True,2026-02-23
+job-0165,Mid Data Analyst,Acme Data,data analyst,mid,Kuala Lumpur,Malaysia,hybrid,,,unknown,,True,2026-02-11
+job-0166,Junior Sales Analyst,Penang Analytics,sales analyst,junior,Johor Bahru,Malaysia,remote,4000.0,MYR,month,4000.0,True,2026-02-26
+job-0167,Entry Product Analyst,Orchid AI,product analyst,entry,Cyberjaya,Malaysia,remote,3000.0,MYR,month,3000.0,True,
+job-0168,Mid Business Analyst,Penang Analytics,business analyst,mid,Singapore,Singapore,remote,6300.0,SGD,month,22050.0,True,2026-03-20
+job-0169,Junior Data Engineer,Merlion Data,data engineer,junior,Kuala Lumpur,Malaysia,onsite,4000.0,MYR,month,4000.0,True,2026-03-25
+job-0170,Entry Data Scientist,Straits Digital,data scientist,entry,Singapore,Singapore,unspecified,2700.0,SGD,month,9450.0,False,2025-11-28
+job-0171,Junior Data Scientist,Acme Data,data scientist,junior,Kuala Lumpur,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-01-20
+job-0172,Mid Data Analyst,Straits Digital,data analyst,mid,Kuala Lumpur,Malaysia,remote,7000.0,MYR,month,7000.0,False,2025-11-11
+job-0173,Senior Data Analyst,Penang Analytics,data analyst,senior,Penang,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-01-27
+job-0174,Mid Data Engineer,Nusantara Tech,data engineer,mid,Penang,Malaysia,hybrid,7000.0,MYR,month,7000.0,True,2026-04-13
+job-0175,Intern Business Analyst,Penang Analytics,business analyst,intern,Kuala Lumpur,Malaysia,onsite,1500.0,MYR,month,1500.0,True,
+job-0176,Intern Sales Analyst,Batik Cloud,sales analyst,intern,Penang,Malaysia,remote,1500.0,MYR,month,1500.0,True,2026-01-01
+job-0177,Junior Software Engineer,Straits Digital,software engineer,junior,Johor Bahru,Malaysia,onsite,4000.0,MYR,month,4000.0,False,2025-12-16
+job-0178,Senior Sales Analyst,Hibiscus Labs,sales analyst,senior,Johor Bahru,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,2026-03-20
+job-0179,Senior Data Analyst,Orchid AI,data analyst,senior,Cyberjaya,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,2026-02-06
+job-0180,Junior Data Analyst,Batik Cloud,data analyst,junior,Cyberjaya,Malaysia,onsite,,,unknown,,True,2026-04-18
+job-0181,Intern Product Analyst,Hibiscus Labs,product analyst,intern,Penang,Malaysia,hybrid,,,unknown,,True,2026-04-17
+job-0182,Senior Business Analyst,Orchid AI,business analyst,senior,Johor Bahru,Malaysia,remote,12000.0,MYR,month,12000.0,True,2026-02-13
+job-0183,Junior Sales Analyst,KualaSoft,sales analyst,junior,Penang,Malaysia,remote,4000.0,MYR,month,4000.0,True,
+job-0184,Junior Business Analyst,Orchid AI,business analyst,junior,Penang,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-01-01
+job-0185,Junior Data Scientist,Acme Data,data scientist,junior,Penang,Malaysia,hybrid,4000.0,MYR,month,4000.0,True,2026-03-21
+job-0186,Entry Software Engineer,Hibiscus Labs,software engineer,entry,Penang,Malaysia,onsite,3000.0,MYR,month,3000.0,True,2026-03-16
+job-0187,Intern Data Analyst,Straits Digital,data analyst,intern,Singapore,Singapore,unspecified,1350.0,SGD,month,4725.0,True,2026-02-16
+job-0188,Entry Business Analyst,Nusantara Tech,business analyst,entry,Penang,Malaysia,remote,3000.0,MYR,month,3000.0,True,2026-03-02
+job-0189,Intern Product Analyst,Acme Data,product analyst,intern,Kuala Lumpur,Malaysia,onsite,1500.0,MYR,month,1500.0,True,2026-04-02
+job-0190,Intern Data Engineer,Selangor Systems,data engineer,intern,Singapore,Singapore,onsite,1350.0,SGD,month,4725.0,True,2026-01-01
+job-0191,Junior Sales Analyst,Nusantara Tech,sales analyst,junior,Kuala Lumpur,Malaysia,hybrid,4000.0,MYR,month,4000.0,False,2025-12-02
+job-0192,Senior Data Scientist,Nusantara Tech,data scientist,senior,Johor Bahru,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,2026-04-09
+job-0193,Intern Business Analyst,Selangor Systems,business analyst,intern,Johor Bahru,Malaysia,unspecified,,,unknown,,True,2026-04-02
+job-0194,Mid Data Engineer,Selangor Systems,data engineer,mid,Cyberjaya,Malaysia,hybrid,7000.0,MYR,month,7000.0,True,2026-03-31
+job-0195,Entry Product Analyst,Nusantara Tech,product analyst,entry,Cyberjaya,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-01-24
+job-0196,Entry Data Analyst,Acme Data,data analyst,entry,Kuala Lumpur,Malaysia,hybrid,3000.0,MYR,month,3000.0,True,2026-01-24
+job-0197,Junior Data Analyst,Penang Analytics,data analyst,junior,Cyberjaya,Malaysia,unspecified,4000.0,MYR,month,4000.0,False,2025-11-22
+job-0198,Junior Product Analyst,Hibiscus Labs,product analyst,junior,Johor Bahru,Malaysia,unspecified,4000.0,MYR,month,4000.0,True,2026-02-18
+job-0199,Senior Data Engineer,Orchid AI,data engineer,senior,Penang,Malaysia,unspecified,12000.0,MYR,month,12000.0,True,
