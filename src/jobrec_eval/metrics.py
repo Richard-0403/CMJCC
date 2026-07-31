@@ -354,11 +354,56 @@ class MetricsComputer:
             expired_rate = expired / returned
             trace_complete = traced / returned
 
-        # grounding (from claim validator output)
-        factual = [c for c in b.claims if c.get("claim_type") != "non_factual"]
-        supported = [c for c in factual if c.get("support_status") == "supported"]
-        grounding = (len(supported) / len(factual)) if factual else None
-        grounded_claim_count = len(supported)
+        # grounding, from the claim validator's TWO verdicts
+        #
+        # The single number this used to report was structural: it counted claims whose
+        # evidence ids resolved. For several claim types the builder registers the evidence
+        # it is about to cite, so that check could not fail -- it read 1.000 on the official
+        # pair while human adjudication rejected 2349 of 11197 claims. Reporting it as
+        # "grounding" attributed a property to the system that had never been measured.
+        #
+        # ``evidence_resolution_rate`` keeps that quantity under a name that says what it
+        # is. ``grounding`` now means semantic support: the evidence resolves AND entails
+        # the claim. ``abstention_rate`` counts claims the validator declines to vouch for,
+        # which is information rather than a failure and must not be folded into either.
+        # A bundle written before the two-verdict validator existed carries neither field.
+        # That is "not measured", NOT "measured as zero", and the difference matters: the
+        # sealed official pair predates the split, so silently scoring its semantic
+        # grounding at 0.000 would attribute a finding to data that was never examined that
+        # way. Such bundles report the structural rate under its own name, leave the
+        # semantic metrics undefined, and fall back to the structural verdict for the
+        # task-success component so their recorded task numbers keep their original meaning.
+        # Denominator is what the system PROPOSED, delivered plus rejected. Over delivered
+        # claims alone every rate is 1.000 by construction, because the validator only
+        # delivers what passed -- the denominator would be filtered by the thing being
+        # measured, which is the defect the trace/semantic split fixed one level down.
+        proposed = list(b.claims) + list(getattr(b, "dropped_claims", []) or [])
+        factual = [c for c in proposed if c.get("claim_type") != "non_factual"]
+        delivered_factual = [c for c in b.claims if c.get("claim_type") != "non_factual"]
+        semantic_present = any("semantic_status" in c for c in factual)
+        resolved = [c for c in factual
+                    if c.get("trace_status", c.get("support_status")) == "supported"]
+        entailed = [c for c in factual if c.get("semantic_status") == "supported"]
+        abstained = [c for c in factual if c.get("semantic_status") == "unknown"]
+        # A delivered claim that is not semantically supported is a contract violation, not
+        # a score: validate_claims only delivers the conjunction. Counted so a regression
+        # shows up as a number instead of silently passing task success.
+        # Gated on the validator having run: without a semantic verdict every delivered
+        # claim would look like a violation, which would penalise pre-split bundles for a
+        # check that did not exist when they were written.
+        unsupported_delivered = [c for c in delivered_factual
+                                 if semantic_present
+                                 and c.get("support_status") == "supported"
+                                 and c.get("semantic_status") != "supported"]
+        evidence_resolution_rate = (len(resolved) / len(factual)) if factual else None
+        if factual and semantic_present:
+            grounding = len(entailed) / len(factual)
+            abstention_rate = len(abstained) / len(factual)
+            grounded_claim_count = len(entailed)
+        else:
+            grounding = None
+            abstention_rate = None
+            grounded_claim_count = len(resolved)
 
         # handoffs
         att = len(b.handoffs)
@@ -382,9 +427,11 @@ class MetricsComputer:
 
         dialogue = dialogue_view(b)
         task = self._task_success(scen, response_type, returned, hcsr, grounded_claim_count,
-                                  d.get("no_match_reason_codes", []), b.clarification, dialogue)
+                                  d.get("no_match_reason_codes", []), b.clarification, dialogue,
+                                  unsupported_delivered=len(unsupported_delivered))
         partial = self._partial(scen, response_type, returned, hcsr, grounded_claim_count, d,
-                                b.clarification, dialogue)
+                                b.clarification, dialogue,
+                                unsupported_delivered=len(unsupported_delivered))
 
         return {
             "run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
@@ -400,6 +447,10 @@ class MetricsComputer:
             "hcsr": hcsr, "mean_violation_count": mvc, "unknown_hard_rate": unknown_hard_rate,
             "expired_rate": expired_rate, "trace_completeness": trace_complete,
             "grounding": grounding, "grounded_claim_count": grounded_claim_count,
+            "evidence_resolution_rate": evidence_resolution_rate,
+            "abstention_rate": abstention_rate,
+            "unsupported_delivered_count": len(unsupported_delivered),
+            "semantic_validator_present": semantic_present,
             "handoff_success": handoff_success, "decision_log_completeness": dlc,
             "turn_count": turn_count,
             "total_latency_ms": b.run_record.get("total_latency_ms"),
@@ -453,7 +504,8 @@ class MetricsComputer:
         return bool(response_type == _ACTION_NO_MATCH and len(no_match_codes) > 0)
 
     def _task_success(self, scen, response_type, returned, hcsr, grounded, no_match_codes,
-                      clar, dialogue: DialogueView | None = None) -> int:
+                      clar, dialogue: DialogueView | None = None, *,
+                      unsupported_delivered: int = 0) -> int:
         """Binary task success for one run.
 
         Clarification-dependent scenarios are scored over the WHOLE dialogue (R7.4): the
@@ -490,7 +542,8 @@ class MetricsComputer:
         return 1 if self._recommendation_ok(response_type, returned, hcsr, grounded) else 0
 
     def _partial(self, scen, response_type, returned, hcsr, grounded, d, clar,
-                 dialogue: DialogueView | None = None) -> float:
+                 dialogue: DialogueView | None = None, *,
+                 unsupported_delivered: int = 0) -> float:
         """Partial credit over four components, on the same dialogue-level view as
         :meth:`_task_success` (R7.4).
 
@@ -519,17 +572,17 @@ class MetricsComputer:
                 else:
                     rec_ok = 1 if (response_type == _ACTION_RECOMMENDATION and returned > 0
                                    and hcsr is not None and hcsr >= 1.0) else 0
-                    grounding_ok = 1 if grounded > 0 else 0
+                    grounding_ok = 1 if grounded > 0 and unsupported_delivered == 0 else 0
         elif scen.no_match_expected:
             slot = 1
             rec_ok = 1 if response_type == _ACTION_NO_MATCH else 0
             correctness = 1 if self._no_match_ok(response_type, no_match_codes) else 0
-            grounding_ok = 1 if grounded > 0 or response_type == _ACTION_NO_MATCH else 0
+            grounding_ok = 1 if (grounded > 0 or response_type == _ACTION_NO_MATCH) and unsupported_delivered == 0 else 0
         else:
             slot = 1 if response_type == _ACTION_RECOMMENDATION else 0
             rec_ok = 1 if (response_type == _ACTION_RECOMMENDATION and returned > 0) else 0
             correctness = 1 if (hcsr is not None and hcsr >= 1.0) else 0
-            grounding_ok = 1 if grounded > 0 else 0
+            grounding_ok = 1 if grounded > 0 and unsupported_delivered == 0 else 0
         return (slot + correctness + rec_ok + grounding_ok) / 4.0
 
 
@@ -538,7 +591,8 @@ def aggregate_scenario_variant(run_metrics: pd.DataFrame) -> pd.DataFrame:
     """Average repeats within each scenario x variant (paired analysis unit)."""
     metric_cols = ["ndcg_at_5", "precision_at_5", "mean_graded_relevance", "hcsr",
                    "mean_violation_count", "unknown_hard_rate", "expired_rate",
-                   "trace_completeness", "grounding", "handoff_success",
+                   "trace_completeness", "grounding", "evidence_resolution_rate",
+                   "abstention_rate", "handoff_success",
                    "decision_log_completeness", "turn_count", "response_turns",
                    "total_latency_ms", "task_success", "partial_task_score",
                    "grounded_claim_count", "clarification_efficiency"]
@@ -551,7 +605,8 @@ def aggregate_scenario_variant(run_metrics: pd.DataFrame) -> pd.DataFrame:
 def variant_summary(scenario_variant: pd.DataFrame) -> pd.DataFrame:
     metric_cols = ["ndcg_at_5", "precision_at_5", "mean_graded_relevance", "hcsr",
                    "mean_violation_count", "unknown_hard_rate", "trace_completeness",
-                   "grounding", "handoff_success", "decision_log_completeness",
+                   "grounding", "evidence_resolution_rate", "abstention_rate",
+                   "handoff_success", "decision_log_completeness",
                    "turn_count", "response_turns", "total_latency_ms", "task_success",
                    "clarification_efficiency"]
     rows = []

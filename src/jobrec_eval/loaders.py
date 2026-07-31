@@ -85,6 +85,11 @@ class RunBundle:
     # what a claim's ``evidence_ids`` point at -- NOT the per-stage decision log in
     # ``evidence_log``. Empty for bundles written before the artifact existed.
     evidence_items: list[dict] = field(default_factory=list)
+    #: Claims the validator REJECTED. Needed because any grounding rate over the delivered
+    #: claims alone is 1.000 by construction -- the validator only delivers what passed, so
+    #: the denominator would be filtered by the thing being measured. An empty list on a
+    #: bundle written before these were exported means "not recorded", not "none rejected".
+    dropped_claims: list[dict] = field(default_factory=list)
 
     @property
     def run_id(self) -> str:
@@ -206,6 +211,7 @@ def load_bundles(experiment_dir: str | Path) -> list[RunBundle]:
                     decision=_read_json(run_dir / "recommendation_decision.json"),
                     response=_read_json(run_dir / "response.json"),
                     claims=_read_json(run_dir / "response_claims.json") or [],
+        dropped_claims=_read_json(run_dir / "dropped_claims.json") or [],
                     handoffs=_read_jsonl(run_dir / "handoffs.jsonl"),
                     evidence_log=_read_jsonl(run_dir / "evidence_log.jsonl"),
                     latency=_read_json(run_dir / "component_latency.json") or {},

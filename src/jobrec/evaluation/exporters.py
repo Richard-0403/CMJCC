@@ -427,6 +427,16 @@ def write_run_bundle(
     _write_json(out / "recommendation_decision.json", _dump(decision))
     _write_json(out / "response.json", _dump(result.response))
     _write_json(out / "response_claims.json", [_dump(c) for c in result.response.claims])
+    # Rejected claims are recorded too, not just counted in runs_index.csv.
+    #
+    # Without them any grounding rate computed from a bundle is tautological: the validator
+    # only DELIVERS claims that passed, so a rate over response_claims.json is 1.000 by
+    # construction. That is the same defect the trace/semantic split fixed one level down --
+    # a measurement whose denominator was filtered by the thing being measured. The honest
+    # denominator is what the system PROPOSED, so the rejected side has to survive into the
+    # bundle for the analysis to see it.
+    _write_json(out / "dropped_claims.json",
+                [_dump(c) for c in (result.dropped_claims or [])])
     _write_json(out / "clarification.json", _dump(result.clarification))
     _write_jsonl(out / "handoffs.jsonl", result.handoffs)
     _write_jsonl(out / "evidence_log.jsonl", result.evidence_log)
