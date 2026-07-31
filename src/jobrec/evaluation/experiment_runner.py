@@ -27,6 +27,7 @@ from ..llm.remote_provider import (
     MODEL_ENV,
 )
 from ..orchestration.feature_flags import FeatureFlags
+from ..orchestration.orchestrator import LEGACY_REPARSE_WARNING
 from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
 from ..utils.time import to_iso, utcnow
@@ -75,6 +76,16 @@ class UndeclaredClarificationAnswerError(RuntimeError):
 
     Failing here rather than mid-batch is deliberate: this is a property of the inputs, and
     a multi-hour run must not spend anything before it is checked.
+    """
+
+
+class LegacyReparseError(RuntimeError):
+    """Raised when a batch's runs fell back to re-parsing earlier utterances.
+
+    Separate from a per-run failure on purpose: re-parsing is not a property of one
+    scenario going wrong, it is the run pipeline failing to carry per-turn extractions, so
+    every multi-turn run in the batch is affected the same way. See
+    :data:`jobrec.orchestration.orchestrator.LEGACY_REPARSE_WARNING`.
     """
 
 
@@ -210,6 +221,30 @@ class ExperimentRunner:
                     index_rows.append(row)
                     if failure:
                         failures.append(failure)
+
+        # R33.2 -- provenance gate. A run that recovered a prior turn's preferences by
+        # re-parsing its text substituted the RULE extractor's reading for whatever
+        # actually produced it, which in hybrid mode silently replaces the model's
+        # extraction. Only a dialogue persisted before extraction snapshots existed can
+        # reach that path, so in a fresh official batch its presence means the run
+        # pipeline is not carrying per-turn extractions at all.
+        #
+        # Raised after the loop rather than inside it, and deliberately NOT caught by the
+        # per-run handler above: this is not a bad run among good ones, it is the whole
+        # batch being unfit to cite. No manifest is written, so the directory stays
+        # incomplete and may be re-run freely once the cause is fixed.
+        tainted = [row for row in index_rows if row.get("legacy_rule_reparse_turns")]
+        if tainted:
+            raise LegacyReparseError(
+                f"{len(tainted)} of {len(index_rows)} runs recovered prior-turn "
+                f"preferences by re-parsing utterance text "
+                f"({LEGACY_REPARSE_WARNING}), which replaces the recorded extraction with "
+                f"the rule extractor's. An official experiment cannot be built from those "
+                f"runs. Affected: "
+                + ", ".join(f"{r['experiment_variant']}/{r['scenario_id']}#{r['run_index']}"
+                            for r in tainted[:5])
+                + (" ..." if len(tainted) > 5 else "")
+            )
 
         self._write_index(exp_dir, index_rows)
         self._write_failures(exp_dir, failures)
@@ -448,6 +483,15 @@ class ExperimentRunner:
             # above 1 is exactly the signature of a long-term write-back having fired,
             # which no run-level artifact used to report.
             "session_count": len(session_ids),
+            # How many turns had to recover an earlier turn's preferences by re-parsing
+            # its text. Must be 0 in an official run; ``run`` refuses to write a manifest
+            # otherwise. Recorded as a count rather than a flag so the index says how far
+            # the taint spread.
+            "legacy_rule_reparse_turns": sum(
+                1 for tr in turn_results
+                if tr.extracted_preferences is not None
+                and LEGACY_REPARSE_WARNING in tr.extracted_preferences.extraction_warnings
+            ),
             "candidate_state_version": last_result.candidate_state.version,
             "termination_reason": termination_reason,
             "total_latency_ms": rr.total_latency_ms,

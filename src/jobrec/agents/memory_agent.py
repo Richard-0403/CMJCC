@@ -195,6 +195,24 @@ class MemoryAgent:
             turns.append(turn)
         return dialogue.model_copy(update={"turns": turns})
 
+    def attach_turn_extraction(
+        self, dialogue: DialogueState, turn_id: str, extraction: ExtractedPreferenceSet
+    ) -> DialogueState:
+        """Return a NEW DialogueState with ``turn_id``'s extraction recorded on the turn.
+
+        This is what lets a later turn reuse what this turn was understood to say instead of
+        re-reading its text. Replace rather than union: a turn is extracted exactly once, and
+        merging two extractions for one utterance would invent a state no extractor produced.
+        No version bump -- like :meth:`attach_turn_evidence` this records provenance for a
+        turn already in the history.
+        """
+        turns = []
+        for turn in dialogue.turns:
+            if turn.turn_id == turn_id:
+                turn = turn.model_copy(update={"extraction_snapshot": extraction})
+            turns.append(turn)
+        return dialogue.model_copy(update={"turns": turns})
+
     def register_profile_evidence(self, candidate: CandidateState) -> None:
         """Re-register a candidate's profile evidence into the current store.
 

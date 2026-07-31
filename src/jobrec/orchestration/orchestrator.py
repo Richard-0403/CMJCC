@@ -42,6 +42,13 @@ from .state_machine import StateMachine
 logger = logging.getLogger(__name__)
 
 # How a preference's value was produced, recorded on ExtractedPreference.metadata.
+#: Marks a turn whose prior-dialogue preferences had to be recovered by re-parsing its
+#: text, because it carries no ``extraction_snapshot``. Only a dialogue persisted before
+#: snapshots existed can produce it. A fresh official run must never contain it -- re-parsing
+#: substitutes the rule extractor's reading for the model's -- so ``ExperimentRunner``
+#: treats its presence as a failed experiment rather than a warning to skim.
+LEGACY_REPARSE_WARNING = "legacy_rule_reparse"
+
 _METHOD_RULE = "rule"
 _METHOD_LLM = "llm"
 
@@ -209,8 +216,18 @@ class ConversationOrchestrator:
             # evidence from being carried forward even under ``full``. The other half of
             # the flag (never continuing a dialogue past a clarification at all) is
             # enforced in ExperimentRunner._continues_dialogue.
+            prior_preferences: list[ExtractedPreference] = []
             if self.flags.use_prior_dialogue and self.flags.use_multi_turn_continuation:
-                extraction = self._merge_prior_dialogue(dialogue_state, extraction)
+                prior_preferences, prior_warnings = self._prior_dialogue_preferences(
+                    dialogue_state)
+                if prior_warnings:
+                    # Surfaced on the CURRENT extraction because that is what the run
+                    # bundle exports; the run is then auditable for having taken the
+                    # legacy path without inspecting every turn.
+                    extraction = extraction.model_copy(update={
+                        "extraction_warnings": [*extraction.extraction_warnings,
+                                                *prior_warnings],
+                    })
             handoff(self.rule_extractor.name, self.memory.name, "ExtractedPreferenceSet", True)
 
             # 2) VALIDATING: CMJCC merge + conflicts + constraints.
@@ -219,6 +236,7 @@ class ConversationOrchestrator:
             cmjcc_out = timed("memory_merge", lambda: cmjcc.run(CMJCCInput(
                 candidate_state, dialogue_state, extraction,
                 self.catalog_snapshot_id, self.config, run_id,
+                prior_preferences=prior_preferences,
             )))
             evidence_log.extend(cmjcc_out.evidence_log_entries)
             dialogue_state = cmjcc_out.dialogue_state
@@ -632,29 +650,53 @@ class ConversationOrchestrator:
             "extraction_warnings": [*pref_set.extraction_warnings, *extra_warnings],
         })
 
-    def _merge_prior_dialogue(
-        self, dialogue_state: DialogueState, current: ExtractedPreferenceSet
-    ) -> ExtractedPreferenceSet:
-        """Merge earlier candidate-turn preferences (memory) with the current turn.
+    def _prior_dialogue_preferences(
+        self, dialogue_state: DialogueState
+    ) -> tuple[list[ExtractedPreference], list[str]]:
+        """Earlier candidate turns' preferences, oldest first, as they were understood.
 
-        Prior preferences come first so that current-turn statements take
-        precedence for scalar overrides (salary, location, level). This is what
-        distinguishes ``full`` from ``no_memory`` / ``one_shot`` across turns.
+        Returns ``(preferences, warnings)``. Read from each turn's stored
+        ``extraction_snapshot``, so nothing is re-extracted and every entry keeps the
+        strength, confirmation, provenance metadata, evidence id and turn id the turn that
+        stated it produced.
+
+        This replaced re-parsing every earlier utterance with the RULE extractor on every
+        turn. That was not just redundant work: it threw away the original extraction, so
+        in hybrid mode the model's reading of turn 1 was replaced by the rule extractor's
+        from turn 2 onwards -- a two-turn hybrid state was ``rule(turn1) + llm(turn2)``,
+        and the strength assigned to an earlier field was recomputed rather than
+        remembered. On the 42-scenario authoritative set that affected the 12 multi-turn
+        scenarios.
+
+        The fallback for a turn with no snapshot is kept so a dialogue persisted before
+        this field existed can still be processed, but it re-introduces exactly the defect
+        above, so it is LABELLED rather than silent: the warning rides on the extraction
+        into the run bundle, and ``ExperimentRunner`` refuses to complete an experiment
+        whose runs carry it.
         """
         prior_turns = [t for t in dialogue_state.turns[:-1] if t.speaker == "candidate"]
-        if not prior_turns:
-            return current
         prior_prefs: list[ExtractedPreference] = []
+        warnings: list[str] = []
         for turn in prior_turns:
+            snapshot = turn.extraction_snapshot
+            if snapshot is not None:
+                prior_prefs.extend(snapshot.preferences)
+                continue
+            # Legacy dialogue only: no snapshot was ever recorded for this turn.
+            if LEGACY_REPARSE_WARNING not in warnings:
+                warnings.append(LEGACY_REPARSE_WARNING)
+            logger.warning(
+                "prior dialogue: turn %s has no extraction snapshot; falling back to "
+                "re-parsing its text with the rule extractor", turn.turn_id)
             tagged = self._tag_all(self.rule_extractor.extract(turn.text), _METHOD_RULE)
-            # Stamp the turn that actually said it. Without this the whole merged set looks
-            # like it came from now, so evidence re-derived from a three-turn-old utterance
-            # was attributed to the current turn and per-turn provenance was unrecoverable.
             prior_prefs.extend(
-                pref.model_copy(update={"origin_turn_id": turn.turn_id})
+                pref.model_copy(update={"origin_turn_id": turn.turn_id,
+                                        "metadata": {**pref.metadata,
+                                                     "extraction_source":
+                                                         LEGACY_REPARSE_WARNING}})
                 for pref in tagged.preferences
             )
-        return current.model_copy(update={"preferences": prior_prefs + list(current.preferences)})
+        return prior_prefs, warnings
 
     def _passthrough_eligibility(self, job: JobPosting):
         from ..domain.constraints import EligibilityResult

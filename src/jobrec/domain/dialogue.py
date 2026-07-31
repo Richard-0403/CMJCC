@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .extraction import ExtractedPreferenceSet
+
 
 class DialogueTurn(BaseModel):
     """A single utterance from the candidate or the system."""
@@ -20,6 +22,24 @@ class DialogueTurn(BaseModel):
     text: str
     created_at: datetime
     evidence_ids: list[str] = Field(default_factory=list)
+    #: What THIS turn's utterance was understood to say, exactly as extracted at the time.
+    #:
+    #: The reason a later turn does not have to re-read this turn's text. Re-parsing was
+    #: not merely wasteful: it discarded the original extraction, so in hybrid mode the
+    #: model's reading of an earlier utterance was silently replaced by the rule
+    #: extractor's from the next turn onwards, and the strength it had assigned was
+    #: recomputed rather than remembered.
+    #:
+    #: Stored as the extraction itself rather than rebuilt from the turn's EvidenceItems on
+    #: purpose: an EvidenceItem does not carry ``polarity``, ``proposed_strength``,
+    #: ``operation``, ``ambiguous_fields`` or ``extraction_warnings``, so reconstructing
+    #: preferences from evidence would lose exactly the fields that decide how a
+    #: preference merges.
+    #:
+    #: ``None`` means the turn predates this field. That is a legacy dialogue, not an empty
+    #: extraction, and the two must not be confused -- see
+    #: :data:`jobrec.orchestration.orchestrator.LEGACY_REPARSE_WARNING`.
+    extraction_snapshot: ExtractedPreferenceSet | None = None
     action_type: str | None = None
 
 

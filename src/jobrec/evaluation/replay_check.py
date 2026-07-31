@@ -473,6 +473,55 @@ def _rehydrate_candidate_evidence(
         )
 
 
+def _rehydrate_prior_turn_evidence(store: EvidenceStore, dialogue: DialogueState) -> None:
+    """Re-register the dialogue evidence earlier turns created, from their snapshots.
+
+    Replay re-executes ONE turn against a fresh store, so evidence the earlier turns of the
+    same session registered is not there. It used to be recreated by accident: the prior
+    dialogue was re-parsed on every turn and re-registered under the current turn's id, so
+    replaying the last turn happened to mint it again. That is the defect P0-2 removed, and
+    removing it exposed the real gap -- a claim grounded in a value stated two turns ago
+    cited evidence the replayed store did not contain, the claim validator dropped it, and
+    the run reported a spurious difference in ``explanation_claims``.
+
+    This is NOT process-restart rehydration (explicitly out of scope). It reconstructs only
+    what the stored snapshots already name, for the one session being replayed, and it
+    verifies the reconstruction instead of assuming it: evidence ids are content-addressed,
+    so re-registering a preference under its ORIGINAL turn id must reproduce the id the
+    snapshot recorded. A mismatch means the snapshot and the store disagree about what that
+    turn established, which is a replay input error rather than something to paper over.
+    """
+    from ..agents.candidate_understanding import EXTRACTOR_NAME, EXTRACTOR_VERSION
+
+    for turn in dialogue.turns:
+        snapshot = turn.extraction_snapshot
+        if turn.speaker != "candidate" or snapshot is None:
+            continue
+        for pref in snapshot.preferences:
+            if pref.evidence_id and store.exists(pref.evidence_id):
+                continue
+            span = (
+                (pref.span_start, pref.span_end)
+                if pref.span_start is not None and pref.span_end is not None
+                else None
+            )
+            item = store.register_field(
+                EvidenceSource.DIALOGUE, dialogue.session_id, pref.field_name,
+                pref.normalized_value, confidence=pref.confidence,
+                confirmation=pref.confirmation_status, scope=pref.persistence_scope,
+                raw_text=pref.raw_text, turn_id=pref.origin_turn_id or turn.turn_id,
+                span=span, extractor_name=EXTRACTOR_NAME,
+                extractor_version=EXTRACTOR_VERSION,
+            )
+            if pref.evidence_id and item.evidence_id != pref.evidence_id:
+                raise ReplayInputError(
+                    f"prior-turn evidence for {pref.field_name!r} on turn "
+                    f"{pref.origin_turn_id or turn.turn_id} re-registers as "
+                    f"{item.evidence_id} but the recorded snapshot says "
+                    f"{pref.evidence_id}"
+                )
+
+
 def _written_back_values(candidate: CandidateState) -> list[tuple[str, Any]]:
     """Candidate values keyed by the EXTRACTION field name that wrote them back.
 
@@ -532,6 +581,7 @@ def _recompute(run_dir: Path, catalog_path: Path | None) -> Any:
         provider=ReplayProvider(run_dir / "model_calls.jsonl"), store=store,
     )
     _rehydrate_candidate_evidence(store, candidate, config)
+    _rehydrate_prior_turn_evidence(store, pre_dialogue)
     return orchestrator.process_turn(
         candidate, pre_dialogue, utterance,
         scenario_id=run_record.get("scenario_id"),

@@ -45,6 +45,15 @@ class ExtractedPreference(BaseModel):
     #: stated three turns ago produced evidence attributed to now. Carrying the origin lets
     #: per-turn provenance stay truthful while the re-parsing itself is still in place.
     origin_turn_id: str | None = None
+    #: The EvidenceItem this preference produced, set once the turn that stated it
+    #: registered its evidence.
+    #:
+    #: Carried on the preference so a prior turn's contribution to a later search state
+    #: can cite the evidence the ORIGINAL turn created. Without it the only way to get an
+    #: evidence id for a historical preference was to re-register it under the current
+    #: turn, which minted a second item for one statement and attributed it to a turn that
+    #: never said it.
+    evidence_id: str | None = None
     temporal_scope: Literal["current_search", "session", "long_term", "unknown"] = "current_search"
     # Free-form provenance bag. Notably carries ``extraction_method`` ("rule"|"llm")
     # recorded by the orchestrator so downstream metrics can attribute each field to

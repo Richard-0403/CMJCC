@@ -22,7 +22,7 @@ from ..domain.candidate import CandidateState
 from ..domain.constraints import JobContextState
 from ..domain.dialogue import ClarificationAction, DialogueState, PreferenceConflict
 from ..domain.enums import ConstraintStrength
-from ..domain.extraction import ExtractedPreferenceSet
+from ..domain.extraction import ExtractedPreference, ExtractedPreferenceSet
 from ..domain.handoff import EvidenceLogEntry
 from ..domain.job import ActiveSearchState
 from ..evidence_store import EvidenceStore
@@ -106,10 +106,35 @@ _PROFILE_TO_ACTIVE_SCALAR = {
 class CMJCCInput:
     candidate_state: CandidateState
     dialogue_state: DialogueState
+    #: What the CURRENT turn said. The only input that may create evidence, raise a
+    #: conflict, or be written back to the long-term profile.
+    #:
+    #: It used to arrive with every earlier utterance's re-parsed preferences prepended,
+    #: which made all three of those current-turn operations run over the whole history
+    #: again on every turn: one statement in turn 1 minted a fresh EvidenceItem stamped
+    #: with turn 2's id, was re-checked for conflicts, and was re-offered to the
+    #: write-back. History now arrives separately in :attr:`prior_preferences`.
     extracted_preferences: ExtractedPreferenceSet
     catalog_snapshot_id: str
     config: AppConfig
     run_id: str
+    #: Earlier turns' stored extractions, oldest first, exactly as those turns produced
+    #: them -- original strength, confirmation, metadata, evidence id and turn id.
+    #:
+    #: Read by :meth:`CMJCC._build_active_search` and by nothing else. Empty whenever the
+    #: variant does not inherit dialogue history, which is what keeps ``no_memory`` and
+    #: ``one_shot`` unchanged.
+    prior_preferences: list[ExtractedPreference] = field(default_factory=list)
+
+    @property
+    def effective_preferences(self) -> list[ExtractedPreference]:
+        """History followed by the current turn: the set the SEARCH STATE is built from.
+
+        Order is load-bearing. ``_build_active_search`` merges in sequence, so putting the
+        current turn last is what lets it override an earlier scalar, and monotone strength
+        merging is what keeps an earlier hard constraint binding.
+        """
+        return [*self.prior_preferences, *self.extracted_preferences.preferences]
 
 
 @dataclass
@@ -152,6 +177,16 @@ class CMJCC:
         turn_id = self.memory.latest_turn_id(inp.dialogue_state) or "no-turn"
         dialogue_state = inp.dialogue_state
         evidence_by_field: dict[str, list[str]] = {}
+        # Prior turns contribute the evidence they ALREADY created. Reused, never
+        # re-registered: an EvidenceItem's id is content-addressed over its turn, so
+        # re-registering a historical preference under the current turn produced a second
+        # item for one statement and attributed it to a turn that never said it.
+        for prior in inp.prior_preferences:
+            if prior.evidence_id:
+                ids = evidence_by_field.setdefault(prior.field_name, [])
+                if prior.evidence_id not in ids:
+                    ids.append(prior.evidence_id)
+
         if self.flags.use_current_turn:
             items = self.memory.build_dialogue_evidence(
                 inp.extracted_preferences, inp.dialogue_state.session_id, turn_id
@@ -161,20 +196,24 @@ class CMJCC:
             log("understanding", "dialogue_evidence_built",
                 outputs=[i.evidence_id for i in items], rule="cmjcc.build_evidence")
 
-            # Record on the turn only what the turn itself said. The set above also holds
-            # evidence re-derived from earlier utterances (see
-            # Orchestrator._merge_prior_dialogue), and stamping those onto this turn would
-            # replace an empty provenance field with a wrong one. Rebuilding from the
-            # current-turn subset is safe because evidence ids are content-addressed, so
-            # the ids reproduce exactly rather than being re-derived differently.
-            current_only = inp.extracted_preferences.model_copy(update={
-                "preferences": [p for p in inp.extracted_preferences.preferences
-                                if p.origin_turn_id is None]})
-            own_items = self.memory.build_dialogue_evidence(
-                current_only, inp.dialogue_state.session_id, turn_id
-            )
+            # Record on the turn what the turn itself said, and how it was understood.
+            # ``items`` is one EvidenceItem per preference in order, so the pairing is
+            # positional by construction; stamping the id and the origin onto the stored
+            # extraction is what lets a later turn cite this turn's evidence without
+            # re-deriving it.
+            stamped = inp.extracted_preferences.model_copy(update={
+                "preferences": [
+                    pref.model_copy(update={"evidence_id": item.evidence_id,
+                                            "origin_turn_id": turn_id})
+                    for pref, item in zip(inp.extracted_preferences.preferences, items,
+                                          strict=True)
+                ],
+            })
             dialogue_state = self.memory.attach_turn_evidence(
-                dialogue_state, turn_id, [i.evidence_id for i in own_items]
+                dialogue_state, turn_id, [i.evidence_id for i in items]
+            )
+            dialogue_state = self.memory.attach_turn_extraction(
+                dialogue_state, turn_id, stamped
             )
 
         # 2) Conflict detection against long-term profile.
@@ -309,17 +348,24 @@ class CMJCC:
         # ---- current-turn contributions (active-search overrides) --------
         year_conflict_fields = {c.field_name for c in conflicts if c.resolution == "ask_clarification"}
         if self.flags.use_current_turn:
-            # locations from current turn OVERRIDE profile locations for this search.
+            # The DIALOGUE contributions: earlier turns as they were understood at the
+            # time, then this turn. Both halves belong here and only here -- the search
+            # state is a view over the whole conversation, while evidence creation,
+            # conflict detection and the profile write-back above are strictly
+            # current-turn operations. ``prior_preferences`` is empty for variants that do
+            # not inherit history, so this stays a single code path.
+            effective = inp.effective_preferences
+            # locations stated in the dialogue OVERRIDE profile locations for this search.
             current_locations = [
                 v
-                for p in inp.extracted_preferences.preferences
+                for p in effective
                 if p.field_name == "preferred_locations" and p.polarity == "positive"
                 for v in _stated_values(p.normalized_value)
             ]
             if current_locations:
                 list_values["preferred_locations"] = list(dict.fromkeys(current_locations))
 
-            for pref in inp.extracted_preferences.preferences:
+            for pref in effective:
                 f = pref.field_name
                 ids = evidence_by_field.get(f, [])
                 if pref.operation == "relax":
