@@ -65,11 +65,15 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "data-quality",
         "catalog schema plus the R17 scenario data-quality checks",
+        # The report goes under artifacts/data_quality/, which .gitignore already covers.
+        # Writing it to artifacts/ directly left an untracked artifacts/data_quality_report.json
+        # behind, so running the gate dirtied `git status` -- a gate that has to be cleaned
+        # up after is a gate people stop running.
         ((PY, str(REPO_ROOT / "scripts" / "validate_catalog.py"),
           "--catalog", "data/processed/jobs.jsonl",
           "--scenarios", "evaluation/data/scenarios.jsonl",
           "--config", "configs/experiment_full.yaml",
-          "--report-dir", "artifacts"),),
+          "--report-dir", "artifacts/data_quality/preflight"),),
     ),
     Check(
         "scenarios",

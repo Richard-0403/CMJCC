@@ -162,10 +162,9 @@ jobs:
       # --scenarios/--config, delegates the R17 data-quality checks to
       # jobrec_eval.cli run_validate, which exits non-zero on any
       # error-severity finding.
+      # preflight creates its own report directory under artifacts/data_quality/.
       - name: Validate catalog + scenarios (data quality)
-        run: |
-          mkdir -p artifacts
-          python scripts/preflight.py --only data-quality
+        run: python scripts/preflight.py --only data-quality
 
       # The authoritative scenario set carries the 42 declared references the canonical
       # oracle is a pure function of, and scripts/build_eval_scenarios.py emits no

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -38,10 +39,19 @@ DEFAULT_OUTPUT = "evaluation/data/scenarios_draft.jsonl"
 #: on one resolved path, because the default being safe is not a guarantee: an explicit
 #: ``--output`` is exactly how the authoritative file would get clobbered, and a
 #: path-equality test is easy to walk around with a relative path or a different cwd.
+#:
+#: Compared case-insensitively. On Windows ``Path.resolve()`` happens to fold the case to
+#: whatever is on disk, so ``SCENARIOS.JSONL`` is caught there by accident -- but only
+#: while the file exists. On macOS the filesystem is case-insensitive and
+#: case-PRESERVING, so ``SCENARIOS.JSONL`` resolves with the requested case and would
+#: open the very same file: a name-equality test would miss it and the authoritative set
+#: would be overwritten. On Linux it is a different file, which is not a clobber but is
+#: still not something this builder should produce.
 PROTECTED_BASENAMES = frozenset({"scenarios.jsonl"})
 
 #: Paths that are authoritative in this repository, refused explicitly as well so the
-#: error message can name them.
+#: error message can name them. Compared with :func:`os.path.normcase` and after symlink
+#: resolution, so a link or a case variant pointing at one of them is caught too.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROTECTED_PATHS = (
     REPO_ROOT / "evaluation" / "data" / "scenarios.jsonl",
@@ -53,6 +63,11 @@ class ProtectedOutputError(RuntimeError):
     """The requested output path is an authoritative scenario file."""
 
 
+def _normalised(path: Path) -> str:
+    """A comparable spelling of ``path``: symlinks resolved, case folded."""
+    return os.path.normcase(os.path.realpath(str(path)))
+
+
 def resolve_output(output: str | Path) -> Path:
     """Return the path to write, or raise :class:`ProtectedOutputError`.
 
@@ -61,14 +76,15 @@ def resolve_output(output: str | Path) -> Path:
     """
     path = Path(output)
     resolved = path.expanduser().resolve()
-    if resolved.name in PROTECTED_BASENAMES:
+    if resolved.name.casefold() in {name.casefold() for name in PROTECTED_BASENAMES}:
         raise ProtectedOutputError(
             f"{path} is named {resolved.name!r}, which is reserved for the authoritative "
             f"scenario set. This builder emits no 'reference' block, so writing it would "
             f"drop the hand-declared references the canonical oracle depends on. Write a "
             f"draft instead (default: {DEFAULT_OUTPUT}) and adopt it in a reviewed step."
         )
-    if resolved in {p.resolve() for p in PROTECTED_PATHS}:
+    protected = {_normalised(p) for p in PROTECTED_PATHS}
+    if _normalised(path.expanduser()) in protected:
         raise ProtectedOutputError(
             f"{path} resolves to the authoritative scenario file {resolved}. Write a "
             f"draft instead (default: {DEFAULT_OUTPUT})."
