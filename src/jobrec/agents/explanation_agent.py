@@ -41,12 +41,25 @@ _NEEDS_CANDIDATE_EVIDENCE = {"candidate_preference", "skill_gap"}
 #: Claim types whose proposition is about a JOB.
 _NEEDS_JOB_EVIDENCE = {"job_attribute", "ranking_reason", "skill_gap"}
 #: ``no_match_reason`` is a claim about the candidate's stated requirement, so it needs
-#: candidate-side evidence. It deliberately does NOT assert that the requirement caused the
-#: empty result: establishing causality needs a record of what each filtering stage removed,
-#: which does not exist yet (P0-5). The wording was changed to match what the evidence can
-#: carry rather than the claim being dropped -- dropping it would have left every no-match
-#: response with no reasons at all, trading an unsupported explanation for none.
+#: candidate-side evidence.
 _NEEDS_CANDIDATE_EVIDENCE_ALSO = {"no_match_reason"}
+
+#: Metadata key marking an evidence item that records a FILTERING EFFECT -- how many jobs a
+#: constraint removed at a given stage. A claim that a requirement caused the empty result
+#: is causal, and evidence that the requirement merely exists is correlational, so the causal
+#: form is only permitted to cite a stage record.
+CAUSAL_EFFECT_KEY = "filtered_count"
+
+#: Claim types that assert causation and therefore require such a record.
+_NEEDS_CAUSAL_EVIDENCE = {"no_match_cause"}
+
+
+def _records_a_filtering_effect(item) -> bool:
+    """Does this evidence item record how many jobs a constraint removed?"""
+    value = item.normalized_value
+    if isinstance(value, dict) and CAUSAL_EFFECT_KEY in value:
+        return True
+    return CAUSAL_EFFECT_KEY in (item.metadata or {})
 
 
 def semantic_status(claim: ResponseClaim, store: EvidenceStore) -> str:
@@ -71,8 +84,13 @@ def semantic_status(claim: ResponseClaim, store: EvidenceStore) -> str:
         return "unsupported"
     if claim.claim_type in _NEEDS_JOB_EVIDENCE and not (sources & _JOB_SOURCES):
         return "unsupported"
+    if claim.claim_type in _NEEDS_CAUSAL_EVIDENCE and not any(
+        _records_a_filtering_effect(i) for i in resolved
+    ):
+        return "unsupported"
     if claim.claim_type in ("candidate_preference", "job_attribute", "constraint_result",
-                            "ranking_reason", "skill_gap", "no_match_reason"):
+                            "ranking_reason", "skill_gap", "no_match_reason",
+                            "no_match_cause"):
         return "supported"
     return "unknown"
 
@@ -211,8 +229,28 @@ class ExplanationAgent:
         return response, dropped
 
     # ------------------------------------------------------------- no match
+    def _filtering_evidence(self, decision, field: str, removed: int) -> str | None:
+        """Register the stage record for ``field`` as citable evidence."""
+        diagnosis = getattr(decision, "no_match_diagnosis", None) or {}
+        from ..domain.enums import ConfirmationStatus, EvidenceSource, PersistenceScope
+        # The count lives in normalized_value, not in metadata: it IS the evidence, so it
+        # belongs in the value that the evidence id is content-addressed over. Putting it in
+        # metadata would let two different counts share one id.
+        item = self.store.register_field(
+            EvidenceSource.SYSTEM_RULE, decision.decision_id, f"filtered_by:{field}",
+            {"field": field, CAUSAL_EFFECT_KEY: removed,
+             "stage_trace": diagnosis.get("stage_trace")},
+            confidence=1.0, confirmation=ConfirmationStatus.CONFIRMED,
+            scope=PersistenceScope.SESSION,
+        )
+        return item.evidence_id
+
     def _no_match(self, decision, active):
         claims: list[ResponseClaim] = []
+        diagnosis = getattr(decision, "no_match_diagnosis", None) or {}
+        blocked_counts = {b["field"]: b.get("filtered_jobs")
+                          for b in diagnosis.get("blocking_constraints", [])}
+        evaluated = diagnosis.get("evaluated_jobs")
         lines = ["No jobs currently satisfy all of your hard requirements at once."]
         for code in decision.no_match_reason_codes:
             lines.append(f"  - Blocking condition: {code}")
@@ -233,6 +271,20 @@ class ExplanationAgent:
                     f"hard filter.",
                     ev,
                 ))
+                # The CAUSAL claim, only when the diagnosis recorded how many jobs this
+                # field actually removed. It cites the filtering record alongside the
+                # candidate's statement, so "this requirement is why" rests on a count
+                # rather than on the requirement's existence.
+                removed = blocked_counts.get(field)
+                if removed:
+                    effect_ev = self._filtering_evidence(decision, field, removed)
+                    if effect_ev:
+                        claims.append(self._claim(
+                            "no_match_cause",
+                            f"Applying your requirement on {field.replace('_', ' ')} removed "
+                            f"{removed} of the {evaluated} job(s) evaluated.",
+                            [*ev, effect_ev],
+                        ))
         lines.append("You could relax a soft or unconfirmed preference to see more options.")
         response = Response(
             response_id=content_id("resp", decision.decision_id),

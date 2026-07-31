@@ -53,6 +53,10 @@ class RecommendationDecision(BaseModel):
     ranked_jobs: list[RankedJob] = Field(default_factory=list)
     selected_job_ids: list[str] = Field(default_factory=list)
     no_match: bool = False
+    #: The no-match diagnosis, including its per-stage trace, or ``None`` when the turn
+    #: produced recommendations. Carried on the decision so it reaches the run bundle: a
+    #: no-match explanation that cannot be recomputed from a record is an assertion.
+    no_match_diagnosis: dict | None = None
     no_match_reason_codes: list[str] = Field(default_factory=list)
     created_at: datetime
     scorer_version: str
@@ -72,6 +76,11 @@ class ResponseClaim(BaseModel):
         "ranking_reason",
         "skill_gap",
         "no_match_reason",
+        #: The CAUSAL form: this requirement removed N of the M jobs evaluated. Separate
+        #: from ``no_match_reason``, which only states that the requirement was applied,
+        #: because the two need different evidence and only one of them can be made from a
+        #: constraint statement alone.
+        "no_match_cause",
     ]
     text: str
     evidence_ids: list[str] = Field(default_factory=list)

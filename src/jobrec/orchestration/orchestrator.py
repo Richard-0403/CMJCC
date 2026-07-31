@@ -291,7 +291,11 @@ class ConversationOrchestrator:
             no_match = len(ranked) == 0
             no_match_codes: list[str] = []
             if no_match:
-                diag = diagnose_no_match(eligibility, context) if context else {"blocking_constraints": []}
+                diag = (diagnose_no_match(
+                    eligibility, context,
+                    catalog_size=len(self.jobs_by_id), pool_size=len(pool),
+                    ranked_size=len(ranked))
+                    if context else {"blocking_constraints": []})
                 no_match_codes = [b["field"] for b in diag.get("blocking_constraints", [])]
                 trace.warning(
                     self.job_context.name, "no_match",
@@ -310,6 +314,9 @@ class ConversationOrchestrator:
                 ranked_jobs=ranked,
                 selected_job_ids=[rj.job_id for rj in ranked[: self.config.experiment.top_k]],
                 no_match=no_match,
+                # The diagnosis travels with the decision, so the run bundle records what
+                # each filtering stage removed instead of only the final verdict.
+                no_match_diagnosis=(diag if no_match else None),
                 no_match_reason_codes=no_match_codes,
                 created_at=utcnow(),
                 scorer_version=SCORER_VERSION,

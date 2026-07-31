@@ -369,6 +369,10 @@ def _ranking_key(field: str) -> str:
 def diagnose_no_match(
     eligibility_results: list[EligibilityResult],
     context: JobContextState,
+    *,
+    catalog_size: int | None = None,
+    pool_size: int | None = None,
+    ranked_size: int = 0,
 ) -> dict:
     """Aggregate blocking constraints when every job was filtered out.
 
@@ -394,8 +398,28 @@ def diagnose_no_match(
         for f, n in field_counts.items()
         if f not in hard_fields
     ]
+    # Per-stage sizes, so a no-match explanation can be checked rather than believed.
+    #
+    # Without them the only recorded fact was that some constraint blocked some jobs INSIDE
+    # the retrieval pool, which cannot distinguish "these requirements are jointly
+    # unsatisfiable" from "nothing in the requested role family was retrieved in the first
+    # place" -- and the response asserted the former. SC-E-02 and SC-E-04 are exactly that
+    # case: catalogue jobs do clear their hard constraints, they are simply outside the
+    # requested roles, which is what the data-quality warning on those two scenarios says.
+    # The counts are recorded here because this is the only layer that sees all four stages.
+    eligible_count = sum(1 for r in eligibility_results if r.eligible)
+    stage_trace = [
+        {"stage": "catalog", "jobs": catalog_size},
+        {"stage": "retrieved", "jobs": (pool_size if pool_size is not None
+                                       else len(eligibility_results))},
+        {"stage": "eligible_after_hard_constraints", "jobs": eligible_count},
+        {"stage": "ranked", "jobs": ranked_size},
+    ]
     return {
         "no_match": True,
+        "stage_trace": stage_trace,
+        "evaluated_jobs": len(eligibility_results),
+        "eligible_jobs": eligible_count,
         "blocking_constraints": blocking,
         "relaxation_candidates": relaxation,
     }
