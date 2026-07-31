@@ -117,11 +117,18 @@ def make_claim(
     claim_type: str = "ranking_reason",
     text: str = "This role matches your stated preference.",
     evidence_ids: Iterable[str] | None = None,
+    **proposition,
 ) -> ResponseClaim:
     """Build a :class:`ResponseClaim` with an arbitrary evidence-id set.
 
     The default ``evidence_ids`` is empty, which is itself an unsupported claim
     (no source). Pass explicit ids for supported or dangling variants.
+
+    ``proposition`` carries the structured fields the validator dispatches on --
+    ``predicate`` and its arguments. Without a predicate the verdict is ``unknown`` rather
+    than ``unsupported``: a claim that states no proposition is one no checker can rule on,
+    which is a different failure from a claim whose evidence does not back it. Tests that
+    mean the latter have to say what the claim asserts.
     """
     ids = list(evidence_ids) if evidence_ids is not None else []
     return ResponseClaim(
@@ -129,6 +136,7 @@ def make_claim(
         claim_type=claim_type,  # type: ignore[arg-type]
         text=text,
         evidence_ids=ids,
+        **proposition,
     )
 
 
@@ -137,9 +145,17 @@ def make_dangling_claim(
     claim_type: str = "ranking_reason",
     text: str = "This role matches evidence that was never registered.",
     evidence_id: str = DANGLING_EVIDENCE_ID,
+    **proposition,
 ) -> ResponseClaim:
-    """A claim whose evidence id does not resolve in any ``EvidenceStore`` (R10.1)."""
-    return make_claim(claim_type=claim_type, text=text, evidence_ids=[evidence_id])
+    """A claim whose evidence id does not resolve in any ``EvidenceStore`` (R10.1).
+
+    ``proposition`` is forwarded so a dangling claim can still state what it asserts. That
+    matters for telling the two failures apart: a claim with a proposition and a dangling id
+    is ``unsupported`` (it cites something absent), while a claim with no proposition is
+    ``unknown`` (nothing can rule on it).
+    """
+    return make_claim(claim_type=claim_type, text=text, evidence_ids=[evidence_id],
+                      **proposition)
 
 
 def make_unsupported_claim(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -84,6 +84,38 @@ class ResponseClaim(BaseModel):
     ]
     text: str
     evidence_ids: list[str] = Field(default_factory=list)
+
+    # ---------------------------------------------------------- the proposition
+    #: WHAT this claim asserts, as a name the validator can dispatch on.
+    #:
+    #: The claim's ``text`` is a RENDERING of the proposition, not its definition. Validating
+    #: by reading the text would check the renderer rather than the claim, and would make the
+    #: verdict depend on phrasing -- so the proposition is carried structurally and the text
+    #: is never parsed.
+    #:
+    #: ``None`` means the claim states no proposition. That is scored ``unknown``, never
+    #: ``supported``: a builder that forgot to say what it was asserting must not be rewarded
+    #: with a default pass, and a legacy claim fed back through the validator must not be
+    #: silently re-blessed. See :func:`jobrec.agents.explanation_agent.semantic_status`.
+    predicate: str | None = None
+    #: The candidate the claim is about, when it is about one.
+    subject_id: str | None = None
+    #: The job the claim is about, when it is about one. Checked against the evidence's own
+    #: source object, so evidence about a DIFFERENT job cannot support the claim.
+    job_id: str | None = None
+    #: The field the proposition is about (``salary_min``, ``work_modes``, ...). Comparing
+    #: this with the evidence's ``field_name`` is what stops location evidence supporting a
+    #: salary claim -- the failure the evidence-class-only check could not catch.
+    field_name: str | None = None
+    #: What the claim asserts the CANDIDATE side to be (the wanted value, the threshold).
+    expected_value: Any = None
+    #: What the claim asserts the JOB or PROFILE side to be (the observed value).
+    observed_value: Any = None
+    #: Predicate-specific arguments: ``skill``, ``feature``, ``removed``,
+    #: ``evaluated_jobs``, ``blocked_job_ids``. Kept in one bag rather than as more optional
+    #: top-level fields, since each is meaningful for only one predicate.
+    claim_args: dict[str, Any] = Field(default_factory=dict)
+
     #: Whether the cited evidence ids exist and resolve. Structural only -- it says nothing
     #: about whether the evidence supports the proposition.
     trace_status: Literal["supported", "unsupported", "unknown"] = "unknown"

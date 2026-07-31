@@ -113,6 +113,12 @@ def export_claim_template(claims: pd.DataFrame, out_path: str | Path) -> Path:
     for c in claims.itertuples():
         rows.append({
             "run_id": c.run_id, "claim_id": c.claim_id, "claim_type": c.claim_type,
+            # The PROPOSITION, alongside the type. A rater judging "is this supported" needs
+            # to know what was asserted and about which field and job; the claim type alone
+            # ("ranking_reason") does not say. Blank for a pre-P0-4 bundle.
+            "predicate": getattr(c, "predicate", None),
+            "claim_field": getattr(c, "claim_field", None),
+            "claim_job_id": getattr(c, "claim_job_id", None),
             "validator": c.supported_binary, "rater_1": "", "rater_2": "",
             ADJUDICATED_COLUMN: "", "notes": "",
         })

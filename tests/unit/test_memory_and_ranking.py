@@ -71,9 +71,15 @@ def test_claim_validator_drops_unsupported(store):
         confirmation=ConfirmationStatus.CONFIRMED, scope=PersistenceScope.LONG_TERM,
     )
     supported = ResponseClaim(claim_id="ok", claim_type="candidate_preference",
-                              text="knows python", evidence_ids=[item.evidence_id])
+                              text="knows python", evidence_ids=[item.evidence_id],
+                              # The profile records this under ``skills``; the claim names the
+                              # extraction field. The validator resolves the alias.
+                              predicate="candidate_preference", field_name="skills_have",
+                              expected_value="python")
     bad = ResponseClaim(claim_id="bad", claim_type="job_attribute",
-                        text="great culture", evidence_ids=["does-not-exist"])
+                        text="great culture", evidence_ids=["does-not-exist"],
+                        predicate="job_attribute", job_id="job-1",
+                        field_name="culture", observed_value="great")
     keep, drop = validate_claims([supported, bad], store)
     assert [c.claim_id for c in keep] == ["ok"]
     assert [c.claim_id for c in drop] == ["bad"]

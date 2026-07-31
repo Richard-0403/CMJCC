@@ -169,8 +169,11 @@ def test_dangling_evidence_id_claim_is_flagged_unsupported_and_never_presented()
         claim_type="candidate_preference",
         text="You asked for a hybrid role.",
         evidence_ids=[_register(store, "work_modes", ["hybrid"])],
+        predicate="candidate_preference", field_name="work_modes",
+        expected_value=["hybrid"],
     )
-    dangling = make_dangling_claim()
+    dangling = make_dangling_claim(predicate="candidate_preference",
+                                    field_name="work_modes", expected_value=["hybrid"])
     assert not store.exists(DANGLING_EVIDENCE_ID), "the dangling id must not resolve"
 
     supported, dropped = validate_claims([grounded, dangling], store)
@@ -269,7 +272,18 @@ def test_unsupported_salary_location_and_skill_claims_are_flagged(
     evidence_id = _evidence_id_for(
         field_name, value, object_id="job-1", source=EvidenceSource.JOB_POSTING
     )
-    claim = make_claim(claim_type=claim_type, text=text, evidence_ids=[evidence_id])
+    # The proposition each case asserts. Without it the verdict would be ``unknown`` -- "no
+    # checker can rule on this" -- rather than ``unsupported``, which is what these cases are
+    # about: the evidence is absent, then present, and the SAME claim flips.
+    proposition: dict = (
+        {"predicate": "skill_not_recorded", "job_id": "job-1",
+         "claim_args": {"skill": "kubernetes"}}
+        if claim_type == "skill_gap"
+        else {"predicate": "job_attribute", "job_id": "job-1",
+              "field_name": field_name, "observed_value": value}
+    )
+    claim = make_claim(claim_type=claim_type, text=text, evidence_ids=[evidence_id],
+                       **proposition)
 
     supported, dropped = validate_claims([claim], store)
     assert supported == []

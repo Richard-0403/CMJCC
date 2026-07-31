@@ -101,7 +101,9 @@ def test_a_causal_claim_needs_a_filtering_record() -> None:
     def claim(evidence_ids):
         return ResponseClaim(claim_id="claim-1", claim_type="no_match_cause",
                              text="Applying your requirement removed 2 of the 2 evaluated.",
-                             evidence_ids=evidence_ids)
+                             evidence_ids=evidence_ids,
+                             predicate="no_match_cause", field_name="salary_min",
+                             claim_args={"removed": 2, "evaluated_jobs": 2})
 
     assert semantic_status(claim([stated.evidence_id]), store) == "unsupported"
     assert semantic_status(
@@ -122,6 +124,7 @@ def test_the_descriptive_claim_still_stands_on_the_statement_alone() -> None:
     descriptive = ResponseClaim(
         claim_id="claim-2", claim_type="no_match_reason",
         text="Your stated requirement on work modes was applied as a hard filter.",
-        evidence_ids=[stated.evidence_id])
+        evidence_ids=[stated.evidence_id],
+        predicate="constraint_applied", field_name="work_modes")
 
     assert semantic_status(descriptive, store) == "supported"

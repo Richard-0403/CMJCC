@@ -89,7 +89,13 @@ def _registered_claim(store: EvidenceStore, field_name: str, value: object, text
         confirmation=ConfirmationStatus.CONFIRMED,
         scope=PersistenceScope.ACTIVE_SEARCH,
     )
-    return make_claim(claim_type="job_attribute", text=text, evidence_ids=[item.evidence_id])
+    return make_claim(
+        claim_type="job_attribute", text=text, evidence_ids=[item.evidence_id],
+        # The proposition, not just the type: the validator dispatches on ``predicate`` and
+        # compares these arguments with the evidence, so a claim without them is ``unknown``.
+        predicate="job_attribute", job_id="job-1", field_name=field_name,
+        observed_value=value,
+    )
 
 
 def _handoff(scenario_id: str, index: int, **overrides) -> AgentHandoff:

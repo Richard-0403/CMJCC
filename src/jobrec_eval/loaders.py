@@ -288,7 +288,16 @@ def normalize(bundles: list[RunBundle]) -> dict[str, pd.DataFrame]:
             claims.append({
                 "run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
                 "claim_id": c.get("claim_id"), "claim_type": c.get("claim_type"),
+                # The structured proposition, so analysis and human raters can see WHAT was
+                # asserted rather than inferring it from the rendered sentence. ``None`` on a
+                # pre-P0-4 bundle, which is how a legacy claim stays distinguishable from one
+                # that states its predicate.
+                "predicate": c.get("predicate"),
+                "claim_field": c.get("field_name"),
+                "claim_job_id": c.get("job_id"),
                 "support_status": c.get("support_status"),
+                "semantic_status": c.get("semantic_status"),
+                "trace_status": c.get("trace_status"),
                 "supported_binary": 1 if c.get("support_status") == "supported" else 0,
                 "evidence_count": len(c.get("evidence_ids", [])),
             })

@@ -448,7 +448,9 @@ def test_grounding_is_re_decided_and_the_callers_claims_are_left_untouched(store
     stale = [
         make_claim(claim_type="candidate_preference",
                    text="You asked for a hybrid role.",
-                   evidence_ids=[evidence_id]).model_copy(
+                   evidence_ids=[evidence_id],
+                   predicate="candidate_preference", field_name="work_modes",
+                   expected_value=["hybrid"]).model_copy(
             update={"support_status": status}
         )
         for status in ("unknown", "unsupported")
