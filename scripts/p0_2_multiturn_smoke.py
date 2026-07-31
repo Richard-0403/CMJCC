@@ -115,6 +115,10 @@ def audit(exp_dir: Path) -> int:
     method_by_position: dict[int, Counter] = {}
     legacy_runs: list[str] = []
     rows: list[dict] = []
+    # Every place the pipeline degraded rather than failing. "0 fallback" is a release
+    # criterion, and a fallback is silent by design -- the run succeeds and the artifact looks
+    # normal -- so it has to be looked for rather than waited for.
+    fallbacks: list[str] = []
 
     for run_dir in _run_dirs(exp_dir):
         dialogue = _read(run_dir / "dialogue_state.json") or {}
@@ -129,6 +133,36 @@ def audit(exp_dir: Path) -> int:
 
         candidate_turns = [t for t in dialogue.get("turns", [])
                            if t.get("speaker") == "candidate"]
+
+        # (0) fallbacks. Four independent kinds, each of which substitutes something weaker
+        # for what was asked for: a field's value coming from the rule extractor after the
+        # model's was rejected, a whole model call failing over to rules, a retried request,
+        # and lexical recall coming back empty so the whole catalogue was substituted.
+        for position, turn in enumerate(candidate_turns):
+            for pref in (turn.get("extraction_snapshot") or {}).get("preferences", []):
+                source = (pref.get("metadata") or {}).get("extraction_source") or ""
+                if "fallback" in source:
+                    fallbacks.append(f"{label} turn {position}: {pref.get('field_name')} "
+                                     f"extraction_source={source}")
+        for warning in warnings:
+            if "fallback" in warning or "unrecoverable" in warning:
+                fallbacks.append(f"{label}: {warning}")
+        retrieval = _read(run_dir / "retrieval_results.json") or {}
+        if retrieval.get("expanded") or retrieval.get("expansion_reason"):
+            fallbacks.append(f"{label}: retrieval expanded "
+                             f"({retrieval.get('expansion_reason')})")
+        for line in (run_dir / "model_calls.jsonl").read_text(
+                encoding="utf-8").splitlines() if (run_dir / "model_calls.jsonl").exists() \
+                else []:
+            if not line.strip():
+                continue
+            call = json.loads(line)
+            meta = call.get("response_metadata") or {}
+            if meta.get("fell_back") or call.get("parsed_ok") is False:
+                fallbacks.append(f"{label}: model call {call.get('purpose')} fell back")
+            if meta.get("retry_reason"):
+                fallbacks.append(f"{label}: model call {call.get('purpose')} retried "
+                                 f"({meta.get('retry_reason')})")
 
         # (1) extraction_method per turn position, read from each turn's own snapshot.
         for position, turn in enumerate(candidate_turns):
@@ -194,6 +228,11 @@ def audit(exp_dir: Path) -> int:
     print(f"\nlegacy_rule_reparse: {len(legacy_runs)} run(s)"
           + (f" -- {legacy_runs}" if legacy_runs else " (none, as required)"))
 
+    print(f"\nfallbacks: {len(fallbacks)}"
+          + ("" if fallbacks else " (none)"))
+    for entry in fallbacks:
+        print(f"  - {entry}")
+
     print("\nper-run final state:")
     for row in rows:
         print(f"  {row['run']}: turns={row['turns']} hard={row['hard']} "
@@ -208,12 +247,12 @@ def audit(exp_dir: Path) -> int:
         print("\nevidence integrity: no duplicated ids, no turn_id drift.")
 
     (exp_dir / "p0_2_audit.json").write_text(
-        json.dumps({"runs": rows, "legacy_runs": legacy_runs,
+        json.dumps({"runs": rows, "legacy_runs": legacy_runs, "fallbacks": fallbacks,
                     "method_by_position": {str(k): dict(v)
                                            for k, v in method_by_position.items()},
                     "problems": problems}, indent=2, sort_keys=True),
         encoding="utf-8")
-    return 1 if (problems or legacy_runs) else 0
+    return 1 if (problems or legacy_runs or fallbacks) else 0
 
 
 _STATE_FIELDS = ("target_roles", "preferred_locations", "work_modes", "salary_min",
