@@ -110,6 +110,18 @@ CHECKS: tuple[Check, ...] = (
         ((PY, "-m", "pytest", "tests/eval/test_turn_state_persistence.py",
           "-q", "--no-header", "-p", "no:cacheprovider"),),
     ),
+    Check(
+        "oracle-freshness",
+        "PRE-RE-RUN: the frozen canonical oracle still matches its inputs, so a batch "
+        "cannot be spent only to fail in the analysis stage",
+        ((PY, str(REPO_ROOT / "scripts" / "check_oracle_freshness.py")),),
+        # Pending because it is red BY DESIGN right now: the salary fix bumped
+        # CANONICAL_ORACLE_VERSION to 4.0.0 so the pre-fix frozen reference would be
+        # rejected instead of silently reused. Rebuilding it changes every grade-derived
+        # number, so it is an operator decision, not something a gate should do. Drop
+        # `pending` once the reference has been rebuilt.
+        pending=True,
+    ),
 )
 
 BY_NAME = {check.name: check for check in CHECKS}
