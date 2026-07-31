@@ -63,6 +63,11 @@ evaluation/outputs_hybrid/
 # plus the sealed bundles.
 evaluation/outputs_human/
 
+# Draft output of scripts/build_eval_scenarios.py. Regenerable, and deliberately NOT the
+# authoritative evaluation/data/scenarios.jsonl -- which that builder now refuses to write
+# because it emits no `reference` declarations.
+evaluation/data/scenarios_draft.jsonl
+
 # Local archives of scratch directories. The annotation evidence package itself is tracked
 # below, so a side archive adds nothing but bulk.
 evaluation/*.rar

@@ -1,6 +1,6 @@
-"""Generate the tagged evaluation scenario set (evaluation/data/scenarios.jsonl).
+"""Draft the tagged evaluation scenario set.
 
-Reproducible builder for ~30 scenarios covering types A-H with difficulty and
+Reproducible builder for the scenarios covering types A-H with difficulty and
 memory/context dependency tags. Kept separate from the golden-test scenarios so
 existing tests are unaffected.
 
@@ -9,15 +9,72 @@ business-analyst / software-engineer roles in Kuala Lumpur / Penang / etc.).
 Recommendation scenarios use satisfiable salary thresholds (RM3000-4500);
 no-match scenarios use an unsatisfiable threshold (RM50000).
 
+This script writes a DRAFT and refuses to write an authoritative scenario file.
+
+The reason is asymmetric damage. ``evaluation/data/scenarios.jsonl`` carries the 42
+hand-reviewed ``reference`` declarations that the canonical oracle is a pure function
+of, and this builder emits no ``reference`` block at all -- grep it, there are zero.
+So writing that path would replace declared ground truth with a file that has none,
+silently, in a single command with no arguments. Regenerating scenario TEXT is a
+drafting operation; adopting a draft as authoritative is a reviewed, manual step that
+has to preserve or re-declare every reference.
+
 Usage:
-    python scripts/build_eval_scenarios.py --output evaluation/data/scenarios.jsonl
+    python scripts/build_eval_scenarios.py
+    python scripts/build_eval_scenarios.py --output /tmp/my_draft.jsonl
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+#: Where a draft goes by default. Deliberately NOT the authoritative path.
+DEFAULT_OUTPUT = "evaluation/data/scenarios_draft.jsonl"
+
+#: Basenames this builder must never produce. The check is on the FILE NAME rather than
+#: on one resolved path, because the default being safe is not a guarantee: an explicit
+#: ``--output`` is exactly how the authoritative file would get clobbered, and a
+#: path-equality test is easy to walk around with a relative path or a different cwd.
+PROTECTED_BASENAMES = frozenset({"scenarios.jsonl"})
+
+#: Paths that are authoritative in this repository, refused explicitly as well so the
+#: error message can name them.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PROTECTED_PATHS = (
+    REPO_ROOT / "evaluation" / "data" / "scenarios.jsonl",
+    REPO_ROOT / "data" / "scenarios" / "scenarios.jsonl",
+)
+
+
+class ProtectedOutputError(RuntimeError):
+    """The requested output path is an authoritative scenario file."""
+
+
+def resolve_output(output: str | Path) -> Path:
+    """Return the path to write, or raise :class:`ProtectedOutputError`.
+
+    Kept separate from :func:`main` so the guard is testable without running the
+    builder and without a filesystem side effect.
+    """
+    path = Path(output)
+    resolved = path.expanduser().resolve()
+    if resolved.name in PROTECTED_BASENAMES:
+        raise ProtectedOutputError(
+            f"{path} is named {resolved.name!r}, which is reserved for the authoritative "
+            f"scenario set. This builder emits no 'reference' block, so writing it would "
+            f"drop the hand-declared references the canonical oracle depends on. Write a "
+            f"draft instead (default: {DEFAULT_OUTPUT}) and adopt it in a reviewed step."
+        )
+    if resolved in {p.resolve() for p in PROTECTED_PATHS}:
+        raise ProtectedOutputError(
+            f"{path} resolves to the authoritative scenario file {resolved}. Write a "
+            f"draft instead (default: {DEFAULT_OUTPUT})."
+        )
+    return path
+
 
 S: list[dict] = []
 
@@ -292,13 +349,19 @@ add("SC-D-12", "preference_change", "hard",
     notes="Role turn1; location override turn2; salary turn3.")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="evaluation/data/scenarios.jsonl")
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT,
+                        help=f"draft path to write (default: {DEFAULT_OUTPUT}). "
+                             "Authoritative scenario files are refused.")
     args = parser.parse_args()
+    try:
+        out = resolve_output(args.output)
+    except ProtectedOutputError as exc:
+        print(f"refusing to write: {exc}", file=sys.stderr)
+        return 2
     for s in S:
         s["profile"]["candidate_id"] = f"{s['scenario_id']}-cand"
-    out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w") as fh:
         for s in S:
@@ -308,10 +371,13 @@ def main() -> None:
     ctx = sum(1 for s in S if s["context_dependency"] == "high")
     for s in S:
         types[s["scenario_type"]] = types.get(s["scenario_type"], 0) + 1
-    print(f"Wrote {len(S)} scenarios -> {out}")
+    print(f"Wrote {len(S)} DRAFT scenarios -> {out}")
     print("by type:", types)
     print(f"memory-dependent(>=medium): {mem} | context-dependent(high): {ctx}")
+    print("NOTE: this is a draft and carries no 'reference' declarations. Adopting it as "
+          "the authoritative set is a separate reviewed step.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
