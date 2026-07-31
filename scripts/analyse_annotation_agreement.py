@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,18 @@ import pandas as pd
 
 WS = Path("evaluation/annotation_workspace")
 ORACLE_LABELS = Path("evaluation/outputs/exp-e748800507ef/normalized/relevance_labels.csv")
+
+#: Seed for the dev/holdout split. Fixed and committed so the split cannot be re-drawn
+#: until it flatters a change: a split chosen after seeing the result is not a split.
+SPLIT_SEED = 20260731
+
+#: Share of SCENARIOS held out. The unit is the scenario, not the (scenario, job) pair --
+#: pairs inside one scenario share a candidate profile and a declared reference, so
+#: splitting pairs would put near-duplicates on both sides and the holdout would measure
+#: nothing.
+HOLDOUT_FRACTION = 0.3
+
+BOOTSTRAP_ITERATIONS = 2000
 
 
 def sha256(path: Path) -> str:
@@ -130,6 +143,129 @@ def relevance_analysis() -> dict[str, Any]:
     }
 
 
+def _weighted_kappa(a: list[int], b: list[int]) -> float | None:
+    try:
+        from sklearn.metrics import cohen_kappa_score
+    except ImportError:  # pragma: no cover - sklearn is a declared dependency
+        return None
+    if len(set(a)) < 2 and len(set(b)) < 2:
+        return None
+    return float(cohen_kappa_score(a, b, weights="quadratic"))
+
+
+def _bootstrap_kappa_ci(pairs: list[tuple[int, int]]) -> dict[str, float | None]:
+    """Percentile CI for the weighted kappa, resampling pairs.
+
+    A point estimate on a few hundred judged pairs is not a quality gate: the audit plan
+    proposed pre-registering kappa >= 0.80, and on this sample size 0.78 and 0.82 are not
+    distinguishable. Reporting the interval is what makes the number usable.
+    """
+    if not pairs:
+        return {"low": None, "high": None}
+    rng = random.Random(SPLIT_SEED)
+    draws: list[float] = []
+    size = len(pairs)
+    for _ in range(BOOTSTRAP_ITERATIONS):
+        sample = [pairs[rng.randrange(size)] for _ in range(size)]
+        value = _weighted_kappa([p[0] for p in sample], [p[1] for p in sample])
+        if value is not None:
+            draws.append(value)
+    if not draws:
+        return {"low": None, "high": None}
+    draws.sort()
+    return {"low": round(draws[int(0.025 * len(draws))], 4),
+            "high": round(draws[min(len(draws) - 1, int(0.975 * len(draws)))], 4)}
+
+
+def oracle_calibration() -> dict[str, Any]:
+    """Frozen scenario-level split, and oracle-vs-human agreement before/after per side.
+
+    Read this for what it is. The guaranteed-minimum salary fix was made after inspecting
+    the disagreement across ALL judged pairs, so the "holdout" below was already seen and
+    is NOT a pre-registered held-out estimate -- no retrospective split can manufacture
+    one. Two things make it worth computing anyway.
+
+    First, as a stability check: the fix has zero free parameters -- it replaces one
+    comparison rule with another stated in the rubric, with nothing fitted to the data --
+    so if dev and holdout move together, the improvement is a property of the rule rather
+    than of a handful of pairs. Divergence between the two sides would be the warning sign.
+
+    Second, and more usefully, it FREEZES the split for future oracle changes, which can
+    then be evaluated on a side they have not seen.
+    """
+    from jobrec.catalog import load_catalog
+    from jobrec.config import load_config
+    from jobrec_eval.oracle_reference import load_or_build_canonical_references
+    from jobrec_eval.relevance import grade_catalog
+
+    raters = pd.read_csv(WS / "labels" / "relevance_raters.csv")
+    raters = raters[raters["gold"].notna()]
+    human = {(r.scenario_id, r.job_id): int(r.gold) for r in raters.itertuples()}
+    #: The oracle grade recorded when the workspace was built, i.e. BEFORE the fix.
+    before = {(r.scenario_id, r.job_id): int(r.oracle_grade) for r in raters.itertuples()}
+
+    config = load_config("configs/experiment_full.yaml", base_dir="configs")
+    catalog = load_catalog("data/processed/jobs.jsonl")
+    canonical = load_or_build_canonical_references(
+        "evaluation/data/scenarios.jsonl", "data/processed/jobs.jsonl", config)
+    graded = grade_catalog(catalog, canonical.references, config)
+    after = {(r.scenario_id, r.job_id): int(r.relevance_grade) for r in graded.itertuples()}
+
+    scenarios = sorted({key[0] for key in human})
+    rng = random.Random(SPLIT_SEED)
+    shuffled = list(scenarios)
+    rng.shuffle(shuffled)
+    cut = round(len(shuffled) * HOLDOUT_FRACTION)
+    holdout = sorted(shuffled[:cut])
+    dev = sorted(shuffled[cut:])
+
+    def side(scenario_ids: list[str]) -> dict[str, Any]:
+        keys = [k for k in sorted(human) if k[0] in set(scenario_ids) and k in after]
+        h = [human[k] for k in keys]
+        pre = [before[k] for k in keys]
+        post = [after[k] for k in keys]
+        return {
+            "scenarios": len(scenario_ids),
+            "judged_pairs": len(keys),
+            "kappa_before": _weighted_kappa(pre, h),
+            "kappa_after": _weighted_kappa(post, h),
+            "kappa_after_ci95": _bootstrap_kappa_ci(list(zip(post, h, strict=True))),
+            "exact_agreement_before": round(
+                sum(1 for a, b in zip(pre, h, strict=True) if a == b) / len(keys), 4)
+            if keys else None,
+            "exact_agreement_after": round(
+                sum(1 for a, b in zip(post, h, strict=True) if a == b) / len(keys), 4)
+            if keys else None,
+            "oracle_more_generous_after": sum(
+                1 for a, b in zip(post, h, strict=True) if b < a),
+            "oracle_stricter_after": sum(
+                1 for a, b in zip(post, h, strict=True) if b > a),
+            "grades_changed_by_the_fix": sum(1 for k in keys if before[k] != after[k]),
+        }
+
+    return {
+        "split": {
+            "seed": SPLIT_SEED,
+            "unit": "scenario",
+            "holdout_fraction": HOLDOUT_FRACTION,
+            "dev_scenarios": dev,
+            "holdout_scenarios": holdout,
+        },
+        "dev": side(dev),
+        "holdout": side(holdout),
+        "all": side(scenarios),
+        "interpretation": (
+            "NOT a pre-registered held-out estimate: the guaranteed-minimum salary fix was "
+            "made after inspecting the disagreement over all judged pairs, so both sides "
+            "had been seen. Read the dev/holdout comparison as a stability check -- the fix "
+            "has no fitted parameters, so agreement between the two sides indicates the "
+            "improvement is a property of the rule rather than of particular pairs. The "
+            "split is frozen here so that the NEXT oracle change can be evaluated on a side "
+            "it has not seen."
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
@@ -138,6 +274,7 @@ def main() -> int:
     result = {
         "relevance": relevance_analysis(),
         "claims": claim_analysis(),
+        "oracle_calibration": oracle_calibration(),
         "forbidden_readings": [
             "Do NOT report validator_vs_human_kappa = 0.000 as chance-level agreement. "
             "It is degenerate: the validator is a constant all-supported predictor.",
@@ -165,6 +302,17 @@ def main() -> int:
     for name, stats in c["by_claim_type"].items():
         print(f"    {name:<22} n={stats['n']:<6} supported_rate={stats['supported_rate']:.4f} "
               f"unsupported={stats['unsupported']}")
+
+    cal = result["oracle_calibration"]
+    print("\n=== oracle calibration (frozen scenario-level split) ===")
+    print(f"  seed {cal['split']['seed']}, holdout fraction "
+          f"{cal['split']['holdout_fraction']}")
+    for name in ("dev", "holdout", "all"):
+        s = cal[name]
+        ci = s["kappa_after_ci95"]
+        print(f"  {name:<8} scenarios={s['scenarios']:<3} pairs={s['judged_pairs']:<4} "
+              f"kappa {s['kappa_before']:.4f} -> {s['kappa_after']:.4f} "
+              f"[{ci['low']}, {ci['high']}]  changed={s['grades_changed_by_the_fix']}")
 
     if not args.write:
         print("\npass --write to persist")

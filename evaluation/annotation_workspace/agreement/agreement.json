@@ -52,6 +52,105 @@
     "Do NOT report validator_vs_human_kappa = 0.000 as chance-level agreement. It is degenerate: the validator is a constant all-supported predictor.",
     "Do NOT quote the human ranking metrics as an unbiased effect estimate. The human label universe is the 368 returned pairs, while the oracle grades the whole catalogue, so NDCG's ideal DCG is computed over a different pool. It is an agreement diagnostic."
   ],
+  "oracle_calibration": {
+    "all": {
+      "exact_agreement_after": 0.8288,
+      "exact_agreement_before": 0.7283,
+      "grades_changed_by_the_fix": 37,
+      "judged_pairs": 368,
+      "kappa_after": 0.9516475815827613,
+      "kappa_after_ci95": {
+        "high": 0.963,
+        "low": 0.939
+      },
+      "kappa_before": 0.7516908060947479,
+      "oracle_more_generous_after": 58,
+      "oracle_stricter_after": 5,
+      "scenarios": 42
+    },
+    "dev": {
+      "exact_agreement_after": 0.8293,
+      "exact_agreement_before": 0.7195,
+      "grades_changed_by_the_fix": 27,
+      "judged_pairs": 246,
+      "kappa_after": 0.9555968128722828,
+      "kappa_after_ci95": {
+        "high": 0.9676,
+        "low": 0.9409
+      },
+      "kappa_before": 0.7397882765098627,
+      "oracle_more_generous_after": 41,
+      "oracle_stricter_after": 1,
+      "scenarios": 29
+    },
+    "holdout": {
+      "exact_agreement_after": 0.8279,
+      "exact_agreement_before": 0.7459,
+      "grades_changed_by_the_fix": 10,
+      "judged_pairs": 122,
+      "kappa_after": 0.9426039910612773,
+      "kappa_after_ci95": {
+        "high": 0.9669,
+        "low": 0.9089
+      },
+      "kappa_before": 0.7777433233846274,
+      "oracle_more_generous_after": 17,
+      "oracle_stricter_after": 4,
+      "scenarios": 13
+    },
+    "interpretation": "NOT a pre-registered held-out estimate: the guaranteed-minimum salary fix was made after inspecting the disagreement over all judged pairs, so both sides had been seen. Read the dev/holdout comparison as a stability check -- the fix has no fitted parameters, so agreement between the two sides indicates the improvement is a property of the rule rather than of particular pairs. The split is frozen here so that the NEXT oracle change can be evaluated on a side it has not seen.",
+    "split": {
+      "dev_scenarios": [
+        "SC-A-01",
+        "SC-A-02",
+        "SC-A-03",
+        "SC-A-06",
+        "SC-B-02",
+        "SC-B-03",
+        "SC-B-04",
+        "SC-B-05",
+        "SC-C-03",
+        "SC-C-04",
+        "SC-C-05",
+        "SC-D-01",
+        "SC-D-02",
+        "SC-D-04",
+        "SC-D-05",
+        "SC-D-06",
+        "SC-D-07",
+        "SC-D-08",
+        "SC-D-09",
+        "SC-D-11",
+        "SC-D-12",
+        "SC-E-03",
+        "SC-E-04",
+        "SC-E-05",
+        "SC-F-01",
+        "SC-F-04",
+        "SC-G-02",
+        "SC-H-01",
+        "SC-H-03"
+      ],
+      "holdout_fraction": 0.3,
+      "holdout_scenarios": [
+        "SC-A-04",
+        "SC-A-05",
+        "SC-B-01",
+        "SC-C-01",
+        "SC-C-02",
+        "SC-D-03",
+        "SC-D-10",
+        "SC-E-01",
+        "SC-E-02",
+        "SC-F-02",
+        "SC-F-03",
+        "SC-G-01",
+        "SC-H-02"
+      ],
+      "seed": 20260731,
+      "unit": "scenario"
+    }
+  },
   "relevance": {
     "confusion_matrix_oracle_rows_human_cols": {
       "oracle_0": {
