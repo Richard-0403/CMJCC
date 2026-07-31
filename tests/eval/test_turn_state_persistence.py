@@ -2,22 +2,29 @@
 
 Two kinds of test live here on purpose.
 
-The GUARDS pass today. They pin properties that currently hold for a reason P0-2 is going
-to remove: ``_merge_prior_dialogue`` re-parses every earlier utterance on every turn, so an
-earlier "onsite only" is re-extracted and re-classified as hard each time. Replacing that
-with a typed event history is the right fix -- re-parsing loses the original extraction,
-and in hybrid mode a model's extraction can be silently replaced by the rule extractor's --
-but it is also load-bearing today. Without these guards, a change that removes re-parsing
-without carrying strength forward would let hard constraints from earlier turns quietly
-become absent, which widens the candidate pool and shows up as a metric shift rather than
-as an error.
+The GUARDS pin OUTCOMES, not the mechanism that produces them. They were written while
+``_merge_prior_dialogue`` still re-parsed every earlier utterance on each turn, to make sure
+that whatever replaced it carried constraint STRENGTH forward: a change that stopped
+re-parsing without preserving strength would let an earlier hard constraint quietly go
+absent, which widens the candidate pool and surfaces as a metric shift rather than an error.
+They did their job -- re-parsing is gone (``_prior_dialogue_preferences`` reads each turn's
+stored ``extraction_snapshot``) and every guard here still passes unchanged.
 
 The second group was the P0-2 entry criterion and failed when it was written: an explicit
 relaxation could not downgrade a hard constraint, and ``DialogueTurn.evidence_ids`` was
-empty on every turn. Both are fixed, so the whole module is unmarked and in the default
-suite. The architectural half of P0-2 -- a typed event history replacing the re-parsing of
-old utterances, and repository rehydration -- is still open, which is exactly what the
-guards above are here to protect.
+empty on every turn. Both are fixed.
+
+Current P0-2 status, because the previous version of this docstring outlived its facts and
+was later cited as evidence that the re-parsing was still in place:
+
+* DONE -- per-turn extraction snapshots replace re-parsing history; evidence, conflict
+  detection and the durable write-back are current-turn only; explicit relaxation is the
+  only path from hard to soft. Asserted in
+  ``tests/eval/test_prior_turn_extraction_snapshot.py``.
+* NOT DONE, and deliberately out of scope -- a generic typed event reducer, and
+  deterministic state recovery after a process restart. Neither is exercised by the
+  experiment: 0 of the 42 authoritative scenarios declare ``session_breaks``, and a session
+  break opens a new session inside the same process. Nothing may claim support for either.
 """
 
 from __future__ import annotations
