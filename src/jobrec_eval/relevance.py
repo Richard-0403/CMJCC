@@ -32,7 +32,19 @@ from jobrec.domain.constraints import JobContextState
 from jobrec.domain.job import JobPosting
 from jobrec.taxonomy import canonical_role, canonical_skill
 
-ORACLE_VERSION = "1.0.0"
+#: Version of the relevance GRADING function in this module.
+#:
+#: 2.0.0 -- salary threshold semantics. Up to 1.0.0 a request like "at least RM4000" was
+#: satisfied by range OVERLAP, so a job paying RM3000-RM4500 counted as meeting it; the
+#: threshold is now read against the job's guaranteed minimum. This moved 182 of 8400
+#: scenario-job grades, all in the same direction (previously over-generous), so labels
+#: produced by 1.x are NOT comparable with labels produced by 2.x and must not be pooled
+#: or diffed as if the difference were noise. Any stored artifact still recording 1.0.0
+#: predates the fix.
+#:
+#: Bumped when the grading function's OUTPUT for unchanged inputs can change. A scenario
+#: or catalog edit is not a reason to bump: those move the inputs fingerprint instead.
+ORACLE_VERSION = "2.0.0"
 
 
 # NOTE: the bundle-derived ``build_references`` that used to live here is gone on

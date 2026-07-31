@@ -84,7 +84,20 @@ from jobrec.utils.hashing import sha256_of_bytes, stable_hash
 #: scenario or the catalog changes -- those move the input fingerprint instead). A
 #: frozen artifact carrying a different version is rejected rather than reused, so a
 #: derivation change can never be masked by a stale file.
-CANONICAL_ORACLE_VERSION = "3.0.0"
+#:
+#: 4.0.0 -- eligibility now reads a salary threshold against the job's GUARANTEED MINIMUM
+#: instead of accepting any overlapping range (see
+#: :data:`jobrec_eval.relevance.ORACLE_VERSION` 2.0.0). This is the case the version guard
+#: exists for: the fix changed the derivation without touching a single scenario or job, so
+#: the inputs fingerprint alone would still have matched and the pre-fix
+#: ``canonical_oracle_scenarios.json`` would have been reused in silence, re-grading the
+#: re-run against exactly the labels being corrected. Bumping invalidates it, so the next
+#: analysis raises :class:`StaleCanonicalOracleError` and the reference must be rebuilt.
+#:
+#: Labels from 3.0.0 and earlier are pre-fix and are not comparable with 4.x labels; the
+#: sealed thesis artifacts record 3.0.0 and stay valid as a record of what was run, not as
+#: a baseline to diff against 4.x grades.
+CANONICAL_ORACLE_VERSION = "4.0.0"
 
 #: Scenario field carrying the AUTHORITATIVE reference for that scenario: what the
 #: candidate is taken to have asked for, and which of those statements are hard. When it is
