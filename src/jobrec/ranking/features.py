@@ -104,12 +104,22 @@ def salary_preference(active: ActiveSearchState, job: JobPosting, salary_scale: 
         if penalize_unknown:
             return FeatureResult(None, 0.5, "salary_unknown_penalized", job_fields=["salary_min"])
         return FeatureResult(None, 0.0, "salary_unknown", applicable=False)
+    # ``job_fields`` names the field the comparison actually used, and it used to name the
+    # RAW ``salary_min``. That field is in the posting's own currency and period, so a claim
+    # citing it as evidence for "salary meets your stated minimum" showed a reader
+    # ``job_posting:salary_min=1350`` against a stated 4000 -- while the comparison had
+    # correctly used the normalised 4725 MYR. The conclusion was right and the evidence
+    # could not support it, which is how 275 of these claims came to be adjudicated
+    # unsupported by human raters. Cite the projection that was compared.
     if jmin is not None and jmin >= cmin:
-        return FeatureResult(jmin, 1.0, "salary_meets_min", job_fields=["salary_min"])
+        return FeatureResult(jmin, 1.0, "salary_meets_min",
+                             job_fields=["salary_min_monthly_myr"])
     top = jmax if jmax is not None else jmin
     if top is not None:
         score = max(0.0, min((top - cmin) / max(salary_scale, 1.0), 1.0))
-        return FeatureResult(top, round(score, 4), "salary_partial", job_fields=["salary_min", "salary_max"])
+        return FeatureResult(top, round(score, 4), "salary_partial",
+                             job_fields=["salary_min_monthly_myr",
+                                         "salary_max_monthly_myr"])
     return FeatureResult(None, 0.0, "salary_unknown", applicable=False)
 
 

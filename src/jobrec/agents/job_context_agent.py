@@ -265,18 +265,35 @@ class JobContextAgent:
         return ConstraintOutcome.FAIL, job.work_mode, "work_mode_mismatch"
 
     def _check_salary(self, job, expected) -> tuple[ConstraintOutcome, object, str]:
+        """Guaranteed-minimum semantics: the posting's FLOOR must clear the stated floor.
+
+        "at least RM4000" is a statement about what the candidate will be guaranteed, so it
+        is satisfied only when ``salary_min_monthly_myr >= 4000``. This used to accept a
+        merely OVERLAPPING range: a posting advertising 3000-4500 passed a 4000 minimum via
+        an outcome called ``salary_range_crosses_min``, on the strength of a ceiling the
+        candidate has no claim to. The consequence was systematic, not occasional -- every
+        salary request was affected the same way, and because the automatic oracle grades
+        through this same method the over-generous reading became ground truth as well, so
+        nothing downstream could see it. Human adjudication is what surfaced it: the raters
+        applied guaranteed-minimum and were stricter than the oracle on 95 of 368 pairs.
+
+        A missing posting minimum is UNKNOWN, never substituted by the maximum. Whether
+        UNKNOWN then passes or fails is the constraint's declared ``unknown_policy``, which
+        is the caller's decision to record, not this comparison's to guess.
+
+        Comparison is in ``salary_*_monthly_myr``: the normalised monthly-MYR projection,
+        so a posting quoted in SGD per month is comparable with a request in MYR.
+        """
         cmin = float(expected)
-        jmax = job.salary_max_monthly_myr
         jmin = job.salary_min_monthly_myr
-        if jmax is None and jmin is None:
-            return ConstraintOutcome.UNKNOWN, None, "salary_unknown"
-        top = jmax if jmax is not None else jmin
-        bottom = jmin if jmin is not None else jmax
-        if top is not None and top < cmin:
-            return ConstraintOutcome.FAIL, {"min": jmin, "max": jmax}, "salary_below_min"
-        if bottom is not None and bottom >= cmin:
-            return ConstraintOutcome.PASS, {"min": jmin, "max": jmax}, "salary_meets_min"
-        return ConstraintOutcome.PASS, {"min": jmin, "max": jmax}, "salary_range_crosses_min"
+        jmax = job.salary_max_monthly_myr
+        observed = {"min": jmin, "max": jmax, "compared_field": "salary_min_monthly_myr",
+                    "threshold": cmin}
+        if jmin is None:
+            return ConstraintOutcome.UNKNOWN, observed, "salary_minimum_unknown"
+        if jmin >= cmin:
+            return ConstraintOutcome.PASS, observed, "salary_meets_min"
+        return ConstraintOutcome.FAIL, observed, "salary_below_min"
 
     def _check_experience(self, job, expected) -> tuple[ConstraintOutcome, object, str]:
         cand_years = expected.get("years")
