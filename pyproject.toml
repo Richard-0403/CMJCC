@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jobrec-cmjcc"
-version = "0.1.0"
+# Kept in step with jobrec.CODE_VERSION and jobrec_eval.EVAL_VERSION (the audit freeze).
+version = "0.2.0"
 description = "Agent-Oriented Conversational Job Recommendation research prototype with the Candidate-Memory and Job-Context Connector (CMJCC)."
 readme = "README.md"
 requires-python = ">=3.11"

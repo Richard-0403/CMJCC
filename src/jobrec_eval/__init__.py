@@ -13,5 +13,9 @@ Integrity notes (see the evaluation guide, sections 0 and 30):
   mean without the paired structure.
 """
 
-__version__ = "0.1.0"
-EVAL_VERSION = "0.1.0"
+#: 0.2.0 -- kept in step with :data:`jobrec.CODE_VERSION` at the audit freeze. The analysis
+#: side changed too: claims now carry a structured proposition and are scored on it, so
+#: grounding, abstention and the claim-level agreement figures are computed from different
+#: inputs than under 0.1.0 and are not comparable with it.
+__version__ = "0.2.0"
+EVAL_VERSION = "0.2.0"
