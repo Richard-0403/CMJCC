@@ -1,5 +1,6 @@
-.PHONY: install lint typecheck test test-unit test-e2e test-perf test-postgres test-pg \
-        prepare-data build-index serve demo run-experiments export-artifacts clean
+.PHONY: install gate-local gate-list lint typecheck test test-unit test-e2e test-perf \
+        test-postgres test-pg prepare-data build-index serve demo run-experiments \
+        export-artifacts clean
 
 VENV ?= .venv
 PY = $(VENV)/bin/python
@@ -10,15 +11,25 @@ install:
 	$(PIP) install --upgrade pip
 	$(PIP) install -e ".[dev]"
 
+# The gate. scripts/preflight.py owns the definition of every check, and CI calls the
+# same script with --only per job, so a green local run and a green CI run mean the same
+# thing. The individual targets below delegate to it rather than re-spelling the
+# commands, which is how they drifted apart before: this file used to lint a narrower
+# path set, swallow mypy failures with `|| true`, and report coverage with no threshold.
+gate-local:
+	$(PY) scripts/preflight.py
+
+gate-list:
+	$(PY) scripts/preflight.py --list
+
 lint:
-	$(VENV)/bin/ruff check src tests
+	$(PY) scripts/preflight.py --only lint
 
 typecheck:
-	$(VENV)/bin/mypy src || true
+	$(PY) scripts/preflight.py --only typecheck
 
 test:
-	$(VENV)/bin/coverage run -m pytest -m "not postgres and not perf"
-	$(VENV)/bin/coverage report --include="src/jobrec/*"
+	$(PY) scripts/preflight.py --only tests
 
 test-unit:
 	$(VENV)/bin/pytest tests/unit tests/contract -q

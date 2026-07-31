@@ -46,8 +46,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # Every gate below calls scripts/preflight.py, which is also what `make gate-local`
+      # runs. The commands are defined there and nowhere else, so a green local gate and a
+      # green CI gate mean the same thing. Previously each was spelled out twice, and they
+      # had already diverged: this job linted src+tests+scripts while the Makefile linted
+      # src+tests only.
       - name: Lint (ruff)
-        run: ruff check src tests scripts
+        run: python scripts/preflight.py --only lint
 
       - name: Secret scan (no committed keys)
         run: |
@@ -82,37 +87,15 @@ jobs:
       # reproducible: an unpinned checker changes the verdict on unchanged code
       # whenever a new release infers more precisely.
       #
-      # src currently carries 14 pre-existing annotation errors (identical on Linux
-      # and Windows), so the gate is a ratchet: it fails when mypy cannot run at all
-      # and when the error count rises above the ceiling. Lower MYPY_MAX_ERRORS as
-      # errors are fixed.
-      - name: Type check (mypy)
-        env:
-          MYPY_MAX_ERRORS: "14"
-        run: |
-          set +e
-          mypy src 2>&1 | tee mypy.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ge 2 ]; then
-            echo "::error::mypy could not complete the type check (exit $status)"
-            exit 1
-          fi
-          errors=$(sed -n 's/^Found \([0-9][0-9]*\) error.*/\1/p' mypy.log | tail -n1)
-          errors=${errors:-0}
-          echo "mypy reported ${errors} error(s); ceiling is ${MYPY_MAX_ERRORS}"
-          if [ "$errors" -gt "$MYPY_MAX_ERRORS" ]; then
-            echo "::error::mypy errors increased to ${errors} (ceiling ${MYPY_MAX_ERRORS})"
-            exit 1
-          fi
-
-      - name: Upload mypy log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mypy-log
-          path: mypy.log
-          if-no-files-found: ignore
+      # The ratchet used to be an inline shell block here, which is why the Makefile
+      # could get away with `mypy src || true`: there was nothing shared to disagree
+      # with. It now lives in scripts/mypy_ratchet.py, which owns the ceiling (14
+      # pre-existing annotation errors, identical on Linux and Windows) and separates
+      # "mypy could not complete" from "more errors than the ceiling". Lower
+      # DEFAULT_MAX_ERRORS there as errors are fixed; do not set MYPY_MAX_ERRORS here,
+      # or the ceiling would have two sources again.
+      - name: Type check (mypy ratchet)
+        run: python scripts/preflight.py --only typecheck
 
   tests:
     name: Unit tests + coverage
@@ -134,9 +117,7 @@ jobs:
       # Postgres-backed tests need a database; perf tests (R28) are latency
       # measurements and are excluded to keep the gate fast.
       - name: Tests (deterministic) + coverage
-        run: |
-          coverage run -m pytest -m "not postgres and not perf"
-          coverage report --include="src/jobrec/*" --fail-under=85
+        run: python scripts/preflight.py --only tests
 
       - name: Upload failure artifacts
         if: failure()
@@ -184,11 +165,14 @@ jobs:
       - name: Validate catalog + scenarios (data quality)
         run: |
           mkdir -p artifacts
-          python scripts/validate_catalog.py \
-            --catalog data/processed/jobs.jsonl \
-            --scenarios evaluation/data/scenarios.jsonl \
-            --config configs/experiment_full.yaml \
-            --report-dir artifacts
+          python scripts/preflight.py --only data-quality
+
+      # The authoritative scenario set carries the 42 declared references the canonical
+      # oracle is a pure function of, and scripts/build_eval_scenarios.py emits no
+      # reference block -- so this asserts the file is intact AND that the builder still
+      # refuses to write it.
+      - name: Authoritative scenarios are intact
+        run: python scripts/preflight.py --only scenarios
 
       - name: Upload data-quality report
         if: always()
