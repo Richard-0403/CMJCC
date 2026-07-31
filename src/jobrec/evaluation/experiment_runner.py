@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,7 +19,13 @@ import yaml
 from ..app_service import AppService
 from ..catalog import catalog_hash, load_catalog
 from ..config import AppConfig
-from ..domain.enums import ResponseType
+from ..domain.enums import ResponseType, RunMode
+from ..llm.remote_provider import (
+    BASE_URL_ENV,
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    MODEL_ENV,
+)
 from ..orchestration.feature_flags import FeatureFlags
 from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
@@ -30,6 +37,7 @@ from .experiment_identity import (
     code_identity,
     experiment_id,
     guard_output_dir,
+    runtime_identity,
 )
 from .exporters import (
     _extracted_value_view,
@@ -139,11 +147,19 @@ class ExperimentRunner:
         # Input gate, before a single run is spent (R33.1).
         assert_clarification_answers_declared(self.scenarios)
         identity = code_identity()
+        # The catalog is hashed here rather than in ``_write_experiment_snapshot`` because
+        # the id has to know it BEFORE the output directory is chosen; the snapshot writer
+        # is handed the same value so the manifest and the id cannot disagree.
+        chash = catalog_hash(load_catalog(self.catalog_path))
+        runtime = self._runtime_identity(chash)
         exp_id = experiment_id(
             variants=variants,
             scenario_ids=[s["scenario_id"] for s in self.scenarios],
             config_hash=self.config.config_hash(),
             identity=identity,
+            # The catalog, the prompts and the LLM backend: run inputs that no source
+            # fingerprint and no config hash covers (see ``runtime_identity``).
+            runtime=runtime,
             # The scenarios' CONTENT, so editing a scenario -- notably the authoritative
             # reference the oracle grades against, or a declared clarification answer the
             # simulated user feeds back -- yields a new experiment instead of colliding
@@ -202,7 +218,7 @@ class ExperimentRunner:
         # variant. This makes the full/no_memory/no_context comparison (and the
         # five-variant path) reconstructable from the experiment directory alone,
         # without depending on the original input files (R1.2, R1.3, R32.3).
-        snapshot = self._write_experiment_snapshot(exp_dir)
+        snapshot = self._write_experiment_snapshot(exp_dir, catalog_digest=chash)
         # Reference each per-run manifest (written by write_run_bundle) so the
         # experiment-level manifest ties the batch to its reproducibility data.
         run_manifests = [
@@ -226,6 +242,11 @@ class ExperimentRunner:
             "catalog_hash": snapshot["catalog_hash"],
             "scenarios_hash": snapshot["scenarios_hash"],
             "prompt_hash": prompt_hash(),
+            # The run inputs that are neither source nor resolved config, recorded as the
+            # exact dict the experiment id was derived from, so the id can be re-derived
+            # from this manifest offline instead of being taken on trust. Carries the LLM
+            # endpoint's HOST only and never the API key.
+            "runtime_identity": runtime,
             "created_at": to_iso(utcnow()),
             # Code identity of the run (commit_hash / code_version / git_dirty /
             # source_fingerprint): what makes two experiment artifacts distinguishable
@@ -238,7 +259,35 @@ class ExperimentRunner:
         self._write_checksums(exp_dir)
         return manifest
 
-    def _write_experiment_snapshot(self, exp_dir: Path) -> dict[str, Any]:
+    def _runtime_identity(self, chash: str) -> dict[str, Any]:
+        """The non-source, non-config run inputs for the experiment id and the manifest.
+
+        The LLM backend is only named when the run mode actually calls one. In
+        ``deterministic`` mode no request is ever issued, so ``JOBREC_LLM_MODEL`` and
+        ``JOBREC_LLM_BASE_URL`` cannot influence a single bundle -- folding them in anyway
+        would make the deterministic experiment id depend on the operator's shell, so the
+        same deterministic batch would land under a different id on a machine that happens
+        to export those variables, which is the opposite of reproducible.
+
+        The environment is read through :mod:`jobrec.llm.remote_provider`'s own constants
+        and defaults, so the recorded backend cannot drift from the one that answers.
+        """
+        calls_llm = self.config.llm.mode is not RunMode.DETERMINISTIC
+        return runtime_identity(
+            catalog_hash=chash,
+            prompt_hash=prompt_hash(),
+            llm_mode=str(self.config.llm.mode),
+            llm_provider=self.config.llm.provider,
+            llm_model=(os.environ.get(MODEL_ENV, DEFAULT_MODEL) if calls_llm else None),
+            # Reduced to its host by ``runtime_identity``; a credential embedded in the
+            # base URL never reaches the id or the manifest.
+            llm_endpoint=(os.environ.get(BASE_URL_ENV, DEFAULT_BASE_URL)
+                          if calls_llm else None),
+        )
+
+    def _write_experiment_snapshot(
+        self, exp_dir: Path, *, catalog_digest: str | None = None
+    ) -> dict[str, Any]:
         """Write the shared, experiment-level reproducibility artifacts.
 
         Emits exactly one copy each of the resolved config, the catalog, and the
@@ -254,9 +303,11 @@ class ExperimentRunner:
         )
 
         # (b) catalog snapshot -- copy the exact catalog file used for the batch
-        # and compute its content hash via the canonical catalog hasher.
-        jobs = load_catalog(self.catalog_path)
-        chash = catalog_hash(jobs)
+        # and record its content hash from the canonical catalog hasher. ``run`` already
+        # needed the hash to derive the experiment id, so it is reused rather than
+        # recomputed: one hash, one value in both the id and the manifest.
+        chash = (catalog_digest if catalog_digest is not None
+                 else catalog_hash(load_catalog(self.catalog_path)))
         catalog_snapshot = exp_dir / "catalog.jsonl"
         catalog_snapshot.write_text(Path(self.catalog_path).read_text())
 

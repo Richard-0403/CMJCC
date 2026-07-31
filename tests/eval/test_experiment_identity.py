@@ -281,6 +281,22 @@ def test_experiment_manifest_records_the_code_identity(tiny_inputs, tmp_path: Pa
     assert on_disk["code_version"]
     # The id is derived from that identity, so the directory name matches the recorded code.
     assert exp_dir.name == manifest["experiment_id"]
+    # The runtime block is recorded as the dict the id was derived from, so the id can be
+    # re-derived from the manifest offline. Asserted here because the digest is only
+    # trustworthy if what it consumed is written down: see
+    # ``tests/eval/test_experiment_identity_runtime.py`` for the fields themselves.
+    recorded = on_disk["runtime_identity"]
+    assert list(recorded) == list(ident.RUNTIME_IDENTITY_FIELDS)
+    assert recorded["catalog_hash"] == on_disk["catalog_hash"]
+    assert recorded["prompt_hash"] == on_disk["prompt_hash"]
+    assert ident.experiment_id(
+        variants=on_disk["variants"],
+        scenario_ids=[_SCENARIO["scenario_id"]],
+        config_hash=on_disk["config_hash"],
+        identity=identity,
+        scenarios_fingerprint=on_disk["scenarios_hash"],
+        runtime=recorded,
+    ) == manifest["experiment_id"]
     # ... and each run bundle repeats the identity, so a single bundle is self-describing.
     run_manifest = json.loads((exp_dir / on_disk["run_manifests"][0]).read_text())
     assert run_manifest["commit_hash"] == identity["commit_hash"]

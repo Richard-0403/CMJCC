@@ -45,6 +45,7 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .. import CODE_VERSION
 from ..utils.hashing import sha256_of_bytes, stable_hash
@@ -94,6 +95,89 @@ CODE_IDENTITY_FIELDS: tuple[str, ...] = (
 #: writes it after every run has landed, so a crashed run leaves no manifest and may be
 #: re-run freely.
 EXPERIMENT_MANIFEST_FILENAME = "experiment_manifest.json"
+
+#: Keys of the dict returned by :func:`runtime_identity`, in manifest order.
+#:
+#: These are the run inputs that live OUTSIDE the source tree and outside the resolved
+#: config, so neither the code fingerprint nor ``config_hash`` moves when they change:
+#:
+#: * ``catalog_hash`` -- the jobs that were searched. Editing the catalog changes every
+#:   ranking and every relevance grade, but it is a data file, not source.
+#: * ``prompt_hash`` -- the prompt texts. They decide what an LLM was asked, and they are
+#:   templates rather than config values.
+#: * ``llm_mode`` / ``llm_provider`` -- how LLM-dependent behaviour was executed. These do
+#:   sit in the config, and are repeated here so the runtime block is readable on its own.
+#: * ``llm_model`` / ``llm_endpoint`` -- read from the ENVIRONMENT by
+#:   :class:`jobrec.llm.remote_provider.RemoteLLMProvider`, so before this block a hybrid
+#:   batch answered by one model and a hybrid batch answered by another shared one
+#:   experiment id and the overwrite guard read the second as a re-run of the first.
+RUNTIME_IDENTITY_FIELDS: tuple[str, ...] = (
+    "catalog_hash",
+    "prompt_hash",
+    "llm_mode",
+    "llm_provider",
+    "llm_model",
+    "llm_endpoint",
+)
+
+
+def endpoint_host(endpoint: str | None) -> str | None:
+    """The ``host[:port]`` of an endpoint URL, or ``None`` when there is no endpoint.
+
+    Deliberately lossy. The endpoint identifies WHICH backend answered, which belongs in
+    the identity, but a base URL is also the one run input that can carry a credential:
+    ``https://key:secret@host/v1`` and ``https://host/v1?api-key=...`` are both accepted
+    by OpenAI-compatible clients. Reducing it to the host drops userinfo, path and query
+    in one step, so no code path can put a key into a manifest, a digest or a log line by
+    recording "just the endpoint". The port is kept because two proxies on one host are
+    two different backends.
+    """
+    if not endpoint:
+        return None
+    raw = str(endpoint).strip()
+    if not raw:
+        return None
+    # A bare "host:port" parses as scheme:path, so give it an authority to live in.
+    parsed = urlsplit(raw if "//" in raw else f"//{raw}")
+    host = parsed.hostname  # drops userinfo and lowercases; never the password
+    if not host:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:  # malformed port -- the host alone still identifies the backend
+        port = None
+    return f"{host}:{port}" if port else host
+
+
+def runtime_identity(
+    *,
+    catalog_hash: str,
+    prompt_hash: str,
+    llm_mode: str,
+    llm_provider: str,
+    llm_model: str | None = None,
+    llm_endpoint: str | None = None,
+) -> dict[str, Any]:
+    """The run inputs that are neither source code nor resolved config.
+
+    Returned as a dict so the same value both enters :func:`experiment_id` and is recorded
+    in the experiment manifest: the id can then be re-derived from the manifest instead of
+    being taken on trust.
+
+    ``llm_endpoint`` is reduced to its host by :func:`endpoint_host` before it is stored,
+    so a credential embedded in a base URL never reaches the manifest or the digest. The
+    API KEY itself is not a parameter of this function and must never become one: it does
+    not identify an experiment (the same key answers every run) and it is the one value
+    that must not be written down.
+    """
+    return {
+        "catalog_hash": catalog_hash,
+        "prompt_hash": prompt_hash,
+        "llm_mode": llm_mode,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_endpoint": endpoint_host(llm_endpoint),
+    }
 
 
 def _git(*args: str) -> str | None:
@@ -246,6 +330,7 @@ def experiment_id(
     config_hash: str,
     identity: dict[str, Any] | None = None,
     scenarios_fingerprint: str | None = None,
+    runtime: dict[str, Any] | None = None,
 ) -> str:
     """The content-addressed experiment id: ``exp-<12 hex>``.
 
@@ -268,6 +353,13 @@ def experiment_id(
     genuinely different experiments collided on one identity and the overwrite guard read
     the second as a re-run of the first. The scenario ids are kept alongside it so a
     changed SET is still distinguishable from changed CONTENT when reading the inputs.
+
+    ``runtime`` is :func:`runtime_identity`: the run inputs that are neither source nor
+    resolved config -- the catalog, the prompts, and the LLM backend named by the
+    environment. Without it the id was blind to all three, so re-pointing
+    ``JOBREC_LLM_MODEL`` at a different model, or editing the job catalog, produced a
+    genuinely different experiment under the OLD id, and the overwrite guard classified it
+    as an idempotent re-run. It carries no credential: see :func:`endpoint_host`.
     """
     identity = identity or code_identity()
     return "exp-" + stable_hash({
@@ -280,6 +372,7 @@ def experiment_id(
             "code_version": identity.get("code_version"),
             "execution_fingerprint": identity.get("execution_fingerprint"),
         },
+        "runtime": dict(runtime) if runtime else None,
     })[:12]
 
 
