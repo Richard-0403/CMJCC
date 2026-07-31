@@ -373,3 +373,57 @@ def test_no_evidence_at_all_is_unsupported(store):
     claim = _claim(claim_type="candidate_preference", predicate="candidate_preference",
                    field_name="salary_min", expected_value=4000, evidence_ids=[])
     assert semantic_status(claim, store) == "unsupported"
+
+
+# ============================== a model's multi-value answer must survive validation
+def test_a_two_value_work_mode_answer_is_fanned_out_not_discarded():
+    """"onsite or hybrid" from the model must reach the state as two modes.
+
+    Found on a hybrid smoke: SC-D-08's ``work_modes`` came back tagged ``rule_fallback``
+    while the model had named both modes correctly. The pipeline represents one stated value
+    per preference, models answer with a list, and field validation rejected the shape -- a
+    one-item list could be unwrapped by schema repair, two items could not, so the field fell
+    through to the rule extractor and was recorded UNCONFIRMED. The model's extraction was
+    right and was thrown away.
+    """
+    from jobrec.llm.field_validation import validate_extraction
+    from jobrec.llm.structured_output import parse_extraction_lenient
+
+    parsed = parse_extraction_lenient(
+        {"preferences": [{"field_name": "work_modes",
+                          "normalized_value": ["onsite", "hybrid"],
+                          "raw_text": "onsite or hybrid is fine",
+                          "proposed_strength": "hard", "polarity": "positive"}]},
+        utterance="onsite or hybrid is fine")
+
+    assert [p.normalized_value for p in parsed.preferences] == ["onsite", "hybrid"]
+    assert {str(p.proposed_strength) for p in parsed.preferences} == {"hard"}
+
+    validated, results = validate_extraction(parsed)
+    assert all(r.ok for r in results), [r for r in results if not r.ok]
+    assert not [w for w in validated.extraction_warnings if "single value" in w]
+    assert {str(p.normalized_value).casefold()
+            for p in validated.preferences} == {"onsite", "hybrid"}
+
+
+def test_a_single_value_answer_is_unchanged_by_the_fan_out():
+    from jobrec.llm.structured_output import parse_extraction_lenient
+
+    parsed = parse_extraction_lenient(
+        {"preferences": [{"field_name": "salary_min", "normalized_value": 4000,
+                          "raw_text": "at least RM4000", "proposed_strength": "hard"}]},
+        utterance="at least RM4000")
+    assert [p.normalized_value for p in parsed.preferences] == [4000]
+
+
+def test_a_list_arity_field_is_left_whole_for_its_own_normalizer():
+    """``skills_have`` fans out inside its normalizer, so it must not be split here too."""
+    from jobrec.llm.structured_output import parse_extraction_lenient
+
+    parsed = parse_extraction_lenient(
+        {"preferences": [{"field_name": "skills_have",
+                          "normalized_value": ["python", "sql"],
+                          "raw_text": "I know Python and SQL"}]},
+        utterance="I know Python and SQL")
+    assert len(parsed.preferences) == 1
+    assert parsed.preferences[0].normalized_value == ["python", "sql"]

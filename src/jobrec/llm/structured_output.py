@@ -26,6 +26,33 @@ def parse_extraction(payload: dict | str) -> ExtractedPreferenceSet:
         raise LLMInvalidJSON(f"extraction failed schema validation: {exc}") from exc
 
 
+def _stated_values(field_name: str, raw: object) -> list:
+    """The values a model's answer states for ``field_name``, one per preference.
+
+    A list on a SCALAR-arity field is fanned out; a list on a list-arity field is left
+    whole, because that field's normalizer is the thing meant to expand it. Anything else is
+    a single value. An empty container yields one ``None``, so "the model named the field
+    without a value" still reaches the ordinary absent-value handling instead of vanishing.
+    """
+    from .field_validation import field_arity
+
+    if not isinstance(raw, list | tuple | set | frozenset):
+        return [raw]
+    values = list(raw)
+    if not values:
+        return [None]
+    if field_arity(field_name) == "list":
+        return [values]
+    # A ONE-item list is left alone. The recovery ladder already unwraps it correctly, marks
+    # the value ``repaired`` and keeps it attributed to the model, and that rung is covered by
+    # its own tests -- fanning it out here would make the repair path unreachable and remove
+    # the coverage without fixing anything. Only 2+ items are fanned out, which is exactly
+    # the shape repair cannot resolve and which was therefore being discarded.
+    if len(values) == 1:
+        return [values]
+    return values
+
+
 def parse_extraction_lenient(payload: dict | str, utterance: str = "") -> ExtractedPreferenceSet:
     """Parse a minimal model JSON into an ExtractedPreferenceSet, filling the
     bookkeeping fields (confirmation/persistence/scope/confidence) with defaults.
@@ -70,17 +97,33 @@ def parse_extraction_lenient(payload: dict | str, utterance: str = "") -> Extrac
         except (TypeError, ValueError):
             confidence = 0.85
         confidence = min(max(confidence, 0.0), 1.0)
-        prefs.append(ExtractedPreference(
-            field_name=str(rp["field_name"]),
-            normalized_value=rp["normalized_value"],
-            raw_text=str(rp.get("raw_text", "")),
-            confidence=confidence,
-            confirmation_status=confirmation,
-            persistence_scope=PersistenceScope.ACTIVE_SEARCH,
-            proposed_strength=ConstraintStrength(strength),
-            polarity=polarity,
-            temporal_scope=temporal,
-        ))
+        field_name = str(rp["field_name"])
+        # One value per preference, which is the representation the rest of the pipeline is
+        # built on: a scalar-arity field holds ONE stated value and several values become
+        # several preferences (the rule extractor already fans out this way).
+        #
+        # Models do not honour that. They answer "onsite or hybrid" as a single preference
+        # whose value is a two-item list, and field validation then rejected the shape: a
+        # one-item list could be unwrapped by schema repair, two items could not, so the
+        # whole field fell through to the rule extractor and was recorded UNCONFIRMED. The
+        # model had extracted the constraint correctly and the value was discarded anyway --
+        # measured on a hybrid smoke, where SC-D-08's ``work_modes`` came back as
+        # ``rule_fallback`` while the model's answer named both modes.
+        #
+        # Fanning out here keeps the model's extraction and produces exactly the shape the
+        # contract asks for, instead of widening the contract to admit lists.
+        for value in _stated_values(field_name, rp["normalized_value"]):
+            prefs.append(ExtractedPreference(
+                field_name=field_name,
+                normalized_value=value,
+                raw_text=str(rp.get("raw_text", "")),
+                confidence=confidence,
+                confirmation_status=confirmation,
+                persistence_scope=PersistenceScope.ACTIVE_SEARCH,
+                proposed_strength=ConstraintStrength(strength),
+                polarity=polarity,
+                temporal_scope=temporal,
+            ))
     return ExtractedPreferenceSet(
         utterance_id=payload.get("utterance_id") or content_id("utt", utterance),
         preferences=prefs,
