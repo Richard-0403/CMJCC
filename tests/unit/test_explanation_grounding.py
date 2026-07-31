@@ -328,18 +328,37 @@ def test_ranking_reason_claims_trace_to_the_feature_that_justified_them(
 
 
 def test_skill_gap_claim_traces_to_the_required_skills_evidence(grounded: ExplainedTurn) -> None:
-    """The gap sentence names a skill the cited job evidence actually requires."""
+    """The gap cites BOTH sides of the comparison it describes.
+
+    Citing only the job's required_skills established that the role wants the skill and was
+    silent on whether the candidate has it -- so "not in your listed skills" asserted
+    something its evidence could not reach, and human raters adjudicated all 1883 of these
+    unsupported. The claim now also cites the candidate's recorded skills and says "not
+    recorded in your profile skills": a statement about the record, which is what the
+    evidence shows.
+    """
     (claim,) = grounded.claims_of("skill_gap")
 
     assert MISSING_SKILL in claim.text
+    assert "not recorded in your profile skills" in claim.text
     items = [grounded.store.get(e) for e in claim.evidence_ids]
     assert items and all(item is not None for item in items)
-    for item in items:
-        assert item.source == EvidenceSource.JOB_POSTING
+
+    job_side = [i for i in items if i.source == EvidenceSource.JOB_POSTING]
+    assert job_side, "the job's requirement is not evidenced"
+    for item in job_side:
         assert item.source_object_id == grounded.job.job_id
         assert item.field_name == "required_skills"
         assert MISSING_SKILL in item.normalized_value
+
+    candidate_side = [i for i in items if i.source != EvidenceSource.JOB_POSTING]
+    assert candidate_side, "the candidate's skills are not evidenced"
+    for item in candidate_side:
+        assert item.field_name == "skills_have"
+        assert MISSING_SKILL not in (item.normalized_value or [])
+
     assert MISSING_SKILL in grounded.ranked_job.skill_gaps
+    assert claim.semantic_status == "supported"
 
 
 def test_delivered_prose_is_backed_by_the_delivered_claims(grounded: ExplainedTurn) -> None:
@@ -420,9 +439,16 @@ def test_grounding_is_re_decided_and_the_callers_claims_are_left_untouched(store
     supported, so the flag on a delivered claim always reflects this pass, and the
     caller's own objects keep the status they came in with.
     """
+    # A candidate_preference claim: it asserts what the candidate asked for, and the
+    # evidence registered here is the candidate's own stated work mode. The type has to
+    # match the evidence now that semantic_status checks whether the KIND of evidence can
+    # carry the proposition -- a claim typed as being about the job cannot be established
+    # from a dialogue statement, which is what this fixture used to do.
     evidence_id = _register(store, "work_modes", ["hybrid"])
     stale = [
-        make_claim(text="You asked for a hybrid role.", evidence_ids=[evidence_id]).model_copy(
+        make_claim(claim_type="candidate_preference",
+                   text="You asked for a hybrid role.",
+                   evidence_ids=[evidence_id]).model_copy(
             update={"support_status": status}
         )
         for status in ("unknown", "unsupported")

@@ -492,12 +492,25 @@ def test_a_rater_cannot_write_another_raters_item_and_cannot_nominate_a_rater_id
     foreign = web.foreign_key(rater)
     client = web.client(rater)
 
+    # Snapshot first: the assertion is that the REFUSED post changed nothing, not that the
+    # item has never been written. Its rightful owner may legitimately have annotated it in
+    # an earlier test against this shared fixture, and asserting `is None` conflated the two
+    # -- which made the test depend on where this item happened to fall in the generated
+    # order, so an unrelated change to the item set could break it.
+    owners = [owner for owner in RATER_POOL if foreign in web.keys_for(owner)]
+    before = {owner: web.store.annotation(foreign, owner) for owner in owners}
+
     refused = client.post("/api/annotations", json={"item_key": foreign, "label": 1,
                                                    "duration_ms": 1000})
     assert refused.status_code == 404, refused.text
-    for owner in RATER_POOL:
-        if foreign in web.keys_for(owner):
-            assert web.store.annotation(foreign, owner) is None
+    for owner in owners:
+        after = web.store.annotation(foreign, owner)
+        assert (after.label if after else None) == (
+            before[owner].label if before[owner] else None)
+    # No separate check that the posting rater has no record: the store raises
+    # NotAssignedError for an item that is not theirs, which is the same refusal the 404
+    # above already established.
+    assert rater not in owners
 
     # A rater_id in the body is ignored: the write lands on the SESSION rater, always.
     mine = web.shared_key(rater, victim, kind=KIND_CLAIM)

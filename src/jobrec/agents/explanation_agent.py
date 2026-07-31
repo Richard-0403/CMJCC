@@ -10,7 +10,7 @@ skills, salaries) that are not present in the evidence package.
 from __future__ import annotations
 
 from ..config import AppConfig
-from ..domain.enums import ResponseType
+from ..domain.enums import ConfirmationStatus, EvidenceSource, ResponseType
 from ..domain.job import ActiveSearchState, JobPosting
 from ..domain.recommendation import (
     RecommendationDecision,
@@ -26,22 +26,86 @@ class ClaimValidationError(Exception):
     """Raised only when a *required* claim cannot be grounded (defensive)."""
 
 
+#: The evidence a claim type needs before its proposition follows, as
+#: ``claim_type -> (required source, required field predicate, why)``.
+#:
+#: The point of stating this per type is that the previous check could not distinguish
+#: "cites evidence" from "cites the RIGHT evidence", and the difference is where every
+#: known failure family lived.
+_CANDIDATE_SOURCES = {EvidenceSource.PROFILE, EvidenceSource.DIALOGUE}
+_JOB_SOURCES = {EvidenceSource.JOB_POSTING}
+
+#: Claim types whose proposition is about the CANDIDATE and therefore cannot be established
+#: from job-side evidence alone.
+_NEEDS_CANDIDATE_EVIDENCE = {"candidate_preference", "skill_gap"}
+#: Claim types whose proposition is about a JOB.
+_NEEDS_JOB_EVIDENCE = {"job_attribute", "ranking_reason", "skill_gap"}
+#: ``no_match_reason`` is a claim about the candidate's stated requirement, so it needs
+#: candidate-side evidence. It deliberately does NOT assert that the requirement caused the
+#: empty result: establishing causality needs a record of what each filtering stage removed,
+#: which does not exist yet (P0-5). The wording was changed to match what the evidence can
+#: carry rather than the claim being dropped -- dropping it would have left every no-match
+#: response with no reasons at all, trading an unsupported explanation for none.
+_NEEDS_CANDIDATE_EVIDENCE_ALSO = {"no_match_reason"}
+
+
+def semantic_status(claim: ResponseClaim, store: EvidenceStore) -> str:
+    """Does the resolved evidence entail ``claim``?
+
+    Returns ``"supported"``, ``"unsupported"`` or ``"unknown"``. ``"unknown"`` means the
+    checker has no rule for this claim type and declines to vouch for it, which is
+    deliberately not the same as passing it.
+    """
+    items = [store.get(e) for e in claim.evidence_ids]
+    resolved = [i for i in items if i is not None]
+    if not resolved:
+        return "unsupported"
+
+    # Provisional or contradicted evidence cannot carry an assertive claim.
+    if any(i.confirmation_status == ConfirmationStatus.UNCONFIRMED for i in resolved):
+        return "unsupported"
+
+    sources = {i.source for i in resolved}
+    needs_candidate = _NEEDS_CANDIDATE_EVIDENCE | _NEEDS_CANDIDATE_EVIDENCE_ALSO
+    if claim.claim_type in needs_candidate and not (sources & _CANDIDATE_SOURCES):
+        return "unsupported"
+    if claim.claim_type in _NEEDS_JOB_EVIDENCE and not (sources & _JOB_SOURCES):
+        return "unsupported"
+    if claim.claim_type in ("candidate_preference", "job_attribute", "constraint_result",
+                            "ranking_reason", "skill_gap", "no_match_reason"):
+        return "supported"
+    return "unknown"
+
+
 def validate_claims(
     claims: list[ResponseClaim], store: EvidenceStore
 ) -> tuple[list[ResponseClaim], list[ResponseClaim]]:
-    """Split claims into (supported, dropped).
+    """Split claims into (delivered, dropped), scoring trace AND semantics separately.
 
-    A claim is supported only when it has at least one evidence id and every id
-    resolves to a registered EvidenceItem.
+    ``trace_status`` is the old check: every cited id resolves. It is necessary and it was
+    never sufficient. For several claim types the builder registers the evidence it is about
+    to cite (see ``_job_field_evidence``), so resolution is true by construction and the
+    check could not fail -- which is why it marked all 11197 claims of the official pair
+    supported while human raters adjudicated 2349 of them unsupported.
+
+    A claim is delivered only when both dimensions pass. Anything else is dropped and keeps
+    the two verdicts, so a reader can tell a dangling reference from evidence that resolves
+    but does not establish the point.
     """
-    supported: list[ResponseClaim] = []
+    delivered: list[ResponseClaim] = []
     dropped: list[ResponseClaim] = []
     for claim in claims:
-        if claim.evidence_ids and all(store.exists(e) for e in claim.evidence_ids):
-            supported.append(claim.model_copy(update={"support_status": "supported"}))
-        else:
-            dropped.append(claim.model_copy(update={"support_status": "unsupported"}))
-    return supported, dropped
+        trace = ("supported"
+                 if claim.evidence_ids and all(store.exists(e) for e in claim.evidence_ids)
+                 else "unsupported")
+        semantic = semantic_status(claim, store) if trace == "supported" else "unsupported"
+        overall = "supported" if trace == "supported" and semantic == "supported" else (
+            "unknown" if semantic == "unknown" else "unsupported")
+        scored = claim.model_copy(update={"trace_status": trace,
+                                          "semantic_status": semantic,
+                                          "support_status": overall})
+        (delivered if overall == "supported" else dropped).append(scored)
+    return delivered, dropped
 
 
 class ExplanationAgent:
@@ -104,11 +168,28 @@ class ExplanationAgent:
                     lines.append(f"  - {text}")
                     claims.append(self._claim("ranking_reason", text, feat.evidence_ids, job.job_id))
             # skill gaps
+            #
+            # The wording used to be "the role requires X, which is not in your listed
+            # skills" while the only evidence cited was the job's required_skills. That
+            # evidence establishes the first half and is silent on the second: it cannot
+            # show a skill is ABSENT from the candidate. Human raters adjudicated all 1883
+            # of these unsupported, and they were right to -- the claim asserted something
+            # its evidence could not reach.
+            #
+            # Two changes. The claim now cites the candidate's recorded skills alongside the
+            # job's, so the comparison it describes is actually evidenced. And it asserts
+            # only what that evidence supports: the skill is not RECORDED in the profile,
+            # which is a statement about the record, not about the candidate's ability.
             for gap in rj.skill_gaps[:2]:
-                gap_ev = self._job_field_evidence(job, "required_skills")
-                text = f"Gap: the role requires {gap}, which is not in your listed skills."
+                gap_ev = [
+                    e for e in (self._job_field_evidence(job, "required_skills"),
+                                self._candidate_skills_evidence(active))
+                    if e
+                ]
+                text = (f"Gap: the role requires {gap}, which is not recorded in your "
+                        f"profile skills.")
                 lines.append(f"  - {text}")
-                claims.append(self._claim("skill_gap", text, [gap_ev] if gap_ev else [], job.job_id))
+                claims.append(self._claim("skill_gap", text, gap_ev, job.job_id))
             # unknown-field transparency
             if job.salary_min_monthly_myr is None and active.salary_min is not None:
                 text = "Note: this posting does not state a salary."
@@ -139,9 +220,17 @@ class ExplanationAgent:
         for field in active.hard_constraint_fields:
             ev = active.field_evidence_map.get(field, [])
             if ev:
+                # "limits the results" was a CAUSAL claim resting on evidence that only
+                # showed the constraint existed. The empty result may have come from the
+                # role scope, the location, an expired posting, or several constraints
+                # together, and nothing here could tell them apart -- human raters
+                # adjudicated all 156 of these unsupported. Restated as what the evidence
+                # does show: this requirement was applied as a hard filter. The causal
+                # form needs a per-stage record of what each filter removed, which is P0-5.
                 claims.append(self._claim(
                     "no_match_reason",
-                    f"Your hard requirement on {field.replace('_', ' ')} limits the results.",
+                    f"Your stated requirement on {field.replace('_', ' ')} was applied as a "
+                    f"hard filter.",
                     ev,
                 ))
         lines.append("You could relax a soft or unconfirmed preference to see more options.")
@@ -181,6 +270,26 @@ class ExplanationAgent:
             "level_exact": f"Experience level matches ({job.experience_level}).",
         }
         return mapping.get(code)
+
+    def _candidate_skills_evidence(self, active) -> str | None:
+        """The candidate's recorded skills, as evidence for a skill-gap comparison.
+
+        Prefers the evidence the active search already carries for ``skills_have`` -- that
+        is the candidate's own statement or profile entry, with its real provenance. Only
+        when the search has none does it register the (possibly empty) recorded list, which
+        is what makes "not recorded in your profile" evidenced rather than asserted.
+        """
+        existing = (active.field_evidence_map or {}).get("skills_have") or []
+        if existing:
+            return existing[0]
+        from ..domain.enums import ConfirmationStatus, EvidenceSource, PersistenceScope
+        item = self.store.register_field(
+            EvidenceSource.PROFILE, active.candidate_id, "skills_have",
+            list(active.skills_have or []),
+            confidence=1.0, confirmation=ConfirmationStatus.CONFIRMED,
+            scope=PersistenceScope.SESSION,
+        )
+        return item.evidence_id
 
     def _job_field_evidence(self, job: JobPosting, field_name: str) -> str | None:
         from ..domain.enums import ConfirmationStatus, EvidenceSource, PersistenceScope

@@ -162,7 +162,11 @@ def _decision(active, *, no_match: bool = False, reason_codes: tuple[str, ...] =
 def test_dangling_evidence_id_claim_is_flagged_unsupported_and_never_presented() -> None:
     """A claim whose evidence id resolves to nothing is rejected, not shown (R10.1/10.6)."""
     store = EvidenceStore()
+    # candidate_preference: the proposition is about what the candidate asked for, and the
+    # evidence is their own stated work mode. The type has to match the evidence now that
+    # semantic_status checks whether that KIND of evidence can carry the claim.
     grounded = make_claim(
+        claim_type="candidate_preference",
         text="You asked for a hybrid role.",
         evidence_ids=[_register(store, "work_modes", ["hybrid"])],
     )
@@ -177,8 +181,9 @@ def test_dangling_evidence_id_claim_is_flagged_unsupported_and_never_presented()
     # Final status: only the grounded claim survives for presentation.
     assert [c.claim_id for c in supported] == [grounded.claim_id]
     assert [c.support_status for c in supported] == ["supported"]
-    # The validator never mutates its inputs.
-    assert dangling.support_status == "supported"
+    # The validator never mutates its inputs. The incoming default is now "unknown", not
+    # "supported": a claim no validator has examined must not arrive already believed.
+    assert dangling.support_status == "unknown"
 
 
 def test_claim_with_a_missing_source_is_flagged_unsupported() -> None:
@@ -271,6 +276,19 @@ def test_unsupported_salary_location_and_skill_claims_are_flagged(
     assert [c.support_status for c in dropped] == ["unsupported"]
 
     _register(store, field_name, value, object_id="job-1", source=EvidenceSource.JOB_POSTING)
+    if claim_type == "skill_gap":
+        # A skill gap compares two things, so job-side evidence alone is not enough to flip
+        # it: the claim also has to cite what the candidate's record says. Supplying only
+        # the job's requirement is exactly the state in which 1883 of these were
+        # adjudicated unsupported.
+        supported, dropped = validate_claims([claim], store)
+        assert supported == []
+        assert [c.semantic_status for c in dropped] == ["unsupported"]
+        claim = claim.model_copy(update={"evidence_ids": [
+            *claim.evidence_ids,
+            _register(store, "skills_have", ["python"], object_id="cand-1",
+                      source=EvidenceSource.PROFILE),
+        ]})
     supported, dropped = validate_claims([claim], store)
     assert dropped == []
     assert [c.support_status for c in supported] == ["supported"]
@@ -706,12 +724,17 @@ def test_property_every_supported_claim_resolves_to_registered_evidence(
         if not resolves:
             assert claim.claim_id not in supported_ids
 
-    # Every rejected claim is flagged unsupported, and is rejected for that reason.
+    # Every rejected claim is flagged, and one of the two dimensions says why. A dangling
+    # reference is no longer the only reason to reject: evidence can resolve and still fail
+    # to establish the proposition, which is the case the old "dropped implies dangling"
+    # assertion could not express -- and the reason the validator passed all 11197 claims
+    # of the official pair while human raters rejected 2349.
     for claim in dropped:
-        assert claim.support_status == "unsupported"
-        assert not claim.evidence_ids or not all(
+        assert claim.support_status in ("unsupported", "unknown")
+        dangling = not claim.evidence_ids or not all(
             store.exists(evidence_id) for evidence_id in claim.evidence_ids
         )
+        assert dangling or claim.semantic_status != "supported", claim
 
     # The partition is exhaustive: no claim is silently lost or duplicated.
     assert len(supported) + len(dropped) == len(claims)
