@@ -26,7 +26,18 @@ from ..taxonomy import (
 from ..utils.hashing import content_id
 
 # Language cues that map to constraint strength.
-_HARD_CUES = ["must", "only", "cannot", "can't", "at least", "minimum", "required", "no less than", "absolutely"]
+#: Cues that make a CATEGORICAL constraint binding -- a location, a work mode.
+#:
+#: Threshold wording ("at least", "minimum", "no less than") is deliberately NOT here, and
+#: used to be. A threshold quantifies a NUMBER; it says nothing about the categorical
+#: fields sharing its clause. While it lived in this list, "business analyst in Kuala
+#: Lumpur at least RM4000" hardened the role and the location as well as the salary, and
+#: "Something hybrid with at least RM4000" hardened the work mode -- in both cases turning
+#: a stated preference into a filter that silently removed candidates. Threshold cues are
+#: matched separately, against the numeric field they actually modify: see
+#: :data:`_THRESHOLD_CUES`.
+_HARD_CUES = ["must", "only", "cannot", "can't", "required", "absolutely",
+              "mandatory", "non-negotiable"]
 _SOFT_CUES = ["prefer", "ideally", "would like", "better", "nice to have", "hopefully"]
 _FLEX_CUES = ["can consider", "flexible", "open to", "also fine", "is fine", "is ok", "okay", "acceptable", "would also"]
 _UNSURE_CUES = ["maybe", "probably", "not sure", "might", "perhaps"]
@@ -110,6 +121,16 @@ def _find(text: str, needle: str) -> tuple[int, int] | None:
     return idx, idx + len(needle)
 
 
+def _word_span(text: str, needle: str) -> tuple[int, int] | None:
+    """Span of ``needle`` as a whole token, or ``None``.
+
+    Alphanumeric boundaries rather than ``\\b`` so hyphenated aliases ("on-site") match as
+    one token instead of breaking at the hyphen.
+    """
+    match = re.search(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", text)
+    return (match.start(), match.end()) if match else None
+
+
 class CandidateUnderstandingAgent:
     """Deterministic rule-based intent extractor."""
 
@@ -165,7 +186,7 @@ class CandidateUnderstandingAgent:
         # --- years of experience ---------------------------------------------
         ym = re.search(r"(\d+(?:\.\d+)?)\s*(?:\+)?\s*years?", lower)
         if ym:
-            window = lower[max(0, ym.start() - 25): ym.end()]
+            window = _cue_window(lower, ym.start(), ym.end())
             add("years_experience", float(ym.group(1)), ym.group(0), (ym.start(), ym.end()), _strength_for(window))
 
         # --- roles ------------------------------------------------------------
@@ -173,11 +194,24 @@ class CandidateUnderstandingAgent:
             for alias in aliases:
                 span = _find(lower, alias)
                 if span:
-                    window = _clause(lower, span[0], span[1])
                     polarity = "negative" if _is_negated(lower, span[0]) else "positive"
                     field = "excluded_roles" if polarity == "negative" else "target_roles"
-                    add(field, canonical_role(canonical), alias, span,
-                        ConstraintStrength.HARD if polarity == "negative" else _strength_for(window),
+                    # A stated target role defines the RELEVANCE SCOPE, not a hard filter,
+                    # so a positive role is never proposed as binding. This is the declared
+                    # semantics of the frozen reference set, not a convenience: across all
+                    # 42 scenarios the declared hard fields are only salary_min,
+                    # preferred_locations and work_modes -- target_roles is declared hard
+                    # zero times, including in scenarios whose text says "I only want a
+                    # data analyst role". Role exclusivity is enforced by scope (a role
+                    # mismatch caps the graded relevance at 0), which is why hardening it
+                    # here would double-count the same intent and shrink the candidate pool
+                    # a second time.
+                    #
+                    # A NEGATIVE role is different: it becomes excluded_roles, and
+                    # exclusions are a hard mechanism by design.
+                    strength = (ConstraintStrength.HARD if polarity == "negative"
+                                else ConstraintStrength.SOFT)
+                    add(field, canonical_role(canonical), alias, span, strength,
                         polarity=polarity)
                     break
 
@@ -201,7 +235,14 @@ class CandidateUnderstandingAgent:
             lower,
         ):
             cur_raw, num_raw, kilo = m.group(1), m.group(2), m.group(3)
+            # Two windows, because they answer different questions. ``window`` is a fixed
+            # character span used to decide whether this number is money at all and which
+            # currency it is in -- that evidence can sit outside the clause ("salary" in an
+            # earlier clause still tells us the number is a salary). ``cue_window`` is the
+            # clause, used only for strength, so a neighbouring field's cue cannot decide
+            # whether this threshold is binding.
             window = lower[max(0, m.start() - 30): m.end() + 10]
+            cue_window = _cue_window(lower, m.start(), m.end())
             amount = float(num_raw.replace(",", ""))
             if kilo:
                 amount *= 1000
@@ -224,10 +265,10 @@ class CandidateUnderstandingAgent:
                 if "rm" in window or "myr" in window or "ringgit" in window:
                     currency = "MYR"
             # A stated minimum ("at least / above / minimum") is a hard threshold.
-            if any(cue in window for cue in _THRESHOLD_CUES):
+            if any(cue in cue_window for cue in _THRESHOLD_CUES):
                 strength = ConstraintStrength.HARD
             else:
-                strength = _strength_for(window)
+                strength = _strength_for(cue_window)
             add("salary_min", amount, m.group(0).strip(), (m.start(), m.end()), strength)
             if currency:
                 add("salary_currency", currency, cur_raw or currency, (m.start(), m.end()),
@@ -238,25 +279,40 @@ class CandidateUnderstandingAgent:
             break
 
         # --- work mode --------------------------------------------------------
+        # Every stated mode, not just the first. This loop used to ``break`` on its first
+        # match, so "remote or hybrid" yielded ["remote"] -- which does not merely lose
+        # information, it asserts the candidate ruled hybrid OUT. Dedupe is by canonical
+        # value because three aliases collapse onto "onsite".
+        seen_modes: set[str] = set()
         for wm in _WORK_MODES:
-            span = _find(lower, wm)
-            if span:
-                canon = "onsite" if wm in {"on-site", "on site", "onsite"} else wm
-                window = _clause(lower, span[0], span[1])
-                polarity = "negative" if _is_negated(lower, span[0]) else "positive"
-                add("work_modes", canon, wm, span, _strength_for(window), polarity=polarity)
-                break
+            span = _word_span(lower, wm)
+            if span is None:
+                continue
+            canon = "onsite" if wm in {"on-site", "on site", "onsite"} else wm
+            if canon in seen_modes:
+                continue
+            seen_modes.add(canon)
+            window = _cue_window(lower, span[0], span[1])
+            polarity = "negative" if _is_negated(lower, span[0]) else "positive"
+            add("work_modes", canon, wm, span, _strength_for(window), polarity=polarity)
 
         # --- locations --------------------------------------------------------
+        # Same fix, plus word-boundary matching. Substring matching was survivable while
+        # the loop stopped at the first hit; without the ``break`` the two-letter alias
+        # "kl" would match inside unrelated words ("weekly") and invent a location.
+        seen_locations: set[str] = set()
         for loc in sorted(_LOCATIONS, key=len, reverse=True):
-            span = _find(lower, loc)
-            if span:
-                canon = _LOCATION_CANON[loc]
-                window = _clause(lower, span[0], span[1])
-                polarity = "negative" if _is_negated(lower, span[0]) else "positive"
-                field = "excluded_locations" if polarity == "negative" else "preferred_locations"
-                add(field, canon, loc, span, _strength_for(window), polarity=polarity)
-                break
+            span = _word_span(lower, loc)
+            if span is None:
+                continue
+            canon = _LOCATION_CANON[loc]
+            if canon in seen_locations:
+                continue
+            seen_locations.add(canon)
+            window = _cue_window(lower, span[0], span[1])
+            polarity = "negative" if _is_negated(lower, span[0]) else "positive"
+            field = "excluded_locations" if polarity == "negative" else "preferred_locations"
+            add(field, canon, loc, span, _strength_for(window), polarity=polarity)
 
         return ExtractedPreferenceSet(
             utterance_id=utterance_id,
@@ -275,16 +331,59 @@ def _is_negated(text: str, start: int) -> bool:
 
 _SENT_DELIMS = ".!?;"
 
+#: Clause boundaries for cue scoping. Commas are included alongside sentence delimiters
+#: because a comma is what separates two independently-modified assertions in the
+#: utterances this extractor sees: in "Cyberjaya only, ideally around RM7400" the "only"
+#: belongs to the location and the "ideally" to the salary, and any window that spans the
+#: comma gets both wrong at once.
+_CLAUSE_DELIMS = _SENT_DELIMS + ","
 
-def _clause(text: str, start: int, end: int) -> str:
-    """Return the clause (from the last sentence delimiter) up to ``end``.
+#: Coordinating words that begin a new assertion without a comma. A cue on the far side of
+#: one of these modifies that assertion, not the previous one -- "onsite is required though
+#: hybrid would also work" states a requirement and then a concession.
+_CLAUSE_BREAKERS = (" and ", " but ", " though ", " although ", " while ", " however ",
+                    " whereas ", " plus ")
 
-    This lets sentence-level modifiers such as "only" / "must" influence the
-    strength of a constraint even when they are not immediately adjacent to it.
+
+def _cue_window(text: str, start: int, end: int) -> str:
+    """Return the clause AROUND ``[start:end]``, for strength classification.
+
+    Replaces an earlier helper that ran from the last sentence delimiter up to ``end``.
+    That had two consequences, and they pulled in opposite directions, which is why both
+    had to be fixed together rather than one at a time.
+
+    It ended at the value, so a POST-positioned cue was structurally invisible: "onsite
+    only" produced the window "onsite" and was classified SOFT, while "at least RM4000" in
+    the same sentence was correctly HARD only because English puts that cue in front of
+    its number. Widening the window forward fixes that.
+
+    It also began at the sentence delimiter, so the window held every earlier field in the
+    sentence and one field's cue decided another's strength. Widening forward without
+    narrowing backward would have made that worse, so the window is now bounded on BOTH
+    sides by :data:`_CLAUSE_DELIMS` and :data:`_CLAUSE_BREAKERS`.
+
+    The window deliberately still extends beyond the matched token: a cue is a property of
+    the clause, not of the word next to it. What it must not do is cross into a clause that
+    modifies something else.
     """
-    cut = 0
-    for i in range(start - 1, -1, -1):
-        if text[i] in _SENT_DELIMS:
-            cut = i + 1
+    left = 0
+    for index in range(start - 1, -1, -1):
+        if text[index] in _CLAUSE_DELIMS:
+            left = index + 1
             break
-    return text[cut:end]
+    right = len(text)
+    for index in range(end, len(text)):
+        if text[index] in _CLAUSE_DELIMS:
+            right = index
+            break
+
+    for breaker in _CLAUSE_BREAKERS:
+        # A breaker before the value moves the left edge in; one after it moves the right
+        # edge in. Only the closest on each side matters.
+        cut = text.rfind(breaker, left, start)
+        if cut != -1:
+            left = max(left, cut + len(breaker))
+        cut = text.find(breaker, end, right)
+        if cut != -1:
+            right = min(right, cut)
+    return text[left:right]

@@ -62,7 +62,6 @@ asyncio_mode = "auto"
 addopts = "-ra"
 pythonpath = ["."]
 markers = [
-    "extraction_gate: P0-1 acceptance gates for constraint extraction -- the 42/42 declared-reference state gate and the hidden paraphrase suite. Excluded from the default run via -m 'not extraction_gate' and run with `python scripts/preflight.py --only extraction-gate`. RED until the extraction fix lands; folding a known-red gate into the default suite would hide the next real regression inside it. Drop the marker once green.",
     "postgres: tests that require a reachable PostgreSQL database",
     "perf: latency measurements across catalog sizes (R28); excluded from the default run via -m 'not perf', run with `make test-perf`",
 ]

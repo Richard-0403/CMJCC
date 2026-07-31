@@ -1,8 +1,9 @@
 """42/42 gate: the system's final state must match every declared reference.
 
-**THIS GATE IS RED ON PURPOSE.** It was written before the extraction fix so that the fix
-is proven by the gate turning green, not asserted. Its baseline failure set, measured on
-commit 49eacbf, is 12 of 42 scenarios:
+Written before the extraction fix, and red when it was committed, so that the fix is
+proven by this turning green rather than asserted. It is green as of the extraction fix and
+now runs in the default suite. The baseline it started from, measured on commit 49eacbf,
+was 21 failures across 12 of 42 scenarios:
 
 * value-level, a disjunction losing its second alternative (2):
   ``SC-A-03`` and ``SC-D-08`` declare ``work_modes = [remote, hybrid]`` and the extractor
@@ -41,8 +42,6 @@ import pytest
 
 from jobrec.config import load_config
 from jobrec.evaluation.experiment_runner import ExperimentRunner, load_scenarios
-
-pytestmark = pytest.mark.extraction_gate
 
 CATALOG = "data/processed/jobs.jsonl"
 SCENARIOS = "evaluation/data/scenarios.jsonl"

@@ -57,7 +57,7 @@ CHECKS: tuple[Check, ...] = (
         "the deterministic suite plus coverage >= 85% over src/jobrec",
         (
             (PY, "-m", "coverage", "run", "-m", "pytest",
-             "-m", "not postgres and not perf and not extraction_gate"),
+             "-m", "not postgres and not perf"),
             (PY, "-m", "coverage", "report", "--include=src/jobrec/*",
              "--fail-under=85"),
         ),
@@ -87,14 +87,15 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "extraction-gate",
         "P0-1: all 42 scenarios match their declared reference, and the hidden "
-        "paraphrase suite passes (RED until the extraction fix lands)",
-        # Kept out of the `tests` check on purpose. Folding a known-red gate into the main
-        # suite would mean every future regression arrives inside an already-failing run,
-        # where nobody can tell the new breakage from the expected one.
+        "paraphrase suite passes",
+        # Also covered by `tests` now that both modules are unmarked and back in the
+        # default suite. Kept as its own named check because it is the P0-1 acceptance
+        # criterion: when it breaks, the signal should say "extraction no longer matches
+        # the declared references", not "some test failed somewhere".
         ((PY, "-m", "pytest",
           "tests/eval/test_reference_state_gate.py",
           "tests/unit/test_constraint_cue_paraphrases.py",
-          "-q", "--no-header", "-p", "no:cacheprovider", "-m", "extraction_gate"),),
+          "-q", "--no-header", "-p", "no:cacheprovider"),),
     ),
 )
 

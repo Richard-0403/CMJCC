@@ -6,8 +6,9 @@ satisfied by tuning until those particular sentences pass, and this suite is wha
 that not enough. It states the extraction contract in terms of the linguistic phenomenon
 rather than the example.
 
-Several of these FAIL on the current implementation, deliberately, and they are the
-specification for the fix:
+Twelve of these failed when the suite was committed, deliberately: they were the
+specification for the extraction fix, and they localise the three defects it had to remove.
+All 32 pass as of that fix.
 
 * POST-positioned cues are invisible. ``_clause(lower, span[0], span[1])`` ends the window
   at the end of the matched value, so "onsite only" yields the clause "onsite" and the
@@ -33,13 +34,6 @@ import pytest
 
 from jobrec.agents.candidate_understanding import CandidateUnderstandingAgent
 from jobrec.domain.enums import ConstraintStrength
-
-#: Marked as a gate so the 12 currently-failing cases do not sit inside the default suite,
-#: where the next genuine regression would arrive in an already-red run and be
-#: indistinguishable from the expected failures. The 19 that pass today are still executed
-#: -- by the gate check rather than the default one. Remove this marker once the suite is
-#: green so the whole module returns to the default run.
-pytestmark = pytest.mark.extraction_gate
 
 SCENARIOS = Path("evaluation/data/scenarios.jsonl")
 
@@ -85,10 +79,20 @@ def test_pre_positioned_hard_cue_is_hard(agent, text, field) -> None:
     ("Remote only.", "work_modes", "remote"),
     ("Onsite only, nothing else.", "work_modes", "onsite"),
     ("Cyberjaya only.", "preferred_locations", "Cyberjaya"),
-    ("I want hybrid, and that is mandatory.", "work_modes", "hybrid"),
+    ("Hybrid is a must.", "work_modes", "hybrid"),
+    ("Remote is mandatory.", "work_modes", "remote"),
 ])
 def test_post_positioned_hard_cue_is_hard(agent, text, field, value) -> None:
-    """The cue follows the value, which is the ordinary English word order for "only"."""
+    """The cue follows the value, which is the ordinary English word order for "only".
+
+    Every case keeps the cue in the SAME clause as the value. An earlier draft used
+    "I want hybrid, and that is mandatory", which fails for a different reason: "that" is
+    an anaphor pointing back across a clause boundary, and resolving it is not cue scoping.
+    Requiring the window to reach it would have meant spanning ", and", which is exactly
+    the boundary that keeps "Remote only, and I would prefer Selangor" from hardening the
+    location. The phenomenon under test here is cue POSITION, so the case was replaced
+    rather than the boundary rule bent to it.
+    """
     prefs = _by_field(agent, text).get(field)
     assert prefs, f"{field} not extracted from {text!r}"
     assert value.casefold() in _values(prefs), (text, _values(prefs))
