@@ -41,6 +41,34 @@ _HARD_CUES = ["must", "only", "cannot", "can't", "required", "absolutely",
 _SOFT_CUES = ["prefer", "ideally", "would like", "better", "nice to have", "hopefully"]
 _FLEX_CUES = ["can consider", "flexible", "open to", "also fine", "is fine", "is ok", "okay", "acceptable", "would also"]
 _UNSURE_CUES = ["maybe", "probably", "not sure", "might", "perhaps"]
+
+#: Explicit WITHDRAWAL of a requirement. Deliberately narrow, and deliberately not the
+#: same list as :data:`_FLEX_CUES`: "hybrid is also fine" ADDS an allowed value and leaves
+#: the requirement standing, while "onsite is no longer a requirement" removes it. Treating
+#: the first as a relaxation would erode constraints the candidate still holds every time
+#: they mention an additional option.
+_RELAX_CUES = ["no longer a requirement", "no longer required", "not a requirement",
+               "just a preference", "only a preference", "just preference",
+               "flexible on", "flexible about", "does not matter", "doesn't matter",
+               "no longer matters", "drop the requirement"]
+
+#: Field names as a candidate says them, so a relaxation can name a field without
+#: restating a value ("I am flexible on work mode"). Longest first: "work mode" must win
+#: over "mode".
+_FIELD_ALIASES: list[tuple[str, str]] = [
+    ("preferred locations", "preferred_locations"),
+    ("work authorisation", "work_authorizations"),
+    ("work authorization", "work_authorizations"),
+    ("employment type", "employment_types"),
+    ("years of experience", "years_experience"),
+    ("experience level", "experience_level"),
+    ("work modes", "work_modes"),
+    ("work mode", "work_modes"),
+    ("location", "preferred_locations"),
+    ("salary", "salary_min"),
+    ("pay", "salary_min"),
+    ("remote work", "work_modes"),
+]
 _NEG_CUES = ["don't want", "do not want", "not interested", "exclude", "avoid", "no ", "not "]
 # Threshold cues that make a salary/experience minimum a hard constraint.
 _THRESHOLD_CUES = ["at least", "minimum", "above", "over", "more than", "no less than", "must"]
@@ -157,6 +185,7 @@ class CandidateUnderstandingAgent:
             confidence: float = 0.85,
             confirmation: ConfirmationStatus | None = None,
             temporal: str | None = None,
+            operation: str = "add",
         ) -> None:
             prefs.append(
                 ExtractedPreference(
@@ -171,6 +200,7 @@ class CandidateUnderstandingAgent:
                     proposed_strength=strength,
                     polarity=polarity,
                     temporal_scope=temporal if temporal is not None else default_temporal,
+                    operation=operation,
                 )
             )
 
@@ -313,6 +343,35 @@ class CandidateUnderstandingAgent:
             polarity = "negative" if _is_negated(lower, span[0]) else "positive"
             field = "excluded_locations" if polarity == "negative" else "preferred_locations"
             add(field, canon, loc, span, _strength_for(window), polarity=polarity)
+
+        # --- explicit relaxations --------------------------------------------
+        # A withdrawal is emitted as its own preference carrying operation="relax", with
+        # no value: the utterance says a field stopped being binding, not what it should
+        # now be. The target is whichever field the relaxation's own clause names -- by
+        # alias ("flexible on work mode") or by value ("onsite is just a preference") --
+        # so a relaxation in one clause cannot reach a field discussed in another.
+        for cue in _RELAX_CUES:
+            cue_at = _find(lower, cue)
+            if cue_at is None:
+                continue
+            clause = _cue_window(lower, cue_at[0], cue_at[1])
+            targets: list[str] = []
+            for alias, field_name in _FIELD_ALIASES:
+                if alias in clause:
+                    targets.append(field_name)
+                    break
+            if not targets:
+                for wm in _WORK_MODES:
+                    if _word_span(clause, wm) is not None:
+                        targets.append("work_modes")
+                        break
+                for loc in sorted(_LOCATIONS, key=len, reverse=True):
+                    if _word_span(clause, loc) is not None:
+                        targets.append("preferred_locations")
+                        break
+            for target in dict.fromkeys(targets):
+                add(target, None, cue, cue_at, ConstraintStrength.SOFT,
+                    confirmation=ConfirmationStatus.CONFIRMED, operation="relax")
 
         return ExtractedPreferenceSet(
             utterance_id=utterance_id,

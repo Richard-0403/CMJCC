@@ -62,11 +62,8 @@ CHECKS: tuple[Check, ...] = (
         "tests",
         "the deterministic suite plus coverage >= 85% over src/jobrec",
         (
-            # p0_2_gate is deselected here and run by the pending `p0-2-gate` check: it
-            # pins a known defect, so leaving it in would make every future run red and
-            # bury the next real failure among four expected ones.
             (PY, "-m", "coverage", "run", "-m", "pytest",
-             "-m", "not postgres and not perf and not p0_2_gate"),
+             "-m", "not postgres and not perf"),
             (PY, "-m", "coverage", "report", "--include=src/jobrec/*",
              "--fail-under=85"),
         ),
@@ -107,12 +104,11 @@ CHECKS: tuple[Check, ...] = (
           "-q", "--no-header", "-p", "no:cacheprovider"),),
     ),
     Check(
-        "p0-2-gate",
-        "P0-2 entry criterion: an explicit relaxation downgrades a hard constraint, and "
-        "every dialogue turn records its own evidence (FAILS today by design)",
+        "turn-state",
+        "multi-turn strength persistence, explicit relaxation, and per-turn evidence "
+        "provenance",
         ((PY, "-m", "pytest", "tests/eval/test_turn_state_persistence.py",
-          "-q", "--no-header", "-p", "no:cacheprovider", "-m", "p0_2_gate"),),
-        pending=True,
+          "-q", "--no-header", "-p", "no:cacheprovider"),),
     ),
 )
 

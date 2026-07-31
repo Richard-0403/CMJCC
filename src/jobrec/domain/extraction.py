@@ -24,6 +24,27 @@ class ExtractedPreference(BaseModel):
     persistence_scope: PersistenceScope
     proposed_strength: ConstraintStrength
     polarity: Literal["positive", "negative"] = "positive"
+    #: What the utterance does to the field, as an explicit operation rather than something
+    #: inferred from the merge order.
+    #:
+    #: ``add`` states a value (the default, and what every extraction did implicitly
+    #: before). ``relax`` WITHDRAWS a requirement: the candidate says it is no longer
+    #: binding, and it is the only operation permitted to turn HARD into SOFT. That
+    #: distinction is the whole reason this field exists -- strength merging is monotone by
+    #: design, because two statements inside one turn should combine to the stronger of the
+    #: two, and without an explicit relax signal that same rule makes a hard constraint
+    #: permanent for the rest of the session no matter what the candidate says next.
+    #:
+    #: A ``relax`` may carry ``normalized_value=None``: "I am flexible on work mode" names
+    #: the field without restating a value.
+    operation: Literal["add", "replace", "remove", "relax", "confirm"] = "add"
+    #: The turn that actually said this. ``None`` means the current turn.
+    #:
+    #: Prior-turn preferences are re-derived by re-parsing history, and everything built
+    #: from them used to be stamped with the CURRENT turn id -- so a value the candidate
+    #: stated three turns ago produced evidence attributed to now. Carrying the origin lets
+    #: per-turn provenance stay truthful while the re-parsing itself is still in place.
+    origin_turn_id: str | None = None
     temporal_scope: Literal["current_search", "session", "long_term", "unknown"] = "current_search"
     # Free-form provenance bag. Notably carries ``extraction_method`` ("rule"|"llm")
     # recorded by the orchestrator so downstream metrics can attribute each field to

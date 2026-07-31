@@ -62,7 +62,6 @@ asyncio_mode = "auto"
 addopts = "-ra"
 pythonpath = ["."]
 markers = [
-    "p0_2_gate: entry criterion for P0-2 (multi-turn state and evidence provenance). Fails today by design; excluded from the default run via -m 'not p0_2_gate' and run with `python scripts/preflight.py --only p0-2-gate`. Drop the marker once green.",
     "postgres: tests that require a reachable PostgreSQL database",
     "perf: latency measurements across catalog sizes (R28); excluded from the default run via -m 'not perf', run with `make test-perf`",
 ]

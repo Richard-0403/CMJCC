@@ -22,7 +22,7 @@ from ..domain.candidate import CandidateState
 from ..domain.dialogue import DialogueState
 from ..domain.enums import ErrorCode, ResponseType, RunMode
 from ..domain.enums import WorkflowState as S
-from ..domain.extraction import ExtractedPreferenceSet
+from ..domain.extraction import ExtractedPreference, ExtractedPreferenceSet
 from ..domain.handoff import AgentHandoff, EvidenceLogEntry
 from ..domain.job import JobPosting
 from ..domain.recommendation import RecommendationDecision, Response
@@ -634,13 +634,19 @@ class ConversationOrchestrator:
         precedence for scalar overrides (salary, location, level). This is what
         distinguishes ``full`` from ``no_memory`` / ``one_shot`` across turns.
         """
-        prior_texts = [t.text for t in dialogue_state.turns[:-1] if t.speaker == "candidate"]
-        if not prior_texts:
+        prior_turns = [t for t in dialogue_state.turns[:-1] if t.speaker == "candidate"]
+        if not prior_turns:
             return current
-        prior_prefs = []
-        for text in prior_texts:
-            tagged = self._tag_all(self.rule_extractor.extract(text), _METHOD_RULE)
-            prior_prefs.extend(tagged.preferences)
+        prior_prefs: list[ExtractedPreference] = []
+        for turn in prior_turns:
+            tagged = self._tag_all(self.rule_extractor.extract(turn.text), _METHOD_RULE)
+            # Stamp the turn that actually said it. Without this the whole merged set looks
+            # like it came from now, so evidence re-derived from a three-turn-old utterance
+            # was attributed to the current turn and per-turn provenance was unrecoverable.
+            prior_prefs.extend(
+                pref.model_copy(update={"origin_turn_id": turn.turn_id})
+                for pref in tagged.preferences
+            )
         return current.model_copy(update={"preferences": prior_prefs + list(current.preferences)})
 
     def _passthrough_eligibility(self, job: JobPosting):

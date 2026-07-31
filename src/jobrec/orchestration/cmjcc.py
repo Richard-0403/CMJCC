@@ -150,6 +150,7 @@ class CMJCC:
 
         # 1) Build dialogue evidence for the current turn (if in scope).
         turn_id = self.memory.latest_turn_id(inp.dialogue_state) or "no-turn"
+        dialogue_state = inp.dialogue_state
         evidence_by_field: dict[str, list[str]] = {}
         if self.flags.use_current_turn:
             items = self.memory.build_dialogue_evidence(
@@ -159,6 +160,22 @@ class CMJCC:
                 evidence_by_field.setdefault(it.field_name, []).append(it.evidence_id)
             log("understanding", "dialogue_evidence_built",
                 outputs=[i.evidence_id for i in items], rule="cmjcc.build_evidence")
+
+            # Record on the turn only what the turn itself said. The set above also holds
+            # evidence re-derived from earlier utterances (see
+            # Orchestrator._merge_prior_dialogue), and stamping those onto this turn would
+            # replace an empty provenance field with a wrong one. Rebuilding from the
+            # current-turn subset is safe because evidence ids are content-addressed, so
+            # the ids reproduce exactly rather than being re-derived differently.
+            current_only = inp.extracted_preferences.model_copy(update={
+                "preferences": [p for p in inp.extracted_preferences.preferences
+                                if p.origin_turn_id is None]})
+            own_items = self.memory.build_dialogue_evidence(
+                current_only, inp.dialogue_state.session_id, turn_id
+            )
+            dialogue_state = self.memory.attach_turn_evidence(
+                dialogue_state, turn_id, [i.evidence_id for i in own_items]
+            )
 
         # 2) Conflict detection against long-term profile.
         conflicts: list[PreferenceConflict] = []
@@ -222,10 +239,12 @@ class CMJCC:
             f for c in conflicts if c.resolution in ("ask_clarification", "unresolved")
             for f in [c.field_name]
         })
-        dialogue = inp.dialogue_state.model_copy(update={
-            "version": inp.dialogue_state.version + 1,
-            "conflicts": [*inp.dialogue_state.conflicts, *conflicts],
-            "unresolved_slots": sorted(set(inp.dialogue_state.unresolved_slots) | set(unresolved)),
+        # ``dialogue_state`` rather than ``inp.dialogue_state``: it already carries the
+        # current turn's recorded evidence, which copying the input would discard.
+        dialogue = dialogue_state.model_copy(update={
+            "version": dialogue_state.version + 1,
+            "conflicts": [*dialogue_state.conflicts, *conflicts],
+            "unresolved_slots": sorted(set(dialogue_state.unresolved_slots) | set(unresolved)),
             "active_search_id": active.active_search_id,
         })
 
@@ -254,6 +273,8 @@ class CMJCC:
         strengths: dict[str, ConstraintStrength] = {}
         exclusions: dict[str, list[str]] = {"roles": [], "locations": [], "industries": []}
         clar_required: list[str] = []
+        #: Fields the candidate explicitly withdrew as requirements this session.
+        relaxed: set[str] = set()
 
         def add_ev(field: str, ids: list[str]) -> None:
             if not ids:
@@ -301,6 +322,15 @@ class CMJCC:
             for pref in inp.extracted_preferences.preferences:
                 f = pref.field_name
                 ids = evidence_by_field.get(f, [])
+                if pref.operation == "relax":
+                    # An explicit withdrawal. Recorded and applied AFTER the merge loop,
+                    # because _stronger() is monotone: applying it here would let a later
+                    # statement in the same turn re-harden the field the candidate just
+                    # said was no longer binding. It contributes no value -- "I am
+                    # flexible on work mode" names the field without restating one.
+                    relaxed.add(f)
+                    add_ev(f, ids)
+                    continue
                 if pref.polarity == "negative":
                     if f in ("excluded_roles", "target_roles"):
                         exclusions["roles"].extend(
@@ -336,6 +366,16 @@ class CMJCC:
         for c in conflicts:
             if c.resolution == "ask_clarification" and c.field_name not in clar_required:
                 clar_required.append(c.field_name)
+
+        # An explicit relaxation is the ONE thing that may lower a strength. _stronger()
+        # is monotone, which is correct for combining two statements within a turn and
+        # wrong across turns -- it made a hard constraint permanent for the session, so a
+        # candidate who said "onsite is no longer a requirement" kept being filtered on
+        # onsite with nothing in the output explaining why the results stayed narrow.
+        # Applied last so statement order inside the turn cannot undo it.
+        for field_name in relaxed:
+            if strengths.get(field_name) == ConstraintStrength.HARD:
+                strengths[field_name] = ConstraintStrength.SOFT
 
         # ---- classify hard / soft / unknown -----------------------------
         present_fields = [f for f in _ACTIVE_LIST_FIELDS if list_values[f]]

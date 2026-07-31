@@ -12,9 +12,12 @@ without carrying strength forward would let hard constraints from earlier turns 
 become absent, which widens the candidate pool and shows up as a metric shift rather than
 as an error.
 
-The GATE is marked ``p0_2_gate`` and fails today. It is the entry criterion for P0-2, kept
-out of the default suite so the next genuine regression does not arrive inside an
-already-red run. Run it with ``python scripts/preflight.py --only p0-2-gate``.
+The second group was the P0-2 entry criterion and failed when it was written: an explicit
+relaxation could not downgrade a hard constraint, and ``DialogueTurn.evidence_ids`` was
+empty on every turn. Both are fixed, so the whole module is unmarked and in the default
+suite. The architectural half of P0-2 -- a typed event history replacing the re-parsing of
+old utterances, and repository rehydration -- is still open, which is exactly what the
+guards above are here to protect.
 """
 
 from __future__ import annotations
@@ -90,7 +93,6 @@ def test_a_later_turn_can_upgrade_a_soft_preference_to_hard(config) -> None:
 
 
 # --------------------------------------------------------------------------- gate
-@pytest.mark.p0_2_gate
 @pytest.mark.parametrize("relaxation", [
     "Actually onsite is just a preference.",
     "Actually I am flexible on work mode.",
@@ -117,7 +119,6 @@ def test_an_explicit_relaxation_downgrades_a_hard_constraint(config, relaxation)
     )
 
 
-@pytest.mark.p0_2_gate
 def test_every_dialogue_turn_records_its_own_evidence(config) -> None:
     """``DialogueTurn.evidence_ids`` is empty on every turn.
 

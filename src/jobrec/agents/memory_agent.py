@@ -172,6 +172,29 @@ class MemoryAgent:
     def latest_turn_id(self, dialogue: DialogueState) -> str | None:
         return dialogue.turns[-1].turn_id if dialogue.turns else None
 
+    def attach_turn_evidence(
+        self, dialogue: DialogueState, turn_id: str, evidence_ids: list[str]
+    ) -> DialogueState:
+        """Return a NEW DialogueState with ``turn_id``'s ``evidence_ids`` recorded.
+
+        The turn has to be appended before the utterance is extracted -- extraction needs
+        the turn id -- so the evidence does not exist yet at :meth:`append_turn`. The field
+        was therefore left empty on every turn, which meant a run bundle could not answer
+        "what did THIS turn establish": the only attribution left was
+        ``field_evidence_map``, keyed by field and rebuilt from scratch each turn.
+
+        Union rather than replace, and no version bump: this records provenance for a turn
+        already in the history, it does not advance the dialogue.
+        """
+        turns = []
+        for turn in dialogue.turns:
+            if turn.turn_id == turn_id and evidence_ids:
+                merged = list(turn.evidence_ids)
+                merged.extend(i for i in evidence_ids if i not in merged)
+                turn = turn.model_copy(update={"evidence_ids": merged})
+            turns.append(turn)
+        return dialogue.model_copy(update={"turns": turns})
+
     def register_profile_evidence(self, candidate: CandidateState) -> None:
         """Re-register a candidate's profile evidence into the current store.
 
