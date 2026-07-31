@@ -57,7 +57,7 @@ CHECKS: tuple[Check, ...] = (
         "the deterministic suite plus coverage >= 85% over src/jobrec",
         (
             (PY, "-m", "coverage", "run", "-m", "pytest",
-             "-m", "not postgres and not perf"),
+             "-m", "not postgres and not perf and not extraction_gate"),
             (PY, "-m", "coverage", "report", "--include=src/jobrec/*",
              "--fail-under=85"),
         ),
@@ -83,6 +83,18 @@ CHECKS: tuple[Check, ...] = (
         # actually guards the file. It costs a few seconds to run twice.
         ((PY, "-m", "pytest", "tests/contract/test_authoritative_scenarios.py",
           "-q", "--no-header", "-p", "no:cacheprovider"),),
+    ),
+    Check(
+        "extraction-gate",
+        "P0-1: all 42 scenarios match their declared reference, and the hidden "
+        "paraphrase suite passes (RED until the extraction fix lands)",
+        # Kept out of the `tests` check on purpose. Folding a known-red gate into the main
+        # suite would mean every future regression arrives inside an already-failing run,
+        # where nobody can tell the new breakage from the expected one.
+        ((PY, "-m", "pytest",
+          "tests/eval/test_reference_state_gate.py",
+          "tests/unit/test_constraint_cue_paraphrases.py",
+          "-q", "--no-header", "-p", "no:cacheprovider", "-m", "extraction_gate"),),
     ),
 )
 
