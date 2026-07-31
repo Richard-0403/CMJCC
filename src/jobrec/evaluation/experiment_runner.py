@@ -29,7 +29,7 @@ from ..llm.remote_provider import (
 from ..orchestration.feature_flags import FeatureFlags
 from ..orchestration.orchestrator import LEGACY_REPARSE_WARNING, uses_remote_backend
 from ..prompts import prompt_hash
-from ..utils.hashing import stable_hash
+from ..utils.hashing import content_id, stable_hash
 from ..utils.time import to_iso, utcnow
 from .checksums import write_checksums
 from .experiment_identity import (
@@ -294,6 +294,29 @@ class ExperimentRunner:
         self._write_checksums(exp_dir)
         return manifest
 
+    @staticmethod
+    def _session_id(exp_dir: Path, variant: str, scenario_id: str, run_index: int,
+                    ordinal: int) -> str:
+        """A session id determined by WHICH session of the experiment this is.
+
+        Content-addressed over the experiment id (the directory name, itself derived from
+        the frozen inputs and the code), the variant, the scenario, the repeat index and the
+        session's ordinal within the run. Every one of those five is load-bearing: dropping
+        any of them would make two distinct sessions of one batch share an id.
+
+        Why this matters beyond tidiness: ``run_id`` is ``content_id("run", session_id,
+        version, text)``, so a random session id gave every run a different id on a second
+        execution of the SAME frozen inputs. The two batches could not be diffed run by run,
+        and the experiment's own idempotence claim -- same inputs, same code, same artifact --
+        held for the directory name while being false for everything inside it.
+
+        The session id deliberately does NOT feed the experiment id. That derivation runs
+        before any session exists, and it must stay a function of the inputs, the code and the
+        runtime backend; adding a per-session value would make it circular.
+        """
+        return content_id("sess", exp_dir.name, variant, scenario_id, str(run_index),
+                          str(ordinal))
+
     def _runtime_identity(self, chash: str) -> dict[str, Any]:
         """The non-source, non-config run inputs for the experiment id and the manifest.
 
@@ -385,7 +408,11 @@ class ExperimentRunner:
         profile = dict(scenario["profile"])
         profile.setdefault("candidate_id", scenario["scenario_id"] + "-cand")
         cand = svc.create_candidate(profile)
-        session_id = svc.create_session(cand.candidate_id, variant)
+        session_id = svc.create_session(
+            cand.candidate_id, variant,
+            session_id=self._session_id(exp_dir, variant, scenario["scenario_id"],
+                                        run_index, 0),
+        )
 
         # Process the scripted scenario turns on a SINGLE session so that memory
         # and dialogue-state thread correctly across turns (single code path).
@@ -413,7 +440,14 @@ class ExperimentRunner:
                 # knows about earlier turns can now ONLY have come through long-term
                 # candidate memory, which is what makes cross-session inheritance
                 # observable in an archived run instead of only in a unit test.
-                session_id = svc.create_session(cand.candidate_id, variant)
+                session_id = svc.create_session(
+                    cand.candidate_id, variant,
+                    # The ORDINAL, not the turn index: a second session is the second
+                    # session whichever turn opened it, and without it every session of one
+                    # run would collide on a single id.
+                    session_id=self._session_id(exp_dir, variant, scenario["scenario_id"],
+                                                run_index, len(session_ids)),
+                )
                 session_ids.append(session_id)
             last_result = svc.process_turn(session_id, text, scenario_id=scenario["scenario_id"])
             response_turns += 1

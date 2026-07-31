@@ -85,6 +85,41 @@ def _token_usage(data: Any) -> dict[str, Any]:
     return out
 
 
+#: Server-reported identity of a single completion, copied verbatim when present.
+#:
+#: ``model`` is the model the SERVER says answered, which is not always the one that was
+#: asked for: an alias like ``gpt-4o-mini`` resolves to a dated build, and a gateway may
+#: route to a different deployment entirely. ``system_fingerprint`` is the backend
+#: configuration OpenAI-compatible servers expose so two identical requests can be told
+#: apart when the serving stack changed underneath. ``id`` identifies the individual
+#: completion and is what a provider-side log can be matched against.
+#:
+#: Without these the artifacts recorded only what was REQUESTED, so "same model" was an
+#: assumption rather than a record.
+_PROVENANCE_FIELDS: tuple[tuple[str, str], ...] = (
+    ("response_id", "id"),
+    ("system_fingerprint", "system_fingerprint"),
+    ("response_model", "model"),
+)
+
+
+def _response_provenance(data: Any) -> dict[str, Any]:
+    """Server-reported completion identity, omitting whatever the server did not send.
+
+    Absent fields are LEFT OUT rather than recorded as null or filled with the requested
+    value: many OpenAI-compatible proxies omit ``system_fingerprint`` entirely, and a
+    fabricated value would be indistinguishable from a real one when reading the bundle.
+    """
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for name, key in _PROVENANCE_FIELDS:
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            out[name] = value
+    return out
+
+
 def _status_reason(exc: httpx.HTTPStatusError) -> str:
     """A short, non-sensitive label for the status that triggered the retry."""
     status = getattr(getattr(exc, "response", None), "status_code", None)
@@ -275,6 +310,7 @@ class RemoteLLMProvider:
             metadata["finish_reason"] = reason
         if retry_reason is not None:
             metadata["retry_reason"] = retry_reason
+        metadata.update(_response_provenance(data))
         return _content_of(data), latency_ms, metadata
 
     def complete_json(self, prompt: str, *, purpose: str) -> tuple[dict, LLMCallRecord]:

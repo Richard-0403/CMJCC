@@ -37,7 +37,7 @@ from jobrec.config import load_config
 from jobrec.domain.enums import RunMode
 from jobrec.evaluation.experiment_identity import (
     RUNTIME_IDENTITY_FIELDS,
-    endpoint_host,
+    endpoint_identity,
     experiment_id,
     runtime_identity,
 )
@@ -113,28 +113,14 @@ def test_an_absent_runtime_block_is_distinguishable_from_a_present_one():
 
 
 # --------------------------------------------------------- the endpoint reduction
-@pytest.mark.parametrize(
-    ("url", "expected"),
-    [
-        ("https://api.example.com/v1", "api.example.com"),
-        ("https://API.Example.COM/v1", "api.example.com"),
-        ("http://localhost:8000/v1", "localhost:8000"),
-        ("localhost:8000", "localhost:8000"),
-        ("api.example.com", "api.example.com"),
-        ("https://api.example.com/v1?api-key=sk-secret", "api.example.com"),
-        ("https://user:sk-secret@api.example.com/v1", "api.example.com"),
-        (None, None),
-        ("", None),
-        ("   ", None),
-    ],
-)
-def test_endpoint_host_keeps_only_what_identifies_the_backend(url, expected):
-    assert endpoint_host(url) == expected
-
-
-def test_two_proxies_on_one_host_are_two_backends():
-    """The port is part of the identity: dropping it would merge distinct backends."""
-    assert endpoint_host("http://localhost:8000/v1") != endpoint_host("http://localhost:9000/v1")
+#
+# The endpoint reduction itself is asserted in
+# ``tests/eval/test_run_provenance_identity.py``, which owns the current rule: the identity
+# keeps ``scheme://host[:port]/normalised-path`` and drops userinfo, query and fragment.
+# The table that used to live here asserted a HOST-ONLY reduction, which was superseded --
+# two OpenAI-compatible deployments are routinely distinguished by path alone, so host-only
+# merged distinct backends into one identity. Keeping both tables would have left two
+# specifications of one function disagreeing with each other.
 
 
 def test_a_credential_in_the_base_url_never_reaches_the_identity():
@@ -146,7 +132,7 @@ def test_a_credential_in_the_base_url_never_reaches_the_identity():
         llm_endpoint=f"https://svc:{secret}@api.example.com/v1?api-key={secret}",
     )
     assert secret not in json.dumps(runtime)
-    assert runtime["llm_endpoint"] == "api.example.com"
+    assert runtime["llm_endpoint"] == endpoint_identity("https://api.example.com/v1")
     # And the same URL with a DIFFERENT key is the same experiment: rotating a credential
     # is not a new experiment, so it must not fork the id.
     rotated = runtime_identity(
@@ -254,7 +240,9 @@ def test_hybrid_mode_records_the_backend_named_by_the_environment(tmp_path: Path
 
     assert runtime["llm_mode"] == "hybrid"
     assert runtime["llm_model"] == "qwen-plus"
-    assert runtime["llm_endpoint"] == "dashscope.example.com"
+    # The PATH is part of the identity: this deployment is not the same backend as
+    # https://dashscope.example.com/v1 would be.
+    assert runtime["llm_endpoint"] == "https://dashscope.example.com/compatible-mode/v1"
     assert "sk-live-must-never-be-recorded" not in json.dumps(runtime)
     # The prompts and the catalog are reported, so both can move the id.
     assert runtime["catalog_hash"] == "cat-1"

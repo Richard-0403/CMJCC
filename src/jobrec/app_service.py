@@ -69,8 +69,18 @@ class AppService:
         return self.repo.get_candidate_state(candidate_id, version)
 
     # -------------------------------------------------------------- sessions
-    def create_session(self, candidate_id: str, variant: str = "full") -> str:
-        session_id = random_id("sess")
+    def create_session(self, candidate_id: str, variant: str = "full",
+                       session_id: str | None = None) -> str:
+        """Open a session. Random by default; ``session_id`` supplies a chosen one.
+
+        The default stays RANDOM because that is correct for real interaction: two live
+        conversations must never share an id, and a caller cannot be trusted to have made one
+        unique. Only :class:`~jobrec.evaluation.experiment_runner.ExperimentRunner` passes an
+        id, because an experiment is the opposite case -- a frozen input set replayed on
+        purpose, where a random id makes every ``run_id`` differ between two otherwise
+        identical batches and so makes their bundles undiffable.
+        """
+        session_id = session_id or random_id("sess")
         self.repo.create_session(session_id, candidate_id, variant)
         return session_id
 

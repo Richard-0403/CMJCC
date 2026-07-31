@@ -121,16 +121,21 @@ RUNTIME_IDENTITY_FIELDS: tuple[str, ...] = (
 )
 
 
-def endpoint_host(endpoint: str | None) -> str | None:
-    """The ``host[:port]`` of an endpoint URL, or ``None`` when there is no endpoint.
+def endpoint_identity(endpoint: str | None) -> str | None:
+    """A credential-free identity for an endpoint: ``scheme://host[:port]/path``.
 
-    Deliberately lossy. The endpoint identifies WHICH backend answered, which belongs in
-    the identity, but a base URL is also the one run input that can carry a credential:
-    ``https://key:secret@host/v1`` and ``https://host/v1?api-key=...`` are both accepted
-    by OpenAI-compatible clients. Reducing it to the host drops userinfo, path and query
-    in one step, so no code path can put a key into a manifest, a digest or a log line by
-    recording "just the endpoint". The port is kept because two proxies on one host are
-    two different backends.
+    Keeps everything that says WHICH backend answered and drops everything that could
+    carry a secret. A base URL is the one run input that can embed a credential -- both
+    ``https://key:secret@host/v1`` and ``https://host/v1?api-key=...`` are accepted by
+    OpenAI-compatible clients -- so userinfo, query and fragment are removed. What remains
+    is parsed structure, not a substring of the input, so a token cannot survive by hiding
+    in a part that was merely not looked at.
+
+    The PATH is kept, normalised. An earlier version reduced the endpoint to its host,
+    which was safe but too lossy: OpenAI-compatible deployments are routinely distinguished
+    by path alone (``/v1`` versus ``/compatible-mode/v1``, or one gateway fronting several
+    model deployments), so two genuinely different backends collided on one identity and the
+    experiment id could not tell them apart. Scheme and port are kept for the same reason.
     """
     if not endpoint:
         return None
@@ -144,9 +149,15 @@ def endpoint_host(endpoint: str | None) -> str | None:
         return None
     try:
         port = parsed.port
-    except ValueError:  # malformed port -- the host alone still identifies the backend
+    except ValueError:  # malformed port -- the rest still identifies the backend
         port = None
-    return f"{host}:{port}" if port else host
+    authority = f"{host}:{port}" if port else host
+    # Normalised path: collapse repeated separators and drop a trailing one, so
+    # ``/v1``, ``/v1/`` and ``//v1`` are one endpoint rather than three.
+    segments = [s for s in parsed.path.split("/") if s]
+    path = "/" + "/".join(segments) if segments else ""
+    scheme = (parsed.scheme or "https").lower()
+    return f"{scheme}://{authority}{path}"
 
 
 def runtime_identity(
@@ -164,11 +175,11 @@ def runtime_identity(
     in the experiment manifest: the id can then be re-derived from the manifest instead of
     being taken on trust.
 
-    ``llm_endpoint`` is reduced to its host by :func:`endpoint_host` before it is stored,
-    so a credential embedded in a base URL never reaches the manifest or the digest. The
-    API KEY itself is not a parameter of this function and must never become one: it does
-    not identify an experiment (the same key answers every run) and it is the one value
-    that must not be written down.
+    ``llm_endpoint`` is reduced by :func:`endpoint_identity` before it is stored, so a
+    credential embedded in a base URL never reaches the manifest or the digest while the
+    parts that distinguish two deployments survive. The API KEY itself is not a parameter of
+    this function and must never become one: it does not identify an experiment (the same
+    key answers every run) and it is the one value that must not be written down.
     """
     return {
         "catalog_hash": catalog_hash,
@@ -176,7 +187,7 @@ def runtime_identity(
         "llm_mode": llm_mode,
         "llm_provider": llm_provider,
         "llm_model": llm_model,
-        "llm_endpoint": endpoint_host(llm_endpoint),
+        "llm_endpoint": endpoint_identity(llm_endpoint),
     }
 
 
