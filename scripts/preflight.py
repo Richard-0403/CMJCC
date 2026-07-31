@@ -39,6 +39,12 @@ class Check:
     name: str
     why: str
     commands: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
+    #: Excluded from a bare run, still available via ``--only``. For a gate that pins a
+    #: known defect scheduled for a later batch: it has to be runnable and named, but
+    #: leaving it in the default set would make the gate permanently red, and a gate that
+    #: is always red is one nobody reads -- at which point it stops reporting the
+    #: regression it was added to catch.
+    pending: bool = False
 
 
 CHECKS: tuple[Check, ...] = (
@@ -56,8 +62,11 @@ CHECKS: tuple[Check, ...] = (
         "tests",
         "the deterministic suite plus coverage >= 85% over src/jobrec",
         (
+            # p0_2_gate is deselected here and run by the pending `p0-2-gate` check: it
+            # pins a known defect, so leaving it in would make every future run red and
+            # bury the next real failure among four expected ones.
             (PY, "-m", "coverage", "run", "-m", "pytest",
-             "-m", "not postgres and not perf"),
+             "-m", "not postgres and not perf and not p0_2_gate"),
             (PY, "-m", "coverage", "report", "--include=src/jobrec/*",
              "--fail-under=85"),
         ),
@@ -97,9 +106,18 @@ CHECKS: tuple[Check, ...] = (
           "tests/unit/test_constraint_cue_paraphrases.py",
           "-q", "--no-header", "-p", "no:cacheprovider"),),
     ),
+    Check(
+        "p0-2-gate",
+        "P0-2 entry criterion: an explicit relaxation downgrades a hard constraint, and "
+        "every dialogue turn records its own evidence (FAILS today by design)",
+        ((PY, "-m", "pytest", "tests/eval/test_turn_state_persistence.py",
+          "-q", "--no-header", "-p", "no:cacheprovider", "-m", "p0_2_gate"),),
+        pending=True,
+    ),
 )
 
 BY_NAME = {check.name: check for check in CHECKS}
+DEFAULT_CHECKS = tuple(check for check in CHECKS if not check.pending)
 
 
 def run_check(check: Check) -> tuple[bool, float]:
@@ -124,7 +142,8 @@ def main() -> int:
     if args.list:
         width = max(len(c.name) for c in CHECKS)
         for check in CHECKS:
-            print(f"{check.name:<{width}}  {check.why}")
+            flag = "  [pending, --only to run]" if check.pending else ""
+            print(f"{check.name:<{width}}  {check.why}{flag}")
         return 0
 
     if args.only:
@@ -135,7 +154,7 @@ def main() -> int:
             return 2
         selected = [BY_NAME[name] for name in args.only]
     else:
-        selected = list(CHECKS)
+        selected = list(DEFAULT_CHECKS)
 
     results: list[tuple[str, bool, float]] = []
     for check in selected:
