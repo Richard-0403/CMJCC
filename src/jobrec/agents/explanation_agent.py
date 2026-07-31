@@ -581,7 +581,8 @@ class ExplanationAgent:
         return response, dropped
 
     # ------------------------------------------------------------- no match
-    def _filtering_evidence(self, decision, field: str, removed: int) -> str | None:
+    def _filtering_evidence(self, decision, field: str, removed: int,
+                            blocked_ids: list[str] | None = None) -> str | None:
         """Register the stage record for ``field`` as citable evidence."""
         diagnosis = getattr(decision, "no_match_diagnosis", None) or {}
         from ..domain.enums import ConfirmationStatus, EvidenceSource, PersistenceScope
@@ -591,6 +592,9 @@ class ExplanationAgent:
         item = self.store.register_field(
             EvidenceSource.SYSTEM_RULE, decision.decision_id, f"filtered_by:{field}",
             {"field": field, CAUSAL_EFFECT_KEY: removed,
+             # WHICH jobs, so the count can be checked against a list rather than believed.
+             # The validator compares this with the claim's own list and rejects a mismatch.
+             **({"blocked_job_ids": sorted(blocked_ids)} if blocked_ids else {}),
              "stage_trace": diagnosis.get("stage_trace")},
             confidence=1.0, confirmation=ConfirmationStatus.CONFIRMED,
             scope=PersistenceScope.SESSION,
@@ -600,14 +604,30 @@ class ExplanationAgent:
     def _no_match(self, decision, active):
         claims: list[ResponseClaim] = []
         diagnosis = getattr(decision, "no_match_diagnosis", None) or {}
-        blocked_counts = {b["field"]: b.get("filtered_jobs")
-                          for b in diagnosis.get("blocking_constraints", [])}
+        blocking = {b["field"]: b for b in diagnosis.get("blocking_constraints", [])}
         evaluated = diagnosis.get("evaluated_jobs")
-        lines = ["No jobs currently satisfy all of your hard requirements at once."]
+        # Scoped, not global. The old opening said no job satisfies the hard requirements at
+        # once, which asserts JOINT INFEASIBILITY over the catalogue. For SC-E-02 and SC-E-04
+        # that is false: catalogue jobs do clear the hard constraints and are simply outside
+        # the requested roles, so the true statement is about the set that was searched.
+        lines = ["No job in the current search scope (your target roles, within the jobs "
+                 "retrieved for this request) satisfies all of your hard requirements."]
+        if evaluated is not None:
+            lines.append(f"  - Jobs evaluated in that scope: {evaluated}")
         for code in decision.no_match_reason_codes:
             lines.append(f"  - Blocking condition: {code}")
-        # ground the no-match reasons in the candidate's hard-constraint evidence
-        for field in active.hard_constraint_fields:
+        # Only fields the diagnosis recorded as blocking. Iterating every hard field asserted
+        # that each one blocked something, which the diagnosis often contradicts: a hard
+        # constraint that rejected nothing is not a reason the result was empty.
+        #
+        # An ABSENT diagnosis is not the same as one reporting no blocking fields. Without it
+        # there is nothing to narrow by, and filtering everything out would leave a no-match
+        # response with no reasons at all -- trading an over-broad explanation for none, which
+        # is worse for the reader. So the hard fields are used as the fallback, and only the
+        # descriptive claim is made: the causal form needs counts that are not available.
+        reason_fields = ([f for f in active.hard_constraint_fields if f in blocking]
+                         if blocking else list(active.hard_constraint_fields))
+        for field in reason_fields:
             ev = active.field_evidence_map.get(field, [])
             if ev:
                 # "limits the results" was a CAUSAL claim resting on evidence that only
@@ -629,21 +649,46 @@ class ExplanationAgent:
                 # field actually removed. It cites the filtering record alongside the
                 # candidate's statement, so "this requirement is why" rests on a count
                 # rather than on the requirement's existence.
-                removed = blocked_counts.get(field)
+                record = blocking.get(field) or {}
+                removed = record.get("filtered_jobs")
+                blocked_ids = record.get("blocked_job_ids")
                 if removed:
-                    effect_ev = self._filtering_evidence(decision, field, removed)
+                    effect_ev = self._filtering_evidence(decision, field, removed,
+                                                         blocked_ids)
                     if effect_ev:
                         claims.append(self._claim(
                             "no_match_cause",
-                            f"Applying your requirement on {field.replace('_', ' ')} removed "
-                            f"{removed} of the {evaluated} job(s) evaluated.",
+                            # "did not meet", not "removed". These per-field sets OVERLAP --
+                            # a job usually fails several conditions at once -- so the counts
+                            # are not independent removals and do not sum to the total.
+                            # Phrasing them as removals invited exactly that arithmetic.
+                            f"{removed} of the {evaluated} job(s) in scope did not meet your "
+                            f"requirement on {field.replace('_', ' ')}.",
                             [*ev, effect_ev],
                             predicate="no_match_cause", subject_id=active.candidate_id,
                             field_name=field,
                             expected_value=getattr(active, field, None),
-                            claim_args={"removed": removed, "evaluated_jobs": evaluated},
+                            claim_args={"removed": removed, "evaluated_jobs": evaluated,
+                                        **({"blocked_job_ids": sorted(blocked_ids)}
+                                           if blocked_ids else {})},
                         ))
-        lines.append("You could relax a soft or unconfirmed preference to see more options.")
+        # Only suggest relaxing something that EXISTS. The line was unconditional, so a
+        # candidate whose every stated preference was hard was told to relax a soft or
+        # unconfirmed one they had never expressed -- advice that cannot be acted on.
+        relaxable = [c["field"] for c in diagnosis.get("relaxation_candidates", [])
+                     if c.get("field")]
+        if relaxable:
+            names = ", ".join(sorted(f.replace("_", " ") for f in relaxable))
+            lines.append(f"You could relax {names} to see more options.")
+        # Deliberately NOT claimed here: "jobs meet your requirements but sit outside your
+        # target roles". It is true of SC-E-02 and SC-E-04 -- 4 and 1 catalogue jobs clear
+        # those hard constraints -- but this layer cannot see it. The diagnosis only describes
+        # the RETRIEVED pool, which is already role-scoped, so those jobs were never
+        # evaluated and ``eligible_jobs`` is 0. Asserting it from here would be a guess
+        # dressed as a finding. Establishing it needs a deliberate second pass over the
+        # catalogue with the role scope lifted, which is a behaviour change, not wording.
+        # The scoped opening line above is what keeps the response from overclaiming
+        # meanwhile: it says nothing in the searched set qualifies, and nothing more.
         response = Response(
             response_id=content_id("resp", decision.decision_id),
             session_id=decision.session_id,

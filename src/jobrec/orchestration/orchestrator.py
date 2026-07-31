@@ -312,7 +312,13 @@ class ConversationOrchestrator:
                 diag = (diagnose_no_match(
                     eligibility, context,
                     catalog_size=len(self.jobs_by_id), pool_size=len(pool),
-                    ranked_size=len(ranked))
+                    ranked_size=len(ranked),
+                    # The POOL, which after the empty-recall fallback is the whole catalogue
+                    # rather than what lexical recall returned. The diagnosis has to describe
+                    # the set that was actually evaluated, or the funnel it reports starts
+                    # from a stage that never happened.
+                    pool_job_ids=[j.job_id for j in pool],
+                    ranked_job_ids=[rj.job_id for rj in ranked])
                     if context else {"blocking_constraints": []})
                 no_match_codes = [b["field"] for b in diag.get("blocking_constraints", [])]
                 trace.warning(
@@ -327,7 +333,15 @@ class ConversationOrchestrator:
                 active_search_id=active.active_search_id,
                 context_id=context.context_id if context else None,
                 experiment_variant=self.config.experiment.variant.value,
-                retrieved_job_ids=[r.job_id for r in outcome.retrieved],
+                # What was actually EVALUATED, which is not always what lexical recall
+                # returned: on an empty recall the fallback above replaces the pool with the
+                # whole catalogue, and this field then reported an empty retrieval for a run
+                # that went on to evaluate every job. A no-match explanation built on that
+                # reads as "nothing was retrieved" when the truth is "everything was
+                # retrieved and everything failed" -- opposite diagnoses. ``outcome.expanded``
+                # and ``expansion_reason`` record that the substitution happened.
+                retrieved_job_ids=([j.job_id for j in pool] if outcome.expanded
+                                   else [r.job_id for r in outcome.retrieved]),
                 eligibility_results=eligibility,
                 ranked_jobs=ranked,
                 selected_job_ids=[rj.job_id for rj in ranked[: self.config.experiment.top_k]],

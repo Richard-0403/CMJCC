@@ -373,6 +373,8 @@ def diagnose_no_match(
     catalog_size: int | None = None,
     pool_size: int | None = None,
     ranked_size: int = 0,
+    pool_job_ids: list[str] | None = None,
+    ranked_job_ids: list[str] | None = None,
 ) -> dict:
     """Aggregate blocking constraints when every job was filtered out.
 
@@ -380,16 +382,23 @@ def diagnose_no_match(
     them are *soft / unknown* relaxation candidates. Hard constraints stated by
     the user are never auto-relaxed; they are only reported.
     """
-    field_counts: dict[str, int] = {}
+    # WHICH jobs each field rejected, not just how many. The count alone could not be
+    # checked, and it invited a wrong reading: these sets OVERLAP, because one job usually
+    # fails several conditions at once, so the per-field numbers are not independent
+    # removals and must never be presented as though a field removed that many jobs on its
+    # own. Recording the ids makes the overlap visible and the claim verifiable.
+    field_jobs: dict[str, list[str]] = {}
     for res in eligibility_results:
         blocked_fields = {code.split(":", 1)[0] for code in res.filtered_reason_codes}
         for field in blocked_fields:
-            field_counts[field] = field_counts.get(field, 0) + 1
+            field_jobs.setdefault(field, []).append(res.job_id)
+    field_counts = {f: len(ids) for f, ids in field_jobs.items()}
 
     hard_fields = {c.field_name for c in context.constraints if c.strength.value == "hard"}
     blocking = [
-        {"field": f, "filtered_jobs": n}
-        for f, n in sorted(field_counts.items(), key=lambda kv: -kv[1])
+        {"field": f, "filtered_jobs": len(field_jobs[f]),
+         "blocked_job_ids": sorted(field_jobs[f])}
+        for f in sorted(field_jobs, key=lambda f: (-len(field_jobs[f]), f))
     ]
     # Relaxation candidates: fields that blocked jobs but are NOT user hard
     # constraints (e.g. unknown-policy fields), which could be safely relaxed.
@@ -407,19 +416,29 @@ def diagnose_no_match(
     # case: catalogue jobs do clear their hard constraints, they are simply outside the
     # requested roles, which is what the data-quality warning on those two scenarios says.
     # The counts are recorded here because this is the only layer that sees all four stages.
-    eligible_count = sum(1 for r in eligibility_results if r.eligible)
+    eligible_ids = [r.job_id for r in eligibility_results if r.eligible]
+    evaluated_ids = [r.job_id for r in eligibility_results]
+    # Each stage carries the ids it ended with, so the funnel can be recomputed from the
+    # bundle instead of trusted. ``catalog`` stays a count: the exact catalogue is already
+    # snapshotted beside the run, so listing every id again would only add bulk.
     stage_trace = [
         {"stage": "catalog", "jobs": catalog_size},
-        {"stage": "retrieved", "jobs": (pool_size if pool_size is not None
-                                       else len(eligibility_results))},
-        {"stage": "eligible_after_hard_constraints", "jobs": eligible_count},
-        {"stage": "ranked", "jobs": ranked_size},
+        {"stage": "retrieved",
+         "jobs": (pool_size if pool_size is not None else len(eligibility_results)),
+         "job_ids": sorted(pool_job_ids) if pool_job_ids is not None
+                    else sorted(evaluated_ids)},
+        {"stage": "eligible_after_hard_constraints", "jobs": len(eligible_ids),
+         "job_ids": sorted(eligible_ids)},
+        {"stage": "ranked", "jobs": ranked_size,
+         "job_ids": sorted(ranked_job_ids) if ranked_job_ids is not None else []},
     ]
     return {
         "no_match": True,
         "stage_trace": stage_trace,
         "evaluated_jobs": len(eligibility_results),
-        "eligible_jobs": eligible_count,
+        "evaluated_job_ids": sorted(evaluated_ids),
+        "eligible_jobs": len(eligible_ids),
+        "eligible_job_ids": sorted(eligible_ids),
         "blocking_constraints": blocking,
         "relaxation_candidates": relaxation,
     }

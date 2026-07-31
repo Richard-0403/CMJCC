@@ -62,7 +62,11 @@ def test_the_diagnosis_records_every_stage() -> None:
     assert diag["evaluated_jobs"] == 2
     assert diag["eligible_jobs"] == 0
     # And the per-field count survives, so a causal claim has a number to cite.
-    assert diag["blocking_constraints"] == [{"field": "salary_min", "filtered_jobs": 2}]
+    assert diag["blocking_constraints"] == [
+        # The blocked ids as well as the count: the count alone could not be checked, and the
+        # per-field sets overlap, so they must not be read as independent removals.
+        {"field": "salary_min", "filtered_jobs": 2,
+         "blocked_job_ids": ["job-1", "job-2"]}]
 
 
 def test_the_stage_trace_separates_an_empty_pool_from_an_infeasible_one() -> None:
