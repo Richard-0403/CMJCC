@@ -32,6 +32,7 @@ artifacts/ci-smoke/
 # the directories above: generated evidence lives on disk and ships with the thesis
 # archive, not in git (the smoke tree alone is 268 files of run bundles).
 artifacts/hybrid_smoke/
+artifacts/p0_2_smoke/
 artifacts/*.log
 
 # OS

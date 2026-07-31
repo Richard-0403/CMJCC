@@ -818,6 +818,21 @@ def _repair_raw(field_name: str, raw: object) -> object | None:
     return None
 
 
+def uses_remote_backend(config: AppConfig) -> bool:
+    """Whether this config will actually send requests to a remote LLM endpoint.
+
+    ``llm.mode`` alone does not answer this: ``mode: hybrid`` with ``provider: mock`` runs
+    the whole hybrid code path against the deterministic mock and contacts nothing, which is
+    what ``configs/hybrid.yaml`` is for. Only ``provider: remote`` reaches the network.
+
+    Exists so :func:`make_provider` and the experiment's runtime identity cannot disagree.
+    They did: the identity recorded ``JOBREC_LLM_MODEL`` and ``JOBREC_LLM_BASE_URL`` for any
+    non-deterministic mode, so a mock-backed hybrid smoke was stamped with a model and an
+    endpoint that no call ever used -- provenance naming a backend that never answered.
+    """
+    return config.llm.mode == RunMode.HYBRID and config.llm.provider == "remote"
+
+
 def make_provider(config: AppConfig, replay_path: str | None = None):
     """Provider factory keyed by run mode."""
     mode = config.llm.mode
@@ -828,7 +843,7 @@ def make_provider(config: AppConfig, replay_path: str | None = None):
         from ..llm.replay import ReplayProvider
         return ReplayProvider(replay_path or "model_calls.jsonl")
     # hybrid
-    if config.llm.provider == "remote":
+    if uses_remote_backend(config):
         from ..llm.remote_provider import RemoteLLMProvider
         return RemoteLLMProvider(
             timeout_seconds=config.llm.timeout_seconds,

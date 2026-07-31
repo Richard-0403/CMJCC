@@ -175,7 +175,7 @@ def test_runtime_identity_records_exactly_the_declared_fields():
 
 
 # ------------------------------------------- what the runner actually reports
-def _runner(tmp_path: Path, mode: RunMode) -> ExperimentRunner:
+def _runner(tmp_path: Path, mode: RunMode, provider: str = "remote") -> ExperimentRunner:
     """A runner over a one-line scenario file; nothing is executed, only inspected."""
     scenarios = tmp_path / "scenarios.jsonl"
     scenarios.write_text(json.dumps({
@@ -188,6 +188,7 @@ def _runner(tmp_path: Path, mode: RunMode) -> ExperimentRunner:
     }) + "\n", encoding="utf-8")
     config = load_config("configs/experiment_full.yaml", base_dir="configs")
     config.llm.mode = mode
+    config.llm.provider = provider
     return ExperimentRunner(config, "data/processed/jobs.jsonl", str(scenarios),
                             out_dir=str(tmp_path / "runs"))
 
@@ -208,12 +209,48 @@ def test_deterministic_mode_ignores_the_backend_environment(tmp_path: Path, monk
     assert "elsewhere.example.com" not in json.dumps(runtime)
 
 
+def test_hybrid_with_a_mock_provider_names_no_backend(tmp_path: Path, monkeypatch):
+    """``mode: hybrid`` + ``provider: mock`` contacts nothing, so it must name nothing.
+
+    Found by a mock-backed hybrid smoke: the identity had gated on the MODE alone, so this
+    run was stamped with the environment's model and endpoint even though every call was
+    answered by the deterministic mock. That is provenance naming a backend that never
+    answered, and it also let an unrelated exported variable move the experiment id.
+    """
+    monkeypatch.setenv(MODEL_ENV, "qwen-plus")
+    monkeypatch.setenv(BASE_URL_ENV, "https://dashscope.example.com/compatible-mode/v1")
+    runtime = _runner(tmp_path, RunMode.HYBRID, provider="mock")._runtime_identity("cat-1")
+
+    assert runtime["llm_mode"] == "hybrid"
+    assert runtime["llm_provider"] == "mock"
+    assert runtime["llm_model"] is None
+    assert runtime["llm_endpoint"] is None
+    assert "dashscope.example.com" not in json.dumps(runtime)
+
+
+def test_the_identity_and_the_provider_factory_agree_on_what_is_remote(tmp_path: Path):
+    """One predicate decides both, so the recorded backend cannot drift from the real one."""
+    from jobrec.orchestration.orchestrator import uses_remote_backend
+
+    for mode, provider, expected in [
+        (RunMode.DETERMINISTIC, "mock", False),
+        (RunMode.DETERMINISTIC, "remote", False),
+        (RunMode.HYBRID, "mock", False),
+        (RunMode.HYBRID, "remote", True),
+    ]:
+        runner = _runner(tmp_path, mode, provider=provider)
+        assert uses_remote_backend(runner.config) is expected, (mode, provider)
+        named = runner._runtime_identity("cat-1")["llm_model"] is not None
+        assert named is expected, (mode, provider)
+
+
 def test_hybrid_mode_records_the_backend_named_by_the_environment(tmp_path: Path,
                                                                  monkeypatch):
     monkeypatch.setenv(MODEL_ENV, "qwen-plus")
     monkeypatch.setenv(BASE_URL_ENV, "https://dashscope.example.com/compatible-mode/v1")
     monkeypatch.setenv(API_KEY_ENV, "sk-live-must-never-be-recorded")
-    runtime = _runner(tmp_path, RunMode.HYBRID)._runtime_identity("cat-1")
+    runtime = _runner(tmp_path, RunMode.HYBRID,
+                      provider="remote")._runtime_identity("cat-1")
 
     assert runtime["llm_mode"] == "hybrid"
     assert runtime["llm_model"] == "qwen-plus"

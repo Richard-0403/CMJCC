@@ -19,7 +19,7 @@ import yaml
 from ..app_service import AppService
 from ..catalog import catalog_hash, load_catalog
 from ..config import AppConfig
-from ..domain.enums import ResponseType, RunMode
+from ..domain.enums import ResponseType
 from ..llm.remote_provider import (
     BASE_URL_ENV,
     DEFAULT_BASE_URL,
@@ -27,7 +27,7 @@ from ..llm.remote_provider import (
     MODEL_ENV,
 )
 from ..orchestration.feature_flags import FeatureFlags
-from ..orchestration.orchestrator import LEGACY_REPARSE_WARNING
+from ..orchestration.orchestrator import LEGACY_REPARSE_WARNING, uses_remote_backend
 from ..prompts import prompt_hash
 from ..utils.hashing import stable_hash
 from ..utils.time import to_iso, utcnow
@@ -297,17 +297,23 @@ class ExperimentRunner:
     def _runtime_identity(self, chash: str) -> dict[str, Any]:
         """The non-source, non-config run inputs for the experiment id and the manifest.
 
-        The LLM backend is only named when the run mode actually calls one. In
-        ``deterministic`` mode no request is ever issued, so ``JOBREC_LLM_MODEL`` and
-        ``JOBREC_LLM_BASE_URL`` cannot influence a single bundle -- folding them in anyway
-        would make the deterministic experiment id depend on the operator's shell, so the
-        same deterministic batch would land under a different id on a machine that happens
-        to export those variables, which is the opposite of reproducible.
+        The LLM backend is only named when the run actually contacts one, which is decided
+        by :func:`~jobrec.orchestration.orchestrator.uses_remote_backend` -- the same
+        predicate ``make_provider`` uses to choose the provider, so the recorded backend
+        cannot disagree with the one that answers.
 
-        The environment is read through :mod:`jobrec.llm.remote_provider`'s own constants
-        and defaults, so the recorded backend cannot drift from the one that answers.
+        Testing the MODE alone was wrong and a mock-backed hybrid smoke proved it: ``mode:
+        hybrid`` with ``provider: mock`` exercises the hybrid code path against the
+        deterministic mock and contacts nothing, yet the identity was stamped with
+        ``JOBREC_LLM_MODEL`` and ``JOBREC_LLM_BASE_URL`` from the environment -- provenance
+        naming an endpoint no call had used, and an experiment id that moved when an
+        unrelated variable was exported.
+
+        Where no remote backend is used the fields are ``None`` rather than the environment's
+        values, so the id cannot depend on the operator's shell for a run the shell cannot
+        influence.
         """
-        calls_llm = self.config.llm.mode is not RunMode.DETERMINISTIC
+        calls_llm = uses_remote_backend(self.config)
         return runtime_identity(
             catalog_hash=chash,
             prompt_hash=prompt_hash(),
