@@ -254,7 +254,13 @@ def relevance_agreement(human_path: str | Path, oracle_labels: pd.DataFrame) -> 
     }
 
 
-def claim_agreement(human_path: str | Path) -> dict | None:
+def claim_agreement(
+    human_path: str | Path,
+    *,
+    occurrences: list[dict] | None = None,
+    experiment_id: str | None = None,
+    min_coverage: float = 0.0,
+) -> dict | None:
     """Cohen's kappa between two claim raters and validator-vs-ADJUDICATED-human agreement.
 
     Same adjudication rule as :func:`relevance_agreement`: the ``adjudicated`` column is
@@ -267,6 +273,19 @@ def claim_agreement(human_path: str | Path) -> dict | None:
     h = pd.read_csv(path).dropna(subset=["rater_1", "rater_2"])
     if h.empty:
         return None
+
+    # Linkage, when the caller supplied the experiment's own occurrences. Without it this
+    # function reads a CSV and reports kappa with no connection to the runs being analysed,
+    # which is how old labels produced a confident-looking figure for an experiment they had
+    # never seen. Agreement over zero overlapping items is not a low score; it is not a
+    # measurement, so it raises rather than being published.
+    linkage = None
+    if occurrences is not None:
+        from .annotation_linkage import link_claim_labels, require_linked
+
+        report = link_claim_labels(experiment_id or "", occurrences, h.to_dict("records"))
+        require_linked(report, min_coverage=min_coverage)
+        linkage = report.as_dict()
     r1 = h["rater_1"].astype(int).tolist()
     r2 = h["rater_2"].astype(int).tolist()
     gold = _gold_labels(r1, r2, _adjudicated_values(h))
@@ -282,6 +301,9 @@ def claim_agreement(human_path: str | Path) -> dict | None:
         n_gold = len(human_paired)
     out.update(_gold_report(gold, n_gold))
     out["human_label_path"] = str(path)
+    # Recorded even when it passed, so a reader can see WHICH fraction of the batch the figure
+    # covers rather than assuming all of it.
+    out["linkage"] = linkage
     return out
 
 
