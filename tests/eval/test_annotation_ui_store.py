@@ -55,7 +55,10 @@ def synthetic_items(count: int = 6) -> list[AnnotationItem]:
             analysis={"oracle_grade": index % 4},
             scenario_id=f"SYN-SC-{index:02d}", job_id=f"SYN-job-{index:02d}"))
     items.append(AnnotationItem(
-        item_key="clm::SYN-claim-1", kind=KIND_CLAIM,
+        # Keyed on the PROPOSITION, which is what schema v2 requires of a claim item: the
+        # store refuses one that does not name the proposition it stands for.
+        item_key="clm::sig-SYN000000000001", kind=KIND_CLAIM,
+        annotation_signature="sig-SYN000000000001",
         payload={"claim_text": "Synthetic claim.", "evidence": []},
         analysis={"validator_supported_binary": {"SYN-run-1": 1}},
         claim_id="SYN-claim-1",

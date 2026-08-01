@@ -30,6 +30,7 @@ from jobrec_eval.annotation import (
     load_adjudicated_relevance_labels,
     relevance_agreement,
 )
+from jobrec_eval.annotation_linkage import DEFAULT_SAMPLING_SEED, DROPPED_STRATA_FIELDS
 from jobrec_eval.annotation_ui import console
 from jobrec_eval.annotation_ui.assignment import assign_two_raters
 from jobrec_eval.annotation_ui.export import (
@@ -41,7 +42,9 @@ from jobrec_eval.annotation_ui.loader import build_items
 from jobrec_eval.annotation_ui.store import (
     KIND_CLAIM,
     KIND_RELEVANCE,
+    META_ANNOTATION_UNIVERSE,
     META_EXPERIMENT_ID,
+    META_SAMPLING_SEED,
     open_store,
 )
 
@@ -145,9 +148,17 @@ def test_export_writes_both_csvs_over_real_items(exported):
     assert result.manifest["counts"]["incomplete_relevance_items"] == LEFT_INCOMPLETE
     # Claims expand back to one row per (run_id, claim_id) occurrence.
     assert len(claims) == built.stats.claim_occurrences
-    assert claims["claim_id"].nunique() == built.stats.claim_items
-    assert len(claims) > claims["claim_id"].nunique()
-    assert not claims.duplicated(subset=["run_id", "claim_id"]).any()
+    # Keyed on the SIGNATURE, not on claim_id: several propositions share one claim_id, so
+    # nunique() over claim_id undercounts the judgements (98 against 146 on this fixture).
+    assert claims["annotation_signature"].nunique() == built.stats.claim_items
+    assert claims["claim_id"].nunique() < claims["annotation_signature"].nunique()
+    assert len(claims) > claims["annotation_signature"].nunique()
+    assert not claims.duplicated(subset=["run_id", "claim_id", "annotation_signature"]).any()
+    # The linkage columns a returned file needs to be tied back to this batch.
+    for column in ("experiment_id", "annotation_signature", "delivery_status"):
+        assert column in claims.columns, column
+    assert (claims["experiment_id"] != "").all()
+    assert set(claims["delivery_status"]) <= {"delivered", "dropped"}
     assert not relevance.duplicated(subset=["scenario_id", "job_id"]).any()
 
 
@@ -231,6 +242,35 @@ def test_the_console_builds_and_exports_from_the_real_experiment(annotation_expe
     assert build_output["stats"]["claim_items"] > 0
     assert build_output["max_load_imbalance"] <= 1
     assert build_output["raters"] == RATER_POOL
+
+    # The pre-registered frame is written BEFORE any label exists, and the store records where
+    # it is and which seed drew it. Coverage is measured against this file, so a frame nobody
+    # can locate or reproduce would make the denominator unverifiable.
+    universe_path = annotation_dir / console.UNIVERSE_FILENAME
+    assert universe_path.is_file()
+    universe = json.loads(universe_path.read_text(encoding="utf-8"))
+    assert universe["sampling_seed"] == DEFAULT_SAMPLING_SEED
+    assert universe["strata_fields"] == list(DROPPED_STRATA_FIELDS)
+    assert universe["counts"]["delivered_signatures"] == build_output["stats"]["claim_items"] - (
+        build_output["stats"]["dropped_claim_items"])
+    assert len(universe["delivered"]) == universe["counts"]["delivered_signatures"]
+    with open_store(annotation_dir, create=False) as store:
+        meta = store.meta()
+    assert meta[META_ANNOTATION_UNIVERSE] == console.UNIVERSE_FILENAME
+    assert meta[META_SAMPLING_SEED] == str(DEFAULT_SAMPLING_SEED)
+    # Rebuilding from the same bundles reproduces the frame exactly.
+    assert console.main([
+        "build", "--experiment-dir", str(annotation_experiment.experiment_dir),
+        "--scenarios", annotation_experiment.scenarios_path,
+        "--catalog", annotation_experiment.catalog_path,
+        "--annotation-dir", str(annotation_dir),
+        "--raters", ",".join(RATER_POOL), "--seed", str(SEED),
+    ]) == 0
+    rebuilt = json.loads(capsys.readouterr().out)
+    assert rebuilt["stats"] == build_output["stats"]
+    again = json.loads(universe_path.read_text(encoding="utf-8"))
+    assert {k: v for k, v in again.items() if k != "created_at"} == {
+        k: v for k, v in universe.items() if k != "created_at"}
 
     assert console.main(["status", "--annotation-dir", str(annotation_dir)]) == 0
     status = json.loads(capsys.readouterr().out)

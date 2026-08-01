@@ -58,7 +58,8 @@ AGREE = "rel::SYN-SC-01::SYN-job-01"
 ADJUDICATED = "rel::SYN-SC-02::SYN-job-02"
 OPEN_DISAGREEMENT = "rel::SYN-SC-03::SYN-job-03"
 INCOMPLETE = "rel::SYN-SC-04::SYN-job-04"
-CLAIM = "clm::SYN-claim-01"
+CLAIM_SIGNATURE = "sig-SYN0000000000001"
+CLAIM = f"clm::{CLAIM_SIGNATURE}"
 
 
 def _relevance_item(item_key: str, index: int) -> AnnotationItem:
@@ -80,15 +81,24 @@ def store(tmp_path):
             _relevance_item(OPEN_DISAGREEMENT, 3), _relevance_item(INCOMPLETE, 4),
             AnnotationItem(
                 item_key=CLAIM, kind=KIND_CLAIM,
+                # Schema v2: a claim item must name the proposition it stands for, and its
+                # occurrences carry the batch, the repeat and whether the user saw them.
+                annotation_signature=CLAIM_SIGNATURE,
                 payload={"claim_text": "Synthetic claim.", "evidence": []},
                 analysis={"occurrence_count": 2}, claim_id="SYN-claim-01",
                 occurrences=(
                     ClaimOccurrence(run_id="SYN-run-1", claim_id="SYN-claim-01",
                                     variant="full", validator_label=1,
-                                    support_status="supported"),
+                                    support_status="supported",
+                                    experiment_id="SYN-exp-1", repeat_index=0,
+                                    annotation_signature=CLAIM_SIGNATURE,
+                                    delivery_status="delivered"),
                     ClaimOccurrence(run_id="SYN-run-2", claim_id="SYN-claim-01",
                                     variant="no_memory", validator_label=0,
-                                    support_status="unsupported"))),
+                                    support_status="unsupported",
+                                    experiment_id="SYN-exp-1", repeat_index=0,
+                                    annotation_signature=CLAIM_SIGNATURE,
+                                    delivery_status="dropped"))),
         ])
         store.save_assignment_plan(
             assign_two_raters(store.item_keys(), [RATER_A, RATER_B], SEED))
@@ -234,15 +244,28 @@ def test_validation_refuses_an_out_of_range_grade_and_a_duplicate_pair():
             {"scenario_id": "SYN-SC-01", "job_id": "SYN-job-01", "rater_1": 2, "rater_2": 2,
              ADJUDICATED_COLUMN: ""}])
 
+    def claim(**over):
+        base = {"experiment_id": "SYN-exp-1", "run_id": "SYN-run-1",
+                "claim_id": "SYN-claim-01", "annotation_signature": CLAIM_SIGNATURE,
+                "delivery_status": "delivered", "rater_1": 1, "rater_2": 1, "validator": 1,
+                ADJUDICATED_COLUMN: ""}
+        base.update(over)
+        return base
+
     with pytest.raises(ExportValidationError, match="outside"):
-        validate_claim_rows([{"run_id": "SYN-run-1", "claim_id": "SYN-claim-01", "rater_1": 2,
-                              "rater_2": 1, "validator": 1, ADJUDICATED_COLUMN: ""}])
+        validate_claim_rows([claim(rater_1=2)])
     with pytest.raises(ExportValidationError, match="once"):
-        validate_claim_rows([
-            {"run_id": "SYN-run-1", "claim_id": "SYN-claim-01", "rater_1": 1, "rater_2": 1,
-             "validator": 1, ADJUDICATED_COLUMN: ""},
-            {"run_id": "SYN-run-1", "claim_id": "SYN-claim-01", "rater_1": 0, "rater_2": 0,
-             "validator": 1, ADJUDICATED_COLUMN: ""}])
+        validate_claim_rows([claim(), claim(rater_1=0, rater_2=0)])
+    # A row that cannot be tied to a batch, a proposition or a delivery state is refused: this
+    # is the shape every pre-migration file has, and reporting it against these runs is the
+    # defect the columns exist to prevent.
+    for missing in ("experiment_id", "annotation_signature", "delivery_status"):
+        with pytest.raises(ExportValidationError, match="needs"):
+            validate_claim_rows([claim(**{missing: ""})])
+    # Two propositions under one claim_id in one run are NOT a duplicate; the old
+    # (run_id, claim_id) key refused to write any file at all when that happened.
+    validate_claim_rows([claim(), claim(annotation_signature="sig-SYN0000000000002",
+                                       rater_1=0, rater_2=0)])
 
 
 def test_a_file_the_consuming_loader_would_reject_is_never_written(tmp_path):

@@ -109,17 +109,38 @@ def test_relevance_payload_carries_profile_turns_in_order_and_job_fields(built,
     assert payload["job"]["is_active"] == job.is_active
 
 
-def test_claim_items_are_deduplicated_by_content_addressed_claim_id(built,
-                                                                    annotation_experiment):
-    """Identical claims across variants collapse to ONE judgement, occurrences preserved."""
-    occurrences_in_runs = [(b.run_id, str(c["claim_id"]))
-                           for b in annotation_experiment.bundles for c in b.claims
-                           if c.get("claim_id")]
+def test_claim_items_are_deduplicated_by_annotation_signature(built,
+                                                              annotation_experiment):
+    """One judgement per PROPOSITION, occurrences preserved -- not one per sentence.
+
+    This used to assert ``len(claim_items) == len(unique_claim_ids)``, which was the defect:
+    ``claim_id`` digests the rendered sentence, so one id covers several propositions whenever a
+    sentence formats identically at different values. On this 24-run subset the two counts are
+    146 signatures against 98 claim ids; on the 210-run deterministic pilot, 694 against 416.
+    """
+    from jobrec_eval.annotation_linkage import annotation_signature
+
+    occurrences_in_runs = []
+    signatures = set()
+    for bundle in annotation_experiment.bundles:
+        evidence = {str(i.get("evidence_id")): i for i in bundle.evidence_items}
+        for claim in [*bundle.claims, *bundle.dropped_claims]:
+            if not claim.get("claim_id"):
+                continue
+            occurrences_in_runs.append((bundle.run_id, str(claim["claim_id"])))
+            signatures.add(annotation_signature(claim, evidence))
     unique_claim_ids = {claim_id for _, claim_id in occurrences_in_runs}
 
-    assert len(built.claim_items) == len(unique_claim_ids)
+    assert len(built.claim_items) == len(signatures)
     assert built.stats.claim_occurrences == len(occurrences_in_runs)
-    assert built.stats.claim_items == len(unique_claim_ids)
+    assert built.stats.claim_items == len(signatures)
+    # The regression this test exists for: MORE items than claim ids, because propositions
+    # sharing a sentence are judged separately now.
+    assert len(signatures) > len(unique_claim_ids), (
+        "the fixture has no sentence covering several propositions, so this proved nothing")
+    # Every item names exactly one proposition, and no two name the same one.
+    assert all(item.annotation_signature for item in built.claim_items)
+    assert len({i.annotation_signature for i in built.claim_items}) == len(built.claim_items)
     # The whole point of the dedup key: fewer judgements than CSV rows.
     assert built.stats.claim_items < built.stats.claim_occurrences
     assert built.stats.claim_dedup_ratio > 1.0
@@ -134,7 +155,10 @@ def test_claim_items_are_deduplicated_by_content_addressed_claim_id(built,
     cross_variant = [i for i in collapsed if len({o.variant for o in i.occurrences}) > 1]
     assert cross_variant, "no claim was shared ACROSS variants"
     item = cross_variant[0]
-    assert item.item_key == claim_item_key(item.claim_id)
+    # Derived from the SIGNATURE, so a rebuild from the same bundles reproduces the same keys.
+    assert item.item_key == claim_item_key(item.annotation_signature)
+    # And every occurrence of this item instantiates that one proposition.
+    assert {o.annotation_signature for o in item.occurrences} == {item.annotation_signature}
     assert set(item.analysis["variants"]) == {o.variant for o in item.occurrences}
 
 
@@ -176,7 +200,17 @@ def test_unresolvable_evidence_id_stays_visible_beside_resolved_ones(annotation_
                         annotation_experiment.scenarios_path,
                         annotation_experiment.catalog_path, bundles=bundles)
 
-    item = next(i for i in built.claim_items if i.claim_id == claim_id)
+    # Located by SIGNATURE, not by claim_id. Several items can now share a claim_id -- that is
+    # the point of the key change -- so ``next(i for i in items if i.claim_id == claim_id)``
+    # would return whichever proposition came first, which is usually not the modified one.
+    # Adding a dangling citation also changes the evidence projection, so the modified claim
+    # has its own signature by construction.
+    from jobrec_eval.annotation_linkage import annotation_signature
+
+    evidence = {str(i.get("evidence_id")): i for i in target_bundle.evidence_items}
+    signature = annotation_signature(target_claim, evidence)
+    item = next(i for i in built.claim_items if i.annotation_signature == signature)
+    assert item.claim_id == claim_id
     assert item.payload["unresolvable_evidence_ids"] == [MISSING_EVIDENCE_ID]
     assert item.payload["has_unresolvable_evidence"] is True
     # The resolved citations are still there: the rater sees BOTH sides and can judge that a

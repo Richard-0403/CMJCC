@@ -33,6 +33,13 @@ import json
 import sys
 from pathlib import Path
 
+from ..annotation_linkage import (
+    DEFAULT_DROPPED_PER_STRATUM,
+    DEFAULT_SAMPLING_SEED,
+    build_annotation_universe,
+    claim_occurrences,
+)
+from ..loaders import load_bundles
 from .app import DEFAULT_HOST, DEFAULT_PORT, NO_AUTH_NOTICE, is_loopback_host
 from .assignment import assign_two_raters
 from .export import export_annotations
@@ -41,9 +48,11 @@ from .store import (
     DB_FILENAME,
     KIND_CLAIM,
     KIND_RELEVANCE,
+    META_ANNOTATION_UNIVERSE,
     META_CATALOG_PATH,
     META_EXPERIMENT_DIR,
     META_EXPERIMENT_ID,
+    META_SAMPLING_SEED,
     META_SCENARIOS_PATH,
     open_store,
 )
@@ -52,22 +61,55 @@ from .store import (
 #: seeded artifact of this thesis carries the same number unless one is passed explicitly.
 DEFAULT_SEED = 2026
 
+#: The pre-registration record, written beside the store. Same filename the pipeline writes
+#: under ``manifests/``, so the two can be diffed to prove the rater queue and the analysis used
+#: the same frame.
+UNIVERSE_FILENAME = "annotation_universe.json"
+
 
 def build_command(args: argparse.Namespace) -> dict:
-    """Build items from real bundles, register the raters and store the assignment plan."""
+    """Build items from real bundles, register the raters and store the assignment plan.
+
+    The withheld (``dropped``) claims are drawn from a PRE-REGISTERED stratified frame, written
+    to :data:`UNIVERSE_FILENAME` before any label exists. Two reasons it is fixed here rather
+    than left implicit: a rater's queue that holds every withheld claim is unbounded work, and a
+    frame chosen after the fact makes coverage circular -- it reads 100% for whatever happened
+    to get annotated.
+    """
+    bundles = load_bundles(Path(args.experiment_dir))
+    experiment_id = Path(args.experiment_dir).name
+    universe = build_annotation_universe(
+        experiment_id,
+        claim_occurrences(experiment_id, [
+            {"run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
+             "repeat_index": b.run_index, "claims": b.claims,
+             "dropped_claims": b.dropped_claims,
+             "evidence_by_id": {i.get("evidence_id"): i for i in b.evidence_items}}
+            for b in bundles]),
+        seed=args.sampling_seed,
+        dropped_per_stratum=args.dropped_per_stratum,
+    )
     result = build_items(args.experiment_dir, args.scenarios, args.catalog,
-                         oracle_labels=args.oracle_labels)
+                         oracle_labels=args.oracle_labels, bundles=bundles,
+                         dropped_sample=universe.dropped_sampled)
     raters = [r.strip() for r in args.raters.split(",") if r.strip()]
-    with open_store(args.annotation_dir) as store:
+    annotation_dir = Path(args.annotation_dir)
+    annotation_dir.mkdir(parents=True, exist_ok=True)
+    universe_path = annotation_dir / UNIVERSE_FILENAME
+    universe_path.write_text(json.dumps(universe.manifest(), indent=2, sort_keys=True),
+                             encoding="utf-8")
+    with open_store(annotation_dir) as store:
         store.register_raters(raters)
         store.add_items(result.all_items)
         plan = assign_two_raters(store.item_keys(), raters, args.seed)
         store.save_assignment_plan(plan)
         store.set_meta({
-            META_EXPERIMENT_ID: Path(args.experiment_dir).name,
+            META_EXPERIMENT_ID: experiment_id,
             META_EXPERIMENT_DIR: str(args.experiment_dir),
             META_SCENARIOS_PATH: str(args.scenarios),
             META_CATALOG_PATH: str(args.catalog),
+            META_ANNOTATION_UNIVERSE: UNIVERSE_FILENAME,
+            META_SAMPLING_SEED: args.sampling_seed,
         })
         return {
             "annotation_store": str(store.path),
@@ -76,6 +118,9 @@ def build_command(args: argparse.Namespace) -> dict:
             "assignment_seed": args.seed,
             "assignment_counts": store.assignment_counts(),
             "max_load_imbalance": plan.max_load_imbalance,
+            "annotation_universe": str(universe_path),
+            "annotation_universe_counts": universe.manifest()["counts"],
+            "sampling_seed": universe.seed,
         }
 
 
@@ -223,6 +268,14 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--raters", required=True,
                        help="comma-separated rater ids (at least two)")
     build.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    build.add_argument("--sampling-seed", type=int, default=DEFAULT_SAMPLING_SEED,
+                       help="seed for the stratified draw of WITHHELD claims into the "
+                            "pre-registered annotation frame; recorded in "
+                            f"{UNIVERSE_FILENAME} and in the store's meta")
+    build.add_argument("--dropped-per-stratum", type=int,
+                       default=DEFAULT_DROPPED_PER_STRATUM,
+                       help="withheld signatures drawn per (claim_type, predicate, "
+                            "support_status) stratum")
     build.add_argument("--oracle-labels", default=None,
                        help="normalized/relevance_labels.csv, for the ANALYSIS side only "
                             "(never shown to a rater)")

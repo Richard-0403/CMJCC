@@ -30,7 +30,10 @@ missing annotation.
 from __future__ import annotations
 
 import json
+import random
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -212,6 +215,231 @@ def claim_occurrences(
     return rows
 
 
+# ------------------------------------------------------- pre-registered annotation universe
+#: Fields a dropped claim is stratified on before sampling. Chosen because they are what a
+#: validator false-negative rate is expected to vary along: the KIND of proposition, the
+#: PREDICATE that decides it, and the verdict that got it withheld. Sampling without strata
+#: would let one populous claim type swallow the sample and leave the rest unestimated.
+DROPPED_STRATA_FIELDS: tuple[str, ...] = ("claim_type", "predicate", "support_status")
+
+#: Default withheld signatures drawn per stratum. Small on purpose: the withheld sample exists
+#: to ESTIMATE a false-negative rate, and every drawn item is human work.
+DEFAULT_DROPPED_PER_STRATUM = 5
+
+#: Seed for the stratified draw. Fixed and recorded, so the frame is reproducible and was
+#: demonstrably not chosen after seeing which claims were easy to label. Defined here rather
+#: than in :mod:`jobrec_eval.cli` so the annotation tool and the analysis pipeline read ONE
+#: number -- the frame a rater works from has to be the frame coverage is measured against, and
+#: the annotation package deliberately does not import the CLI (and with it the plotting stack).
+DEFAULT_SAMPLING_SEED = 20260801
+
+
+def stratum_of(row: dict, fields: Sequence[str] = DROPPED_STRATA_FIELDS) -> tuple[str, ...]:
+    """The stratum key of one occurrence row."""
+    return tuple(str(row.get(name) or "") for name in fields)
+
+
+@dataclass(frozen=True)
+class AnnotationUniverse:
+    """The signatures that were PRE-REGISTERED for annotation, and how they were chosen.
+
+    This is the denominator of claim coverage. Coverage against "whatever got annotated" is
+    circular -- it reports 100% for any sample -- so the frame is fixed first, written to a
+    manifest with its seed and strata rules, and coverage is measured against it afterwards.
+
+    Delivered signatures are taken WHOLE: they are what the user saw, so leaving any of them
+    out would mean reporting agreement over a subset of the explanations under test. Withheld
+    (``dropped``) signatures are stratified and sampled, because they exist only to estimate the
+    validator's false-negative rate and there can be far more of them than a rater can judge.
+    """
+
+    experiment_id: str
+    delivered: tuple[str, ...]
+    dropped_sampled: tuple[str, ...]
+    dropped_population: tuple[str, ...]
+    seed: int
+    dropped_per_stratum: int
+    strata_fields: tuple[str, ...]
+    #: ``stratum -> (population size, sampled size)``, so a reader can see which strata were
+    #: exhausted and which were subsampled.
+    strata: tuple[tuple[tuple[str, ...], int, int], ...] = ()
+    created_at: str = ""
+
+    @property
+    def signatures(self) -> frozenset[str]:
+        """Every signature in the frame: all delivered, plus the sampled withheld ones."""
+        return frozenset(self.delivered) | frozenset(self.dropped_sampled)
+
+    @property
+    def size(self) -> int:
+        return len(self.signatures)
+
+    def manifest(self) -> dict:
+        """The pre-registration record: seed, rules, per-stratum counts and the frame itself.
+
+        The signature lists are included in full rather than digested. A digest proves the
+        frame did not change; the list is what lets coverage be RECOMPUTED later, which is the
+        point of pre-registering a denominator.
+        """
+        return {
+            "experiment_id": self.experiment_id,
+            "created_at": self.created_at,
+            "sampling_seed": self.seed,
+            "strata_fields": list(self.strata_fields),
+            "dropped_per_stratum": self.dropped_per_stratum,
+            "sampling_rule": (
+                "every delivered signature is included; withheld signatures are grouped by "
+                f"{'+'.join(self.strata_fields)} and up to {self.dropped_per_stratum} are drawn "
+                "per stratum with a per-stratum seeded RNG, so adding a stratum cannot reshuffle "
+                "the draw of any other"),
+            "counts": {
+                "universe_signatures": self.size,
+                "delivered_signatures": len(self.delivered),
+                "dropped_population_signatures": len(self.dropped_population),
+                "dropped_sampled_signatures": len(self.dropped_sampled),
+                "strata": len(self.strata),
+            },
+            "strata": [{"stratum": dict(zip(self.strata_fields, key, strict=True)),
+                        "population": population, "sampled": sampled}
+                       for key, population, sampled in self.strata],
+            "delivered": list(self.delivered),
+            "dropped_sampled": list(self.dropped_sampled),
+        }
+
+
+def build_annotation_universe(
+    experiment_id: str,
+    occurrences: list[dict],
+    *,
+    seed: int = DEFAULT_SAMPLING_SEED,
+    dropped_per_stratum: int = DEFAULT_DROPPED_PER_STRATUM,
+    strata_fields: Sequence[str] = DROPPED_STRATA_FIELDS,
+) -> AnnotationUniverse:
+    """Fix the annotation frame for one experiment, before any labelling happens.
+
+    Deterministic in ``(seed, occurrences)``: the draw is made from the SORTED signatures of
+    each stratum with an RNG seeded on ``(seed, stratum)``, so rebuilding the frame from the
+    same bundles reproduces it exactly, and a stratum appearing or growing cannot change which
+    signatures were drawn from any other stratum.
+
+    A signature that appears both delivered and withheld counts as delivered: the user saw it
+    at least once, so it is in the frame whole rather than by sample.
+    """
+    delivered: set[str] = set()
+    dropped: dict[tuple[str, ...], set[str]] = {}
+    dropped_rows: dict[str, tuple[str, ...]] = {}
+    for row in occurrences:
+        signature = str(row["annotation_signature"])
+        if row.get("delivery_status") == DELIVERY_DELIVERED:
+            delivered.add(signature)
+        else:
+            key = stratum_of(row, strata_fields)
+            dropped.setdefault(key, set()).add(signature)
+            dropped_rows.setdefault(signature, key)
+
+    sampled: set[str] = set()
+    strata: list[tuple[tuple[str, ...], int, int]] = []
+    for key in sorted(dropped):
+        # Delivered wins, so a signature already in the frame is not also sampled.
+        population = sorted(dropped[key] - delivered)
+        if not population:
+            strata.append((key, 0, 0))
+            continue
+        take = min(dropped_per_stratum, len(population))
+        rng = random.Random(f"{seed}|{'|'.join(key)}")  # noqa: S311 - sampling, not crypto
+        drawn = sorted(rng.sample(population, take))
+        sampled.update(drawn)
+        strata.append((key, len(population), len(drawn)))
+
+    return AnnotationUniverse(
+        experiment_id=experiment_id,
+        delivered=tuple(sorted(delivered)),
+        dropped_sampled=tuple(sorted(sampled)),
+        dropped_population=tuple(sorted(set(dropped_rows) - delivered)),
+        seed=seed, dropped_per_stratum=dropped_per_stratum,
+        strata_fields=tuple(strata_fields), strata=tuple(strata),
+        created_at=datetime.now(UTC).isoformat(),
+    )
+
+
+#: Why a human label row was refused entry to kappa.
+EXCLUDED_OTHER_EXPERIMENT = "other_experiment"
+EXCLUDED_NO_SIGNATURE = "no_signature"
+EXCLUDED_OBSOLETE = "obsolete_signature"
+EXCLUDED_OUT_OF_UNIVERSE = "outside_pre_registered_universe"
+
+
+@dataclass(frozen=True)
+class LabelFilterResult:
+    """Which label rows may enter kappa, and why the rest may not."""
+
+    #: Row indices to keep, in input order.
+    kept: tuple[int, ...]
+    #: ``reason -> count`` for the refused rows.
+    excluded: dict[str, int]
+
+    @property
+    def n_excluded(self) -> int:
+        return sum(self.excluded.values())
+
+    def as_dict(self) -> dict:
+        return {"kept_rows": len(self.kept), "excluded_rows": self.n_excluded,
+                "excluded_by_reason": dict(sorted(self.excluded.items()))}
+
+
+def filter_labels_to_universe(
+    labels: list[dict],
+    *,
+    experiment_id: str,
+    universe: frozenset[str] | set[str],
+    produced: frozenset[str] | set[str] | None = None,
+) -> LabelFilterResult:
+    """Keep only the label rows that describe THIS experiment's pre-registered frame.
+
+    Four kinds of row are refused, each counted separately so the exclusion is auditable
+    rather than a silent drop:
+
+    - a row from another ``experiment_id`` -- it was made from runs this analysis is not about;
+    - a row with no ``annotation_signature`` -- every v1 file is like this, and there is no way
+      to tell which proposition it judged, because ``claim_id`` covered several;
+    - a row whose signature no longer exists (obsolete): the proposition changed or went away;
+    - a row inside the experiment but outside the pre-registered frame -- a withheld claim that
+      was not sampled, say. Counting it would make coverage's denominator depend on what
+      happened to get annotated, which reports 100% for any sample.
+
+    ``experiment_id`` is only enforced where the row states one. A file without the column is
+    not assumed to be foreign; its rows still have to match on signature, which is the check
+    that actually ties a label to these runs.
+
+    Args:
+        produced: Every signature the experiment produced, used only to tell the two
+            out-of-frame cases apart: a signature that does not exist at all is OBSOLETE, while
+            one that exists but was left out of the frame is out of scope. Without it both are
+            reported as out of scope, which is true but less useful.
+    """
+    kept: list[int] = []
+    excluded: dict[str, int] = {}
+
+    def refuse(reason: str) -> None:
+        excluded[reason] = excluded.get(reason, 0) + 1
+
+    for index, row in enumerate(labels):
+        row_experiment = str(row.get("experiment_id") or "")
+        if row_experiment and experiment_id and row_experiment != experiment_id:
+            refuse(EXCLUDED_OTHER_EXPERIMENT)
+            continue
+        signature = str(row.get("annotation_signature") or "")
+        if not signature:
+            refuse(EXCLUDED_NO_SIGNATURE)
+            continue
+        if signature not in universe:
+            refuse(EXCLUDED_OBSOLETE if produced is not None and signature not in produced
+                   else EXCLUDED_OUT_OF_UNIVERSE)
+            continue
+        kept.append(index)
+    return LabelFilterResult(kept=tuple(kept), excluded=excluded)
+
+
 @dataclass
 class LinkageReport:
     """How much of the current experiment a set of human labels actually covers."""
@@ -223,6 +451,14 @@ class LinkageReport:
     overlapping_signatures: int = 0
     missing_signatures: int = 0
     obsolete_signatures: int = 0
+    #: Set when a pre-registered universe supplied the denominator, so a reader can tell a
+    #: coverage measured against a fixed frame from one measured against whatever was produced.
+    universe_signatures: int | None = None
+    #: Signatures the experiment produced that the frame deliberately left out (unsampled
+    #: withheld claims). Not missing annotation -- out of scope by pre-registration.
+    out_of_universe_signatures: int = 0
+    #: Label rows refused entry to kappa, by reason.
+    excluded_label_rows: dict[str, int] = field(default_factory=dict)
 
     @property
     def coverage(self) -> float | None:
@@ -249,7 +485,13 @@ class LinkageReport:
             "overlapping_signatures": self.overlapping_signatures,
             "missing_signatures": self.missing_signatures,
             "obsolete_signatures": self.obsolete_signatures,
+            "universe_signatures": self.universe_signatures,
+            "out_of_universe_signatures": self.out_of_universe_signatures,
+            "excluded_label_rows": dict(sorted(self.excluded_label_rows.items())),
             "coverage": self.coverage,
+            "coverage_denominator": (
+                "pre_registered_universe" if self.universe_signatures is not None
+                else "signatures_produced"),
             "is_stale": self.is_stale,
         }
 
@@ -258,20 +500,46 @@ def link_claim_labels(
     experiment_id: str,
     occurrences: list[dict],
     labels: list[dict],
+    *,
+    universe: AnnotationUniverse | None = None,
 ) -> LinkageReport:
-    """Compare the signatures the experiment produced with the ones that were annotated."""
-    current = {row["annotation_signature"] for row in occurrences}
-    labelled = {row.get("annotation_signature") for row in labels
+    """Compare the signatures the experiment produced with the ones that were annotated.
+
+    With a ``universe``, the PRE-REGISTERED frame is the denominator and labels are filtered to
+    it first: rows from another experiment, rows with no signature, obsolete signatures and
+    signatures deliberately left out of the frame are all excluded from the overlap, each
+    counted under its own reason. Without one the denominator is every signature produced,
+    which is the stricter reading and the right default when no frame was registered.
+    """
+    produced = {str(row["annotation_signature"]) for row in occurrences}
+    denominator = set(universe.signatures) if universe is not None else produced
+
+    if universe is not None:
+        kept = filter_labels_to_universe(
+            labels, experiment_id=experiment_id, universe=universe.signatures,
+            produced=frozenset(produced))
+        usable = [labels[i] for i in kept.kept]
+        excluded = dict(kept.excluded)
+    else:
+        usable = list(labels)
+        excluded = {}
+
+    labelled = {str(row.get("annotation_signature")) for row in usable
                 if row.get("annotation_signature")}
+    all_labelled = {str(row.get("annotation_signature")) for row in labels
+                    if row.get("annotation_signature")}
     return LinkageReport(
         experiment_id=experiment_id,
         label_experiment_ids=sorted({str(r.get("experiment_id")) for r in labels
                                      if r.get("experiment_id")}),
-        current_signatures=len(current),
+        current_signatures=len(denominator),
         labelled_signatures=len(labelled),
-        overlapping_signatures=len(current & labelled),
-        missing_signatures=len(current - labelled),
-        obsolete_signatures=len(labelled - current),
+        overlapping_signatures=len(denominator & labelled),
+        missing_signatures=len(denominator - labelled),
+        obsolete_signatures=len(all_labelled - produced),
+        universe_signatures=(universe.size if universe is not None else None),
+        out_of_universe_signatures=len(produced - denominator),
+        excluded_label_rows=excluded,
     )
 
 

@@ -23,12 +23,19 @@ import pytest
 from jobrec_eval.annotation_linkage import (
     DELIVERY_DELIVERED,
     DELIVERY_DROPPED,
+    DROPPED_STRATA_FIELDS,
     annotation_items,
     annotation_signature,
     claim_occurrences,
     evidence_projection,
 )
-from jobrec_eval.cli import HUMAN_RELEVANCE_MIN_COVERAGE, run_pipeline
+from jobrec_eval.cli import (
+    ANNOTATION_DROPPED_PER_STRATUM,
+    ANNOTATION_SAMPLING_SEED,
+    ANNOTATION_UNIVERSE_FILENAME,
+    HUMAN_RELEVANCE_MIN_COVERAGE,
+    run_pipeline,
+)
 
 CATALOG = "data/processed/jobs.jsonl"
 CONFIG = "configs/experiment_full.yaml"
@@ -211,3 +218,32 @@ def test_the_claim_template_has_one_row_per_signature(analysed: Path):
     for column in ("experiment_id", "annotation_signature", "delivery_status"):
         assert column in template.columns, column
     assert template["annotation_signature"].is_unique
+
+
+def test_the_pipeline_pre_registers_the_annotation_frame(analysed: Path):
+    """The coverage denominator is written on the OFFICIAL path, before any label is read.
+
+    Measured against whatever happened to get annotated, coverage reads 100% for any sample. It
+    has to be measured against a frame fixed in advance, and that frame has to be on disk with
+    its seed and rules for anyone to check it.
+    """
+    path = analysed / "manifests" / ANNOTATION_UNIVERSE_FILENAME
+    assert path.is_file(), "the pipeline did not pre-register an annotation frame"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    occurrences = pd.read_csv(analysed / "normalized" / "claim_occurrences.csv")
+
+    assert manifest["experiment_id"] == analysed.name
+    assert manifest["sampling_seed"] == ANNOTATION_SAMPLING_SEED
+    assert manifest["dropped_per_stratum"] == ANNOTATION_DROPPED_PER_STRATUM
+    assert manifest["strata_fields"] == list(DROPPED_STRATA_FIELDS)
+    delivered = occurrences[occurrences["delivery_status"] == DELIVERY_DELIVERED]
+    assert manifest["counts"]["delivered_signatures"] == (
+        delivered["annotation_signature"].nunique())
+    # The frame itself, so coverage can be recomputed rather than merely believed.
+    assert len(manifest["delivered"]) == manifest["counts"]["delivered_signatures"]
+
+    coverage = json.loads(
+        (analysed / "manifests" / "annotation_coverage.json").read_text(encoding="utf-8"))
+    assert coverage["claim_annotation_universe_manifest"] == (
+        f"manifests/{ANNOTATION_UNIVERSE_FILENAME}")
+    assert coverage["claim_annotation_universe"]["sampling_seed"] == ANNOTATION_SAMPLING_SEED

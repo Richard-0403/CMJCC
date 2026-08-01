@@ -308,7 +308,8 @@ def test_an_unresolvable_citation_is_shown_prominently_and_can_be_flagged(annota
     payload = dict(source.payload)
     payload["unresolvable_evidence_ids"] = ["SYNTHETIC-EV-DOES-NOT-RESOLVE"]
     payload["has_unresolvable_evidence"] = True
-    item = AnnotationItem(item_key="clm::SYNTHETIC-UNRESOLVABLE", kind=KIND_CLAIM,
+    item = AnnotationItem(item_key="clm::sig-SYNTHETICUNRESOLV", kind=KIND_CLAIM,
+                          annotation_signature="sig-SYNTHETICUNRESOLV",
                           payload=payload, analysis={}, claim_id="SYNTHETIC-UNRESOLVABLE")
     pool = RATER_POOL[:2]
     with open_store(directory) as store:

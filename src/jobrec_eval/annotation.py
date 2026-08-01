@@ -39,6 +39,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -267,6 +268,7 @@ def claim_agreement(
     *,
     occurrences: list[dict] | None = None,
     experiment_id: str | None = None,
+    universe: Any | None = None,
     min_coverage: float = 0.0,
     strict: bool = False,
 ) -> dict | None:
@@ -275,6 +277,26 @@ def claim_agreement(
     Same adjudication rule as :func:`relevance_agreement`: the ``adjudicated`` column is
     the gold when present, concordant raters are their own gold, and an unadjudicated
     disagreement is counted and excluded rather than averaged.
+
+    Two different units are reported, and they are named so they cannot be confused:
+
+    - ``n_items`` / ``cohens_kappa`` are per SIGNATURE. One human judgement covers every
+      occurrence of a proposition, and the CSV replicates that judgement across its rows, so
+      computing kappa over rows would multiply n by the occurrence count (3578 rows for 694
+      judgements in the 210-run pilot) and report a confidence nobody earned.
+    - ``validator_vs_human_kappa`` / ``n_validator_occurrences`` are per OCCURRENCE, because
+      the validator ran once per run and its verdict genuinely differs between occurrences of
+      the same proposition.
+
+    Args:
+        occurrences: This experiment's claim occurrences. Supplying them turns linkage into a
+            precondition; without them the function reads a CSV and reports kappa with no
+            connection to the runs being analysed, which is how old labels produced a
+            confident-looking figure for an experiment they had never seen.
+        universe: Optional pre-registered
+            :class:`~jobrec_eval.annotation_linkage.AnnotationUniverse`. When given it is the
+            coverage denominator and the label filter, so a withheld claim that was never
+            sampled is out of scope rather than counted as missing annotation.
     """
     path = Path(human_path)
     if not path.exists():
@@ -283,22 +305,20 @@ def claim_agreement(
     if h.empty:
         return None
 
-    # Linkage, when the caller supplied the experiment's own occurrences. Without it this
-    # function reads a CSV and reports kappa with no connection to the runs being analysed,
-    # which is how old labels produced a confident-looking figure for an experiment they had
-    # never seen. Agreement over zero overlapping items is not a low score; it is not a
-    # measurement, so it raises rather than being published.
     linkage = None
     unusable_reason = None
+    label_filter: dict[str, Any] | None = None
     if occurrences is not None:
         from .annotation_linkage import (
             MissingHumanLabelsError,
             StaleAnnotationError,
+            filter_labels_to_universe,
             link_claim_labels,
             require_linked,
         )
 
-        report = link_claim_labels(experiment_id or "", occurrences, h.to_dict("records"))
+        rows = h.to_dict("records")
+        report = link_claim_labels(experiment_id or "", occurrences, rows, universe=universe)
         linkage = report.as_dict()
         try:
             require_linked(report, min_coverage=min_coverage)
@@ -310,28 +330,74 @@ def claim_agreement(
             # withheld and the REASON is recorded. Returning None for the kappas is the point:
             # a number computed over zero overlapping items would look like weak agreement
             # instead of like no measurement.
-            return {"n_items": int(len(h)), "cohens_kappa": None,
+            return {"n_items": 0, "n_label_rows": int(len(h)), "cohens_kappa": None,
                     "validator_vs_human_kappa": None, "raw_agreement": None,
                     "human_label_path": str(path), "linkage": linkage,
                     "unusable_reason": str(exc)}
+
+        # Refuse the rows that must not reach kappa: another experiment's, signature-less v1
+        # rows, obsolete signatures, and signatures outside the pre-registered frame. Filtering
+        # AFTER the coverage check is deliberate -- coverage is about the frame, and it is the
+        # kappa that must be computed on the overlap alone.
+        produced = {str(row["annotation_signature"]) for row in occurrences}
+        frame = set(universe.signatures) if universe is not None else produced
+        kept = filter_labels_to_universe(
+            rows, experiment_id=experiment_id or "", universe=frozenset(frame),
+            produced=frozenset(produced))
+        label_filter = kept.as_dict()
+        h = h.iloc[list(kept.kept)].reset_index(drop=True)
+        if h.empty:
+            return {"n_items": 0, "n_label_rows": 0, "cohens_kappa": None,
+                    "validator_vs_human_kappa": None, "raw_agreement": None,
+                    "human_label_path": str(path), "linkage": linkage,
+                    "label_filter": label_filter,
+                    "unusable_reason": (
+                        "no human label row survived the linkage filter: "
+                        f"{label_filter['excluded_by_reason']}. Kappa over zero overlapping "
+                        f"items is not a low score, it is not a measurement.")}
+
+    n_label_rows = int(len(h))
+    # Per-occurrence validator agreement is computed BEFORE the per-signature collapse, since
+    # the validator verdict is what varies between occurrences.
+    validator_kappa = None
+    n_validator_occurrences = 0
+    if "validator" in h.columns:
+        occ_r1 = h["rater_1"].astype(int).tolist()
+        occ_r2 = h["rater_2"].astype(int).tolist()
+        occ_gold = _gold_labels(occ_r1, occ_r2, _adjudicated_values(h))
+        validator = pd.to_numeric(h["validator"], errors="coerce").tolist()
+        validator_paired, human_paired = _paired(validator, occ_gold.values)
+        validator_kappa = _kappa([int(v) for v in validator_paired], human_paired)
+        n_validator_occurrences = len(human_paired)
+
+    # One row per judged proposition, so kappa's n is the number of judgements made. Sorted
+    # first for a deterministic pick when a signature spans several occurrence rows; the rater
+    # columns are identical across them by construction, so which row wins does not change the
+    # labels, only the tie-break.
+    if "annotation_signature" in h.columns and h["annotation_signature"].notna().any():
+        h = (h.sort_values([c for c in ("annotation_signature", "run_id", "claim_id")
+                            if c in h.columns])
+             .drop_duplicates(subset=["annotation_signature"], keep="first")
+             .reset_index(drop=True))
+
     r1 = h["rater_1"].astype(int).tolist()
     r2 = h["rater_2"].astype(int).tolist()
     gold = _gold_labels(r1, r2, _adjudicated_values(h))
-    out = {"n_items": len(h),
-           "raw_agreement": float((pd.Series(r1) == pd.Series(r2)).mean()),
-           "cohens_kappa": _kappa(r1, r2)}
-    n_gold = sum(1 for v in gold.values if v is not None)
-    if "validator" in h.columns:
-        validator = pd.to_numeric(h["validator"], errors="coerce").tolist()
-        validator_paired, human_paired = _paired(validator, gold.values)
-        out["validator_vs_human_kappa"] = _kappa([int(v) for v in validator_paired],
-                                                 human_paired)
-        n_gold = len(human_paired)
-    out.update(_gold_report(gold, n_gold))
+    out: dict[str, Any] = {
+        "n_items": len(h),
+        "n_label_rows": n_label_rows,
+        "raw_agreement": float((pd.Series(r1) == pd.Series(r2)).mean()),
+        "cohens_kappa": _kappa(r1, r2),
+    }
+    if validator_kappa is not None or "validator" in h.columns:
+        out["validator_vs_human_kappa"] = validator_kappa
+        out["n_validator_occurrences"] = n_validator_occurrences
+    out.update(_gold_report(gold, sum(1 for v in gold.values if v is not None)))
     out["human_label_path"] = str(path)
     # Recorded even when it passed, so a reader can see WHICH fraction of the batch the figure
     # covers rather than assuming all of it.
     out["linkage"] = linkage
+    out["label_filter"] = label_filter
     out["unusable_reason"] = unusable_reason
     return out
 

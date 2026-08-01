@@ -33,8 +33,11 @@ that claim checkable.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import sqlite3
+import stat
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -47,7 +50,19 @@ from . import ANNOTATION_UI_VERSION
 DB_FILENAME = "annotation.sqlite3"
 
 #: Schema layout version, recorded in ``meta``.
-SCHEMA_VERSION = "1"
+#: 2 -- claim items are keyed on ``annotation_signature`` instead of ``claim_id``.
+#:
+#: ``claim_id`` is a digest of the RENDERED SENTENCE, so it covers several propositions whenever
+#: one sentence formats identically at different values. Measured on the 210-run deterministic
+#: pilot: 416 claim_ids spanned 694 signatures, 178 of those ids covered more than one
+#: proposition, and 278 propositions -- 40% of the total -- would never have been judged as
+#: themselves. Their labels would have been inherited from whichever occurrence a rater happened
+#: to see, with evidence unioned across up to five different propositions.
+#:
+#: A v1 database is never migrated in place. Claim labels do not carry over at all: they were
+#: collected before P0-4/P0-5 changed claim predicates and texts, and overlap the current
+#: signature universe 0/694. See :func:`archive_v1_database`.
+SCHEMA_VERSION = "2"
 
 #: Item kinds. ``relevance`` items are graded 0-3 (checklist item 10); ``claim`` items are
 #: judged supported/unsupported as 1/0 (checklist item 11).
@@ -90,6 +105,11 @@ META_EXPERIMENT_DIR = "experiment_dir"
 META_SCENARIOS_PATH = "scenarios_path"
 META_CATALOG_PATH = "catalog_path"
 META_ASSIGNMENT_SEED = "assignment_seed"
+#: Filename of the pre-registered annotation frame beside this store, and the seed that drew
+#: the withheld sample into it. Recorded because coverage is measured against that frame: a
+#: denominator nobody can reproduce is not a pre-registration.
+META_ANNOTATION_UNIVERSE = "annotation_universe"
+META_SAMPLING_SEED = "sampling_seed"
 META_SCHEMA_VERSION = "schema_version"
 META_ANNOTATION_UI_VERSION = "annotation_ui_version"
 META_CREATED_AT = "created_at"
@@ -113,24 +133,45 @@ CREATE TABLE IF NOT EXISTS raters (
 CREATE TABLE IF NOT EXISTS items (
     item_key      TEXT PRIMARY KEY,
     kind          TEXT NOT NULL CHECK (kind IN ('relevance', 'claim')),
+    -- The proposition a claim item stands for. NOT NULL for claim items and unique among
+    -- them, enforced by idx_items_claim_signature below: a claim item that does not name its
+    -- proposition, or two items naming the same one, is the defect this column exists to make
+    -- impossible. NULL for relevance items, which are keyed on (scenario_id, job_id).
+    annotation_signature TEXT,
     payload_json  TEXT NOT NULL,
     analysis_json TEXT NOT NULL,
     scenario_id   TEXT,
     job_id        TEXT,
     claim_id      TEXT,
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    CHECK (kind <> 'claim' OR annotation_signature IS NOT NULL)
 );
+
+-- One claim item per proposition. A partial index so relevance items, whose signature is
+-- NULL, are not forced to be distinct on it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_items_claim_signature
+    ON items(annotation_signature) WHERE kind = 'claim';
 
 CREATE TABLE IF NOT EXISTS item_occurrences (
     item_key          TEXT NOT NULL REFERENCES items(item_key) ON DELETE CASCADE,
     run_id            TEXT NOT NULL,
     claim_id          TEXT NOT NULL,
+    -- Which batch this occurrence came from, which repeat of it, which proposition it
+    -- instantiates, and whether the user actually saw it. Without these a returned label
+    -- cannot be tied back to the experiment that produced it, and a withheld claim cannot be
+    -- told apart from a delivered one.
+    experiment_id     TEXT NOT NULL DEFAULT '',
+    repeat_index      INTEGER,
+    annotation_signature TEXT NOT NULL DEFAULT '',
+    delivery_status   TEXT NOT NULL DEFAULT '',
     variant           TEXT NOT NULL DEFAULT '',
     scenario_id       TEXT NOT NULL DEFAULT '',
     validator_label   INTEGER,
     support_status    TEXT NOT NULL DEFAULT '',
     fully_resolved    INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY (item_key, run_id, claim_id)
+    -- ``repeat_index`` joins the key because one run can deliver the same proposition once per
+    -- repeat, and those are distinct occurrences.
+    PRIMARY KEY (item_key, run_id, claim_id, repeat_index)
 );
 
 CREATE TABLE IF NOT EXISTS assignments (
@@ -169,8 +210,120 @@ CREATE INDEX IF NOT EXISTS idx_occurrences_item ON item_occurrences(item_key);
 """
 
 
+#: Filename a sealed v1 database is copied to, beside the new one.
+V1_ARCHIVE_FILENAME = "annotations.pre-signature.db"
+#: Sidecar recording what was sealed, so the archive can be verified without opening it.
+V1_ARCHIVE_MANIFEST = "annotations.pre-signature.manifest.json"
+
+
 class AnnotationStoreError(RuntimeError):
     """Base class for store misuse that must not be silently tolerated."""
+
+
+class SchemaVersionError(AnnotationStoreError):
+    """Raised when an on-disk database was written by a different schema version."""
+
+
+def archive_v1_database(path: str | Path) -> dict[str, Any] | None:
+    """Seal a pre-signature database beside itself and describe what was sealed.
+
+    Returns the manifest, or ``None`` when there is nothing to archive.
+
+    The original file is COPIED, never modified and never migrated in place. Claim labels are
+    not carried forward at all: they were collected before P0-4/P0-5 changed claim predicates
+    and texts, and they overlap the current signature universe 0 of 694. Of the 416 claim ids in
+    that data, 178 covered more than one proposition, so their labels are ambiguous by
+    construction -- there is no mapping from them to signatures that is not a guess. Inheriting
+    the remaining 238 would add a high-risk code path for labels that are stale anyway.
+
+    Idempotent: an existing archive with a matching digest is left alone and its manifest
+    returned, so re-running the migration cannot double-seal or overwrite the evidence.
+    """
+    source = Path(path)
+    if not source.exists():
+        return None
+
+    digest = _sha256_file(source)
+    manifest_path = source.with_name(V1_ARCHIVE_MANIFEST)
+    archive_path = source.with_name(V1_ARCHIVE_FILENAME)
+
+    if manifest_path.exists():
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if existing.get("sha256") == digest and archive_path.exists():
+            return existing
+
+    counts: dict[str, int] = {}
+    schema_version = None
+    connection = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    try:
+        connection.row_factory = sqlite3.Row
+        tables = [row["name"] for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")]
+        for table in tables:
+            counts[table] = connection.execute(
+                f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]  # noqa: S608
+        if "meta" in tables:
+            row = connection.execute(
+                "SELECT value FROM meta WHERE key = ?", (META_SCHEMA_VERSION,)).fetchone()
+            schema_version = row["value"] if row else None
+    finally:
+        connection.close()
+
+    shutil.copy2(source, archive_path)
+    # Read-only on disk as well as by convention, so an accidental write fails loudly.
+    archive_path.chmod(stat.S_IREAD)
+
+    manifest = {
+        "archived_from": source.name,
+        "archive": archive_path.name,
+        "sha256": digest,
+        "schema_version": schema_version,
+        "row_counts": dict(sorted(counts.items())),
+        "archived_at": _utcnow(),
+        "claim_labels_carried_forward": False,
+        "reason": (
+            "Claim items are now keyed on annotation_signature. This database keyed them on "
+            "claim_id, a digest of the rendered sentence: 178 of its 416 claim ids covered "
+            "more than one proposition, so their labels are ambiguous by construction. The "
+            "labels also predate P0-4/P0-5 and overlap the current signature universe 0/694. "
+            "They are retained here as pre-fix history and must not enter any new kappa."),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    return manifest
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _require_compatible_version(path: Path) -> None:
+    """Refuse a database written by a different schema version."""
+    if not path.is_file():
+        return
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        connection.row_factory = sqlite3.Row
+        has_meta = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone()
+        if has_meta is None:
+            return  # a fresh or empty file; the schema is about to be created
+        row = connection.execute(
+            "SELECT value FROM meta WHERE key = ?", (META_SCHEMA_VERSION,)).fetchone()
+    finally:
+        connection.close()
+    found = row["value"] if row else None
+    if found is None or str(found) == SCHEMA_VERSION:
+        return
+    raise SchemaVersionError(
+        f"{path} was written by annotation store schema v{found}, and this code is "
+        f"v{SCHEMA_VERSION}. It is NOT upgraded in place: v1 keyed claim items on claim_id, so "
+        f"its rows carry no annotation_signature and its claim labels are ambiguous wherever "
+        f"one claim_id covered several propositions. Seal it with archive_v1_database() and "
+        f"rebuild the store from the run bundles.")
 
 
 class UnknownRaterError(AnnotationStoreError):
@@ -215,6 +368,14 @@ class ClaimOccurrence:
     validator_label: int | None = None
     support_status: str = ""
     fully_resolved: bool = True
+    #: Which batch produced it, which repeat, which proposition, and whether it was shown.
+    experiment_id: str = ""
+    repeat_index: int | None = None
+    annotation_signature: str = ""
+    #: ``delivered`` is what the user saw; ``dropped`` was built and withheld. A withheld claim
+    #: is needed to estimate the validator's false-negative rate and must never be counted as
+    #: a shown explanation, so the status travels with the occurrence.
+    delivery_status: str = ""
 
 
 @dataclass(frozen=True)
@@ -234,6 +395,8 @@ class AnnotationItem:
     scenario_id: str | None = None
     job_id: str | None = None
     claim_id: str | None = None
+    #: The proposition this item stands for. Required for claim items.
+    annotation_signature: str | None = None
     occurrences: tuple[ClaimOccurrence, ...] = ()
 
 
@@ -412,6 +575,12 @@ class AnnotationStore:
         if not create and not path.is_file():
             raise FileNotFoundError(f"no annotation store at {path}")
         directory.mkdir(parents=True, exist_ok=True)
+        # An older database is refused rather than upgraded by running the v2 schema over it.
+        # ``CREATE TABLE IF NOT EXISTS`` would leave v1 tables untouched and silently missing
+        # the signature columns, so items would be written with a NULL signature and the whole
+        # point of the version would be lost. Sealing v1 is an explicit operator step:
+        # ``archive_v1_database`` copies it aside, and the new store is built from the bundles.
+        _require_compatible_version(path)
         connection = sqlite3.connect(path, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA journal_mode=WAL")
@@ -510,28 +679,45 @@ class AnnotationStore:
                     f"item {item.item_key!r} payload carries blinded field(s) "
                     f"{', '.join(sorted(leaked))}; the oracle grade and the validator verdict "
                     f"belong in AnnotationItem.analysis, never in what a rater sees")
+            if item.kind == KIND_CLAIM and not item.annotation_signature:
+                # Refused here rather than left to the UNIQUE index, so the message names the
+                # cause. A claim item without its proposition cannot be deduplicated safely:
+                # falling back to claim_id is exactly what merged 278 of 694 propositions.
+                raise ValueError(
+                    f"claim item {item.item_key!r} carries no annotation_signature; a claim "
+                    f"item must name the proposition it stands for")
             rows.append((
-                item.item_key, item.kind, json.dumps(item.payload, sort_keys=True, default=str),
+                item.item_key, item.kind, item.annotation_signature,
+                json.dumps(item.payload, sort_keys=True, default=str),
                 json.dumps(item.analysis, sort_keys=True, default=str),
                 item.scenario_id, item.job_id, item.claim_id, now,
             ))
             for occurrence in item.occurrences:
                 occurrence_rows.append((
-                    item.item_key, occurrence.run_id, occurrence.claim_id, occurrence.variant,
+                    item.item_key, occurrence.run_id, occurrence.claim_id,
+                    occurrence.experiment_id, occurrence.repeat_index,
+                    occurrence.annotation_signature or (item.annotation_signature or ""),
+                    occurrence.delivery_status, occurrence.variant,
                     occurrence.scenario_id, occurrence.validator_label,
                     occurrence.support_status, int(occurrence.fully_resolved),
                 ))
         with self._db:
             self._db.executemany(
-                "INSERT INTO items(item_key, kind, payload_json, analysis_json, scenario_id, "
-                "job_id, claim_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "INSERT INTO items(item_key, kind, annotation_signature, payload_json, "
+                "analysis_json, scenario_id, job_id, claim_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(item_key) DO UPDATE SET payload_json = excluded.payload_json, "
-                "analysis_json = excluded.analysis_json", rows)
+                "analysis_json = excluded.analysis_json, "
+                "annotation_signature = excluded.annotation_signature", rows)
             self._db.executemany(
-                "INSERT INTO item_occurrences(item_key, run_id, claim_id, variant, scenario_id, "
+                "INSERT INTO item_occurrences(item_key, run_id, claim_id, experiment_id, "
+                "repeat_index, annotation_signature, delivery_status, variant, scenario_id, "
                 "validator_label, support_status, fully_resolved) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(item_key, run_id, claim_id) DO UPDATE SET "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(item_key, run_id, claim_id, repeat_index) DO UPDATE SET "
+                "experiment_id = excluded.experiment_id, "
+                "annotation_signature = excluded.annotation_signature, "
+                "delivery_status = excluded.delivery_status, "
                 "validator_label = excluded.validator_label, "
                 "support_status = excluded.support_status, "
                 "fully_resolved = excluded.fully_resolved", occurrence_rows)
@@ -877,11 +1063,17 @@ class AnnotationStore:
                                      else int(occ["validator_label"])),
                     support_status=occ["support_status"],
                     fully_resolved=bool(occ["fully_resolved"]),
+                    experiment_id=occ["experiment_id"] or "",
+                    repeat_index=occ["repeat_index"],
+                    annotation_signature=occ["annotation_signature"] or "",
+                    delivery_status=occ["delivery_status"] or "",
                 )
                 for occ in self._db.execute(
                     "SELECT run_id, claim_id, variant, scenario_id, validator_label, "
-                    "support_status, fully_resolved FROM item_occurrences WHERE item_key = ? "
-                    "ORDER BY run_id, claim_id", (item_key,)))
+                    "support_status, fully_resolved, experiment_id, repeat_index, "
+                    "annotation_signature, delivery_status FROM item_occurrences "
+                    "WHERE item_key = ? ORDER BY run_id, claim_id, repeat_index",
+                    (item_key,)))
             yield ExportRecord(
                 item_key=item_key, kind=row["kind"], scenario_id=row["scenario_id"],
                 job_id=row["job_id"], claim_id=row["claim_id"],

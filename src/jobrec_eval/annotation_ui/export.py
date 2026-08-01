@@ -81,7 +81,14 @@ RELEVANCE_COLUMNS = ["scenario_id", "job_id", "rater_1", "rater_2", ADJUDICATED_
 
 #: Claim CSV column order. ``validator`` is the system's own verdict for that run, taken from
 #: the analysis side of the store -- never from a rater.
-CLAIM_COLUMNS = ["run_id", "claim_id", "rater_1", "rater_2", "validator", ADJUDICATED_COLUMN]
+#:
+#: ``experiment_id``, ``annotation_signature`` and ``delivery_status`` are what let a returned
+#: file be linked back to the batch and the proposition it describes. Without them a CSV is just
+#: labels beside run ids, which is how an earlier batch's annotations came to be reported against
+#: runs they had never seen -- and how a withheld claim could be counted as one the user saw.
+CLAIM_COLUMNS = ["experiment_id", "run_id", "claim_id", "annotation_signature",
+                 "delivery_status", "rater_1", "rater_2", "validator", ADJUDICATED_COLUMN,
+                 "notes"]
 
 #: Valid label values per file, reused from the store so there is one definition of "0-3" and
 #: "{0,1}" in this package.
@@ -185,13 +192,26 @@ def _check_labels(rows: Sequence[dict[str, Any]], columns: Sequence[str],
 def _check_unique(rows: Sequence[dict[str, Any]], keys: Sequence[str]) -> None:
     seen: dict[tuple, int] = {}
     for row in rows:
-        key = tuple(str(row[k]) for k in keys)
+        # ``get`` rather than ``[]``: a missing column is a separate failure with its own
+        # message (see ``_check_required``), and a KeyError from inside the uniqueness check
+        # would report it as an internal error instead.
+        key = tuple(str(row.get(k, "")) for k in keys)
         seen[key] = seen.get(key, 0) + 1
     duplicated = sorted(k for k, count in seen.items() if count > 1)
     if duplicated:
         raise ExportValidationError(
             f"every {tuple(keys)} must appear once; duplicated "
             + ", ".join(str(k) for k in duplicated[:10]))
+
+
+def _check_required(rows: Sequence[dict[str, Any]], keys: Sequence[str], what: str) -> None:
+    """Refuse rows missing a column that ties a label to what it describes."""
+    offenders = [f"row {index}: {name}" for index, row in enumerate(rows) for name in keys
+                 if not str(row.get(name, "")).strip()]
+    if offenders:
+        raise ExportValidationError(
+            f"every {what} needs {tuple(keys)}; empty or absent in "
+            + "; ".join(offenders[:10]))
 
 
 def validate_relevance_rows(rows: Sequence[dict[str, Any]]) -> None:
@@ -211,13 +231,28 @@ def validate_relevance_rows(rows: Sequence[dict[str, Any]]) -> None:
 def validate_claim_rows(rows: Sequence[dict[str, Any]]) -> None:
     """Refuse claim rows the agreement functions could not read.
 
+    The uniqueness key is ``(run_id, claim_id, annotation_signature)``, not
+    ``(run_id, claim_id)``. ``claim_id`` digests the rendered sentence, so one id can cover
+    several propositions -- 178 of the 416 ids in the 210-run pilot do. Requiring
+    ``(run_id, claim_id)`` to be unique would refuse to write ANY file the moment a single run
+    produced two propositions that read alike, which is a legal outcome, not a duplicate. The
+    real invariant is that no OCCURRENCE of a proposition appears twice, and that is this key.
+
+    ``experiment_id``, ``annotation_signature`` and ``delivery_status`` are required, not merely
+    written. A row without them cannot be tied to a batch, a proposition or to whether the user
+    saw the claim, which is how an earlier batch's labels came to be reported against runs they
+    had never seen -- and the check is here because a file the consuming side cannot link is
+    worse than no file.
+
     Raises:
-        ExportValidationError: A label is not in ``{0, 1}``, or a ``(run_id, claim_id)`` pair
-            appears twice.
+        ExportValidationError: A label is not in ``{0, 1}``, a linkage column is missing, or one
+            occurrence appears twice.
     """
     _check_labels(rows, ("rater_1", "rater_2", "validator", ADJUDICATED_COLUMN), _CLAIM_LABELS,
                   "claim row")
-    _check_unique(rows, ("run_id", "claim_id"))
+    _check_required(rows, ("experiment_id", "annotation_signature", "delivery_status"),
+                    "claim row")
+    _check_unique(rows, ("run_id", "claim_id", "annotation_signature"))
 
 
 def relevance_rows(store: AnnotationStore) -> tuple[list[dict[str, Any]],
@@ -255,11 +290,15 @@ def claim_rows(store: AnnotationStore) -> tuple[list[dict[str, Any]],
         adjudicated = _adjudicated_cell(record)
         for occurrence in record.occurrences:
             rows.append({
+                "experiment_id": occurrence.experiment_id,
                 "run_id": occurrence.run_id, "claim_id": occurrence.claim_id,
+                "annotation_signature": occurrence.annotation_signature,
+                "delivery_status": occurrence.delivery_status,
                 "rater_1": record.slot_labels[1], "rater_2": record.slot_labels[2],
                 "validator": ("" if occurrence.validator_label is None
                               else int(occurrence.validator_label)),
                 ADJUDICATED_COLUMN: adjudicated,
+                "notes": _notes_cell(record),
             })
     return rows, tuple(skipped)
 
@@ -293,7 +332,10 @@ def _dump_records(store: AnnotationStore, export_id: str, exported_at: str) -> l
             "occurrences": [
                 {"run_id": o.run_id, "claim_id": o.claim_id, "variant": o.variant,
                  "scenario_id": o.scenario_id, "validator_label": o.validator_label,
-                 "support_status": o.support_status, "fully_resolved": o.fully_resolved}
+                 "support_status": o.support_status, "fully_resolved": o.fully_resolved,
+                 "experiment_id": o.experiment_id, "repeat_index": o.repeat_index,
+                 "annotation_signature": o.annotation_signature,
+                 "delivery_status": o.delivery_status}
                 for o in record.occurrences],
             "annotations": [
                 {"slot": slot, "rater_id": record.slot_raters[slot],
@@ -387,8 +429,16 @@ def export_annotations(store: AnnotationStore, out_dir: str | Path, *,
             "relevance_items": store.item_count(KIND_RELEVANCE),
             "claim_items": store.item_count(KIND_CLAIM),
             "relevance_items_exported": len(relevance),
-            "claim_items_exported": len({row["claim_id"] for row in claims}),
+            # Counted on the SIGNATURE, because that is the unit a rater judged. Counting
+            # distinct claim_ids under-reports the work by however many ids covered several
+            # propositions -- 416 instead of 694 on the 210-run pilot.
+            "claim_items_exported": len({row["annotation_signature"] for row in claims}),
+            "claim_ids_exported": len({row["claim_id"] for row in claims}),
             "claim_rows_exported": len(claims),
+            "claim_rows_by_delivery_status": {
+                status: sum(1 for row in claims if row["delivery_status"] == status)
+                for status in sorted({str(row["delivery_status"]) for row in claims})
+            },
             "incomplete_relevance_items": len(relevance_skipped),
             "incomplete_claim_items": len(claim_skipped),
             "disagreements": len(disagreements),

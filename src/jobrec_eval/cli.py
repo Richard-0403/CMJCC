@@ -76,8 +76,11 @@ from .annotation import (
     relevance_agreement,
 )
 from .annotation_linkage import (
+    DEFAULT_DROPPED_PER_STRATUM,
+    DEFAULT_SAMPLING_SEED,
     MissingHumanLabelsError,
     annotation_items,
+    build_annotation_universe,
     claim_occurrences,
     relevance_coverage,
     require_relevance_coverage,
@@ -150,12 +153,22 @@ RELEVANCE_SOURCE_ORACLE = "automatic_oracle"
 #: Either every returned pair is judged, or the number is N/A.
 HUMAN_RELEVANCE_MIN_COVERAGE = 1.0
 
+#: Seed and per-stratum size for the withheld-claim draw. Imported from
+#: :mod:`jobrec_eval.annotation_linkage` rather than redefined, so the frame the annotation tool
+#: builds a rater queue from is byte-for-byte the frame coverage is measured against here.
+ANNOTATION_SAMPLING_SEED = DEFAULT_SAMPLING_SEED
+ANNOTATION_DROPPED_PER_STRATUM = DEFAULT_DROPPED_PER_STRATUM
+
 RELEVANCE_SOURCE_HUMAN = "human_adjudicated"
 RELEVANCE_SOURCES = {"oracle": RELEVANCE_SOURCE_ORACLE, "human": RELEVANCE_SOURCE_HUMAN}
 
 #: Human label files the annotation tool exports, read from beside ``--scenarios``.
 HUMAN_RELEVANCE_FILENAME = "relevance_labels_human.csv"
 HUMAN_CLAIMS_FILENAME = "claim_annotations_human.csv"
+
+#: The pre-registered annotation frame, under ``manifests/``. Written on every run, before any
+#: human label is read, so the coverage denominator is fixed independently of what was labelled.
+ANNOTATION_UNIVERSE_FILENAME = "annotation_universe.json"
 
 #: Metrics derived from the relevance label table (``MetricsComputer.grade``), i.e. the
 #: ones that change with ``--relevance-source``. Everything else in the pipeline is
@@ -572,9 +585,21 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     # a study decision, not a default this code may invent. Zero overlap still fails, since
     # that is not a low coverage but an absence of measurement.
     _write_csv(pd.DataFrame(occurrences), out / "normalized" / "claim_occurrences.csv")
+
+    # The PRE-REGISTERED annotation frame, written before any label is read. It is the
+    # denominator of claim coverage: measured against "whatever got annotated" instead,
+    # coverage reports 100% for any sample. Every delivered signature is in the frame whole;
+    # withheld ones are stratified and drawn with a recorded seed, because they exist to
+    # estimate the validator's false-negative rate and there can be more of them than a rater
+    # can judge.
+    universe = build_annotation_universe(
+        experiment_id, occurrences, seed=ANNOTATION_SAMPLING_SEED,
+        dropped_per_stratum=ANNOTATION_DROPPED_PER_STRATUM)
+    _write_json(universe.manifest(), out / "manifests" / ANNOTATION_UNIVERSE_FILENAME)
+
     clm_agree = claim_agreement(scen_dir / HUMAN_CLAIMS_FILENAME,
                                 occurrences=occurrences, experiment_id=experiment_id,
-                                min_coverage=0.0)
+                                universe=universe, min_coverage=0.0)
 
     # ``coverage`` was computed before the metrics, because it GATES them.
     # The COMPLETE annotation task, not a 20-row sample. A truncated list cannot be handed to
@@ -586,6 +611,13 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     write_coverage_report(out / "manifests" / "annotation_coverage.json", {
         "experiment_id": experiment_id,
         "claim_linkage": (clm_agree or {}).get("linkage"),
+        "claim_label_filter": (clm_agree or {}).get("label_filter"),
+        # The frame the claim coverage above is measured against, and where its full
+        # pre-registration record (seed, strata rules, per-stratum counts) lives.
+        "claim_annotation_universe": {
+            k: v for k, v in universe.manifest().items()
+            if k not in ("delivered", "dropped_sampled")},
+        "claim_annotation_universe_manifest": f"manifests/{ANNOTATION_UNIVERSE_FILENAME}",
         "relevance_coverage": coverage.as_dict(),
         "relevance_delta_annotation_csv": str(
             (ann_dir / "relevance_delta_annotation.csv").relative_to(out)),
