@@ -21,22 +21,16 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Artifacts (generated run bundles, logs, indexes, CI/perf/data-quality output)
-artifacts/runs/
-artifacts/logs/
-artifacts/indexes/
-artifacts/reports/
-artifacts/data_quality/
-artifacts/ci-smoke/
-# Hybrid connectivity-smoke run bundles and the official hybrid run logs. Same rule as
-# the directories above: generated evidence lives on disk and ships with the thesis
-# archive, not in git (the smoke tree alone is 268 files of run bundles).
-artifacts/hybrid_smoke/
-artifacts/p0_2_smoke/
-artifacts/pilot_deterministic/
-artifacts/pilot_hybrid/
-artifacts/*.txt
-artifacts/*.log
+# Artifacts: every generated run bundle, log, index and report. Nothing under this
+# directory is tracked -- generated evidence lives on disk and ships with the thesis archive,
+# not in git (one smoke tree alone is 268 files of run bundles).
+#
+# Ignored WHOLESALE rather than directory by directory. The list used to be enumerated, so a
+# new output directory was untracked-but-not-ignored, and `git status` reported the tree dirty
+# for it. That is not cosmetic: `code_identity()` reports `git_dirty: True` for an untracked
+# file, and that flag lands in every experiment manifest written afterwards -- so a scratch
+# directory made a clean-commit batch record itself as built from an unidentified tree.
+artifacts/
 
 # OS
 .DS_Store
