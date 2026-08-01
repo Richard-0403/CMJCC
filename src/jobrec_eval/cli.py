@@ -71,14 +71,16 @@ from .annotation import (
     AdjudicatedRelevanceLabels,
     MissingAdjudicatedLabelsError,
     claim_agreement,
-    export_claim_template,
     export_relevance_template,
     load_adjudicated_relevance_labels,
     relevance_agreement,
 )
 from .annotation_linkage import (
+    MissingHumanLabelsError,
+    annotation_items,
     claim_occurrences,
     relevance_coverage,
+    require_relevance_coverage,
     write_coverage_report,
 )
 from .casestudies import error_taxonomy, extract_cases, render_cases_md
@@ -139,6 +141,15 @@ FAMILY_COLUMN = "family"
 #: ``--relevance-source`` values, mapped to what ``manifests/analysis_plan.yaml`` records.
 #: The plan records what was ACTUALLY used, never a hardcoded constant (checklist item 10).
 RELEVANCE_SOURCE_ORACLE = "automatic_oracle"
+#: Fraction of returned ``(scenario_id, job_id)`` pairs that must carry a human relevance label
+#: before human-scored ranking metrics are computed at all.
+#:
+#: 1.0 on purpose. A ranking metric over a partially labelled result set is not a weaker version
+#: of the same measurement: an unlabelled pair enters the computation as a 0 grade, so the figure
+#: becomes a mixture of "judged irrelevant" and "not judged" that cannot be separated afterwards.
+#: Either every returned pair is judged, or the number is N/A.
+HUMAN_RELEVANCE_MIN_COVERAGE = 1.0
+
 RELEVANCE_SOURCE_HUMAN = "human_adjudicated"
 RELEVANCE_SOURCES = {"oracle": RELEVANCE_SOURCE_ORACLE, "human": RELEVANCE_SOURCE_HUMAN}
 
@@ -416,9 +427,46 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     # the oracle column only and leaves the human column empty (never imputed).
     oracle_vsum = vsum if recorded_source == RELEVANCE_SOURCE_ORACLE else _ranking_variant_summary(
         cfg, catalog, references, labels, scenarios, bundles, cfg.experiment.top_k)
-    human_vsum = vsum if recorded_source == RELEVANCE_SOURCE_HUMAN else (
-        _ranking_variant_summary(cfg, catalog, references, human.labels, scenarios, bundles,
-                                 cfg.experiment.top_k) if human is not None else None)
+    # Human ranking metrics are gated on COVERAGE of the pairs this experiment actually
+    # returned. An unlabelled returned pair is UNKNOWN, not irrelevant, and the metric
+    # machinery would treat a missing label as a 0 grade -- which converts "nobody judged
+    # this" into "the system was wrong" and biases every human figure downward by exactly the
+    # amount of missing annotation. Below the requirement the column is None (N/A) rather than
+    # a number computed over an implied zero.
+    returned_pairs = {
+        (str(row["scenario_id"]), str(row["job_id"]))
+        for _i, row in tables["recommendations"].iterrows()
+    }
+    labelled_pairs: set[tuple[str, str]] = (
+        {(str(r["scenario_id"]), str(r["job_id"])) for _i, r in human.labels.iterrows()}
+        if human is not None else set())
+    coverage = relevance_coverage(returned_pairs, labelled_pairs)
+
+    # Claim occurrences are built here too, because the annotation template is derived from
+    # them and the linkage guard consumes them further down.
+    occurrences = claim_occurrences(experiment_id, [
+        {"run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
+         "repeat_index": b.run_index, "claims": b.claims,
+         "dropped_claims": b.dropped_claims,
+         "evidence_by_id": {i.get("evidence_id"): i for i in b.evidence_items}}
+        for b in bundles
+    ])
+    human_metrics_withheld: str | None = None
+    try:
+        require_relevance_coverage(coverage, min_coverage=HUMAN_RELEVANCE_MIN_COVERAGE)
+    except MissingHumanLabelsError as exc:
+        human_metrics_withheld = str(exc)
+
+    human_vsum = None
+    if human_metrics_withheld is None:
+        human_vsum = vsum if recorded_source == RELEVANCE_SOURCE_HUMAN else (
+            _ranking_variant_summary(cfg, catalog, references, human.labels, scenarios,
+                                     bundles, cfg.experiment.top_k)
+            if human is not None else None)
+    elif recorded_source == RELEVANCE_SOURCE_HUMAN:
+        # The run was ASKED for human labels and they do not cover it. Withholding the number
+        # silently would leave the report claiming a human-scored result it does not have.
+        raise MissingHumanLabelsError(human_metrics_withheld)
     source_comparison = relevance_source_comparison(oracle_vsum, human_vsum)
     _write_csv(source_comparison, out / "metrics" / "relevance_source_comparison.csv")
 
@@ -503,7 +551,13 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     ann_dir = out / "annotation"
     ann_dir.mkdir(parents=True, exist_ok=True)
     export_relevance_template(tables["recommendations"], labels, ann_dir / "relevance_template.csv")
-    export_claim_template(tables["claims"], ann_dir / "claim_template.csv")
+    # Built from the OCCURRENCES, deduplicated by annotation_signature, so the template has one
+    # row per proposition a rater has to judge -- including withheld claims, which are the only
+    # way to estimate the validator's false-negative rate. Building it from ``tables["claims"]``
+    # would key on claim_id (a digest of the rendered sentence, so it merges propositions that
+    # read alike) and would omit dropped claims entirely.
+    _write_csv(pd.DataFrame(annotation_items(occurrences)),
+               ann_dir / "claim_template.csv")
     rel_agree = relevance_agreement(human_labels_path, labels)
 
     # Annotation linkage, on the OFFICIAL path rather than merely available.
@@ -517,37 +571,31 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     # fractions are recorded rather than enforced -- because the pre-registered requirement is
     # a study decision, not a default this code may invent. Zero overlap still fails, since
     # that is not a low coverage but an absence of measurement.
-    occurrences = claim_occurrences(experiment_id, [
-        {"run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
-         "repeat_index": b.run_index, "claims": b.claims,
-         "dropped_claims": b.dropped_claims,
-         "evidence_by_id": {i.get("evidence_id"): i for i in b.evidence_items}}
-        for b in bundles
-    ])
     _write_csv(pd.DataFrame(occurrences), out / "normalized" / "claim_occurrences.csv")
     clm_agree = claim_agreement(scen_dir / HUMAN_CLAIMS_FILENAME,
                                 occurrences=occurrences, experiment_id=experiment_id,
                                 min_coverage=0.0)
 
-    # Which returned pairs a human relevance label set covers. An unlabelled returned pair is
-    # UNKNOWN, not irrelevant, so this is reported as a delta to annotate rather than folded
-    # into the metric as a zero.
-    returned_pairs = {
-        (str(row["scenario_id"]), str(row["job_id"]))
-        for _i, row in tables["recommendations"].iterrows()
-    }
-    labelled_pairs: set[tuple[str, str]] = set()
-    if human is not None:
-        labelled_pairs = {(str(r["scenario_id"]), str(r["job_id"]))
-                          for _i, r in human.labels.iterrows()}
-    coverage = relevance_coverage(returned_pairs, labelled_pairs)
+    # ``coverage`` was computed before the metrics, because it GATES them.
+    # The COMPLETE annotation task, not a 20-row sample. A truncated list cannot be handed to
+    # a rater, and the sample in the JSON report exists for reading, not for working from.
+    _write_csv(
+        pd.DataFrame(sorted(coverage.delta), columns=["scenario_id", "job_id"]),
+        ann_dir / "relevance_delta_annotation.csv",
+    )
     write_coverage_report(out / "manifests" / "annotation_coverage.json", {
         "experiment_id": experiment_id,
         "claim_linkage": (clm_agree or {}).get("linkage"),
         "relevance_coverage": coverage.as_dict(),
+        "relevance_delta_annotation_csv": str(
+            (ann_dir / "relevance_delta_annotation.csv").relative_to(out)),
         # Stated so a reader knows the human ranking figures, if present, were computed over
         # the reused pairs only and not over an implied zero for the rest.
         "human_relevance_labels_present": human is not None,
+        "human_relevance_min_coverage": HUMAN_RELEVANCE_MIN_COVERAGE,
+        # None when the human figures were computed; the reason when they were withheld. A
+        # reader can tell "no human metrics" from "human metrics of 0" without guessing.
+        "human_metrics_withheld_reason": human_metrics_withheld,
     })
 
     # ---- Stage 6: plots -------------------------------------------------

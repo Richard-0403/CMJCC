@@ -85,7 +85,19 @@ def _failed_call_record(purpose: str, prompt: str, exc: BaseException,
         latency_ms=0.0,
         provider=getattr(provider, "name", "unknown"),
         model=getattr(provider, "model", "unknown"),
-        metadata={"failed": True, "error": type(exc).__name__, "attempts": attempt},
+        metadata={
+            "failed": True,
+            "error": type(exc).__name__,
+            # ONE request was made and it failed. ``attempts`` is a COUNT, so summing it
+            # across records gives the HTTP attempts actually sent.
+            #
+            # It used to be set to ``attempt`` -- the retry's 1-based INDEX -- so four
+            # consecutive failures recorded 1, 2, 3, 4 and any sum over them reported ten
+            # attempts for four requests. That inflated the very denominator the endpoint
+            # decision rests on. The index is still recorded, under its own name.
+            "attempts": 1,
+            "attempt_index": attempt,
+        },
     )
 _SOURCE_RULE_FALLBACK = "rule_fallback"
 _SOURCE_UNRESOLVED = "unresolved"

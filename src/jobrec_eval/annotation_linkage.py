@@ -129,6 +129,49 @@ def annotation_signature(claim: dict, evidence_by_id: dict[str, dict] | None = N
     })[:16]
 
 
+def annotation_items(occurrences: list[dict]) -> list[dict]:
+    """One row per SIGNATURE -- the unit a rater judges -- with its occurrences counted.
+
+    Deduplication is by ``annotation_signature``, never by ``claim_id``: that id digests the
+    rendered sentence, so it merges propositions that read alike at different values. One item
+    per signature is therefore both the smallest honest unit of work and the largest safe one.
+
+    Evidence is NOT merged across signatures. Each item carries the projection of its own
+    signature only, because a rater shown the union of two propositions' evidence is being
+    asked a question neither claim makes.
+
+    Dropped claims get their own items. They are the only way to estimate the validator's
+    false-negative rate, and ``delivery_status`` keeps them distinguishable from what the user
+    actually saw.
+    """
+    items: dict[str, dict] = {}
+    for row in occurrences:
+        signature = row["annotation_signature"]
+        item = items.get(signature)
+        if item is None:
+            items[signature] = {
+                "annotation_signature": signature,
+                "experiment_id": row.get("experiment_id"),
+                "claim_type": row.get("claim_type"),
+                "predicate": row.get("predicate"),
+                "text": row.get("text"),
+                "claim_field": row.get("claim_field"),
+                "claim_job_id": row.get("claim_job_id"),
+                "delivery_status": row.get("delivery_status"),
+                "validator": (1 if row.get("support_status") == "supported" else 0),
+                "occurrence_count": 1,
+                "example_run_id": row.get("run_id"),
+                "example_claim_id": row.get("claim_id"),
+            }
+            continue
+        item["occurrence_count"] += 1
+        # A signature seen both delivered and withheld is reported as delivered, because the
+        # user did see it at least once; the split stays visible in the occurrence table.
+        if row.get("delivery_status") == DELIVERY_DELIVERED:
+            item["delivery_status"] = DELIVERY_DELIVERED
+    return sorted(items.values(), key=lambda r: str(r["annotation_signature"]))
+
+
 def claim_occurrences(
     experiment_id: str,
     runs: list[dict],
@@ -160,6 +203,11 @@ def claim_occurrences(
                     "claim_type": claim.get("claim_type"),
                     "predicate": claim.get("predicate"),
                     "support_status": claim.get("support_status"),
+                    # The rendered sentence, so an annotation task can be built from this
+                    # table alone rather than joined back to the bundles.
+                    "text": claim.get("text"),
+                    "claim_field": claim.get("field_name"),
+                    "claim_job_id": claim.get("job_id"),
                 })
     return rows
 

@@ -917,7 +917,13 @@ def test_repeated_model_errors_fall_back_to_rules_after_a_bounded_number_of_atte
     # empty list made the retry budget invisible in the archive.
     assert len(calls) == 3, "every spent attempt must be recorded"
     assert all(c.metadata["failed"] is True and not c.parsed_ok for c in calls)
-    assert [c.metadata["attempts"] for c in calls] == [1, 2, 3]
+    # ``attempts`` is a COUNT: one request per record. This assertion used to read [1, 2, 3]
+    # because the field held the retry's INDEX, so summing it across records reported six HTTP
+    # attempts for three requests -- and under a four-retry policy, ten for four. The index is
+    # still asserted, under the name that means it.
+    assert [c.metadata["attempts"] for c in calls] == [1, 1, 1]
+    assert sum(c.metadata["attempts"] for c in calls) == provider.attempts
+    assert [c.metadata["attempt_index"] for c in calls] == [1, 2, 3]
     assert len({c.call_id for c in calls}) == 3, "attempt records must not collide"
     assert pref_set.preferences, "rule fallback produced nothing"
     assert all(p.metadata["extraction_method"] == "rule" for p in pref_set.preferences)

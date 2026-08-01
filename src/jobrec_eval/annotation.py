@@ -113,6 +113,14 @@ def export_claim_template(claims: pd.DataFrame, out_path: str | Path) -> Path:
     for c in claims.itertuples():
         rows.append({
             "run_id": c.run_id, "claim_id": c.claim_id, "claim_type": c.claim_type,
+            # WHICH batch and WHICH delivery this rating belongs to. Without these a returned
+            # CSV cannot be linked back to the experiment that produced it, which is how an
+            # earlier batch's labels came to be reported against runs they never described.
+            "experiment_id": getattr(c, "experiment_id", None),
+            "annotation_signature": getattr(c, "annotation_signature", None),
+            # ``delivered`` is what the user saw. A withheld claim must never be counted as a
+            # shown explanation, so the status travels with the row rather than being inferred.
+            "delivery_status": getattr(c, "delivery_status", None),
             # The PROPOSITION, alongside the type. A rater judging "is this supported" needs
             # to know what was asserted and about which field and job; the claim type alone
             # ("ranking_reason") does not say. Blank for a pre-P0-4 bundle.
