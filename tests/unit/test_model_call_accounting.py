@@ -522,3 +522,101 @@ def test_malformed_payload_falls_back_to_the_rule_extractor(monkeypatch, tmp_pat
     # Every spent attempt is recorded, so the degradation is auditable.
     assert result.model_calls, "the failed attempts left no record"
     assert all(c.metadata.get("failed") for c in result.model_calls)
+
+
+# ---------------------------------------------------------------------------
+# The clarification call is subject to the SAME bounded retry as extraction.
+#
+# It used to take exactly one attempt and fall back to the template question on the first
+# drop, while the experiment manifest declared ``max_retries: 4`` -- so the stated retry
+# policy was true of intent extraction only. Measured on a 126-run hybrid pilot: 3 of the 4
+# failed logical calls were clarification calls that never retried once, against an 86%
+# recovery rate on the path that did.
+# ---------------------------------------------------------------------------
+def _clarification_orchestrator(monkeypatch, tmp_path):
+    """A hybrid orchestrator plus the clarification action to phrase."""
+    from jobrec.domain.dialogue import ClarificationAction, DialogueState
+    from jobrec.utils.time import utcnow
+
+    monkeypatch.setenv(API_KEY_ENV, FAKE_KEY)
+    config = load_config("configs/hybrid_vectorengine.yaml", base_dir="configs")
+    # Zero delays, so the ATTEMPT COUNT is what is under test here rather than the wall clock.
+    # The schedule's own values are asserted in the retry tests; ``max_retries`` is untouched,
+    # which is the policy these tests are about.
+    config.llm.retry_backoff_seconds = [0.0, 0.0, 0.0, 0.0]
+    service = AppService(config, CATALOG_PATH)
+    candidate = service.create_candidate(
+        {"candidate_id": "c-clarify", "skills": ["Python"], "years_experience": 2})
+    session_id = service.create_session(candidate.candidate_id, "full")
+    orchestrator, _store = service._orchestrator_for(session_id, "full")
+    action = ClarificationAction(
+        clarification_id="clar-1", target_fields=["target_roles"],
+        reason_code="ambiguous_role", options=["data analyst", "data engineer"],
+        question_text="TEMPLATE: which role did you mean?", created_at=utcnow())
+    dialogue = DialogueState(session_id=session_id, candidate_id=candidate.candidate_id,
+                             version=1)
+    return orchestrator, dialogue, action, config
+
+
+def test_a_dropped_clarification_call_is_retried_under_the_declared_policy(
+        monkeypatch, tmp_path) -> None:
+    """Five attempts for max_retries=4, and the phrasing that finally worked is used."""
+    orchestrator, dialogue, action, config = _clarification_orchestrator(monkeypatch, tmp_path)
+    assert config.llm.max_retries == 4, "fixture guard: the policy under test"
+    attempts: list[int] = []
+
+    def post(_body: dict) -> dict:
+        attempts.append(1)
+        if len(attempts) < 5:
+            raise httpx.ConnectError("connection refused")
+        return _response("PHRASED: which role did you mean?", usage=CLASSIC_USAGE)
+
+    monkeypatch.setattr(orchestrator.provider, "_post", post)
+
+    calls: list = []
+    response = orchestrator._clarification_response(dialogue, action, calls)
+
+    assert len(attempts) == 5, f"took {len(attempts)} attempt(s), not 1 + max_retries"
+    assert response.message == "PHRASED: which role did you mean?"
+    # Every attempt is recorded, so http_attempts and retry_attempts are right.
+    assert len(calls) == 5
+    assert sum(1 for c in calls if (c.metadata or {}).get("fell_back")) == 4
+    assert calls[-1].parsed_ok is True
+
+
+def test_an_exhausted_clarification_call_keeps_the_template_and_records_every_attempt(
+        monkeypatch, tmp_path) -> None:
+    """The deterministic question stands, and the degradation is visible in the artifact."""
+    orchestrator, dialogue, action, _config = _clarification_orchestrator(monkeypatch, tmp_path)
+
+    def boom(_body: dict) -> dict:
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(orchestrator.provider, "_post", boom)
+
+    calls: list = []
+    response = orchestrator._clarification_response(dialogue, action, calls)
+
+    assert response.message == "TEMPLATE: which role did you mean?"
+    assert len(calls) == 5, "an exhausted call must not hide the attempts it spent"
+    assert all((c.metadata or {}).get("fell_back") for c in calls)
+
+
+def test_a_clarification_call_that_works_first_time_takes_one_attempt(
+        monkeypatch, tmp_path) -> None:
+    """The retry must not turn one call into five when nothing failed."""
+    orchestrator, dialogue, action, _config = _clarification_orchestrator(monkeypatch, tmp_path)
+    attempts: list[int] = []
+
+    def post(_body: dict) -> dict:
+        attempts.append(1)
+        return _response("PHRASED once.", usage=CLASSIC_USAGE)
+
+    monkeypatch.setattr(orchestrator.provider, "_post", post)
+
+    calls: list = []
+    response = orchestrator._clarification_response(dialogue, action, calls)
+
+    assert len(attempts) == 1
+    assert len(calls) == 1
+    assert response.message == "PHRASED once."

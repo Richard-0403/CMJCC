@@ -200,6 +200,42 @@ def audit_llm_calls(exp_dir: Path) -> dict[str, Any]:
                 scenario_counter[scenario] += 1
                 turn_counter[str(index)] += 1
 
+    # Fallbacks that are NOT a substituted preference. A clarification call that exhausted its
+    # retries leaves the template question in place: nothing in the extraction snapshot changes,
+    # so reading snapshots alone reported 1 affected run on a pilot where 4 runs had degraded --
+    # 0.79% against 3.17%. The affected-run rate is a release threshold, and a fallback that
+    # cannot be seen in it is a fallback silently excluded from the metric.
+    for calls_path in sorted(exp_dir.rglob("model_calls.jsonl")):
+        label = _run_label(calls_path)
+        scenario = calls_path.parts[-3]
+        by_call: dict[tuple, list[dict]] = {}
+        for line in calls_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            purpose = str(record.get("purpose") or "")
+            if purpose == "intent_extraction":
+                continue  # already covered by the snapshot pass above
+            by_call.setdefault(
+                (record.get("turn_run_id"), record.get("turn_index"), purpose), []
+            ).append(record)
+        for (_run_key, turn_index, purpose), attempt_records in by_call.items():
+            # Only an EXHAUSTED call is a fallback: one that failed and then succeeded got
+            # what it asked for, and counting it here would conflate a rescued call with a
+            # degraded turn.
+            if any(failure_kind(r, r.get("response_metadata") or {}) is None
+                   for r in attempt_records):
+                continue
+            index = int(turn_index) if isinstance(turn_index, int) else 0
+            fallback_prefs.append({"run": label, "scenario": scenario, "turn": index,
+                                   "field": f"<{purpose}>", "source": f"{purpose}_fallback",
+                                   "attempts": len(attempt_records)})
+            fallback_turns.add((label, index))
+            fallback_runs.add(label)
+            field_counter[f"<{purpose}>"] += 1
+            scenario_counter[scenario] += 1
+            turn_counter[str(index)] += 1
+
     total_runs = len({_run_label(p) for p in exp_dir.rglob("dialogue_state.json")})
     total_turns = sum(
         len([t for t in json.loads(p.read_text(encoding="utf-8")).get("turns", [])

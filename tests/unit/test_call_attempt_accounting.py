@@ -157,3 +157,83 @@ def test_the_runner_puts_the_summary_in_the_experiment_manifest(tmp_path):
     # The policy it is read against is still there.
     assert set(written["retry_policy"]) == {"max_retries", "backoff_seconds",
                                             "timeout_seconds"}
+
+
+# ---------------------------------------------------------------------------
+# A fallback that is NOT a substituted preference still counts as an affected turn and run.
+#
+# ``final_fallback_turns`` / ``final_fallback_runs`` were read from the extraction snapshots
+# alone. An exhausted CLARIFICATION call leaves the template question in place and changes no
+# preference, so it registered nowhere: on a 126-run hybrid pilot the affected-run rate was
+# reported as 1/126 = 0.79% where 4 runs had actually degraded (3.17%). The affected-run rate
+# is a release threshold, so a fallback invisible to it is a fallback silently excluded from
+# the metric.
+# ---------------------------------------------------------------------------
+def _exhausted_call(root, run: str, purpose: str, *, turn_index: int = 0):
+    """One logical call of ``purpose`` that failed every attempt, in its own run dir."""
+    variant, scenario, index = run.split("/")
+    run_dir = root / variant / scenario / index
+    run_dir.mkdir(parents=True, exist_ok=True)
+    with (run_dir / "model_calls.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({
+            "call_id": f"call-{purpose}", "purpose": purpose,
+            "parsed_ok": False, "raw_response": "",
+            "turn_run_id": f"{scenario}-run", "turn_index": turn_index,
+            "response_metadata": {"fell_back": True, "error": "LLMError", "attempts": 1},
+        }) + "\n")
+    (run_dir / "dialogue_state.json").write_text(
+        json.dumps({"turns": [{"speaker": "candidate", "turn_id": f"t{i}",
+                               "extraction_snapshot": {"preferences": []}}
+                              for i in range(turn_index + 1)]}), encoding="utf-8")
+    return run_dir
+
+
+def test_an_exhausted_clarification_call_counts_as_an_affected_turn_and_run(tmp_path):
+    from jobrec.evaluation.llm_call_audit import audit_llm_calls
+
+    _exhausted_call(tmp_path, "full/SC-B-02/0", "clarification")
+    _exhausted_call(tmp_path, "no_context/SC-B-01/0", "clarification")
+    _exhausted_call(tmp_path, "no_memory/SC-D-12/0", "clarification", turn_index=2)
+    # A fourth run that is clean, so the denominator is not all failures.
+    clean = tmp_path / "full" / "SC-A-01" / "0"
+    clean.mkdir(parents=True)
+    (clean / "dialogue_state.json").write_text(
+        json.dumps({"turns": [{"speaker": "candidate", "turn_id": "t0",
+                               "extraction_snapshot": {"preferences": []}}]}),
+        encoding="utf-8")
+
+    report = audit_llm_calls(tmp_path)
+    counts, rates = report["counts"], report["rates"]
+
+    assert counts["total_runs"] == 4
+    assert counts["failed_logical_calls"] == 3
+    # The point of the test: these are NOT zero.
+    assert counts["final_fallback_turns"] == 3
+    assert counts["final_fallback_runs"] == 3
+    assert rates["final_fallback_run_rate"] == 0.75
+    # Attributed to the purpose, so a clarification fallback is not mistaken for a field one.
+    assert report["fallback_distribution"]["by_field"] == {"<clarification>": 3}
+    assert report["fallback_distribution"]["by_turn_index"] == {"0": 2, "2": 1}
+
+
+def test_a_clarification_call_that_recovered_is_not_an_affected_run(tmp_path):
+    """A rescued call got what it asked for; counting it would conflate the two."""
+    from jobrec.evaluation.llm_call_audit import audit_llm_calls
+
+    run_dir = _exhausted_call(tmp_path, "full/SC-B-02/0", "clarification")
+    # A second attempt of the SAME logical call, this time successful.
+    with (run_dir / "model_calls.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({
+            "call_id": "call-clarification", "purpose": "clarification",
+            "parsed_ok": True, "raw_response": "PHRASED",
+            "turn_run_id": "SC-B-02-run", "turn_index": 0,
+            "response_metadata": {"attempts": 1, "response_id": "resp-1"},
+        }) + "\n")
+
+    counts = audit_llm_calls(tmp_path)["counts"]
+
+    assert counts["logical_calls"] == 1
+    assert counts["failed_logical_calls"] == 0
+    assert counts["recovered_after_retry"] == 1
+    assert counts["final_fallback_turns"] == 0
+    assert counts["final_fallback_runs"] == 0

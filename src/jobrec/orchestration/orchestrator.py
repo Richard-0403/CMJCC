@@ -741,23 +741,54 @@ class ConversationOrchestrator:
     def _clarification_response(self, dialogue_state, clar, model_calls=None) -> Response:
         """Build the clarification response, optionally rephrased by the provider.
 
-        ``model_calls`` receives the phrasing call's record. Threading it is not
+        ``model_calls`` receives every attempt's record. Threading it is not
         cosmetic: this call is a real, billed model call in hybrid mode (it fired 21+
         times in a single experiment) and its record used to be discarded at the call
         site, so it appeared in no artifact -- breaking call accounting, token/cost
         totals and replay completeness for every clarification turn.
+
+        The call is retried under the SAME bounded policy as extraction. It previously took
+        exactly one attempt and fell back to the template question on the first drop, while the
+        experiment manifest declared ``max_retries: 4`` -- so the stated policy was true of
+        extraction only. Measured on a 126-run hybrid pilot: 3 of the 4 failed logical calls
+        were clarification calls that never retried, against an 86% recovery rate on the path
+        that did. This is not a longer retry budget, it is the declared budget reaching a path
+        that was silently skipping it.
         """
         text = clar.question_text
         if self.provider is not None and self.config.llm.mode != RunMode.DETERMINISTIC:
+            from ..llm.provider import LLMError
+            from ..llm.retry import retry_call
             from ..prompts import prompt_templates
             tmpl = prompt_templates()["clarification"]
             prompt = (tmpl.replace("{field}", ",".join(clar.target_fields))
                           .replace("{reason}", clar.reason_code)
                           .replace("{options}", ", ".join(clar.options)))
-            text, record = self.provider.complete_text(
-                prompt, purpose="clarification", fallback=clar.question_text)
+            attempts: list = []
+
+            def once() -> str:
+                # ``complete_text`` never raises by contract -- phrasing must not break the
+                # pipeline -- so the fallback it reports is turned into the error ``retry_call``
+                # understands, and every attempt is recorded either way.
+                phrased, record = self.provider.complete_text(
+                    prompt, purpose="clarification", fallback=clar.question_text)
+                attempts.append(record)
+                if (record.metadata or {}).get("fell_back"):
+                    raise LLMError(str((record.metadata or {}).get("error") or "fell_back"))
+                return phrased
+
+            # No waiting when replaying: a recording has no transient condition to wait out.
+            backoff = (() if self.config.llm.mode == RunMode.REPLAY
+                       else tuple(self.config.llm.retry_backoff_seconds))
+            try:
+                text = retry_call(once, self.config.llm.max_retries, backoff=backoff)
+            except LLMError:
+                # Exhausted: the deterministic question text stands. Recorded as a fallback by
+                # the attempt records already appended, so it cannot pass for a phrased answer.
+                logger.warning("clarification: model call failed; using the template question")
+                text = clar.question_text
             if model_calls is not None:
-                model_calls.append(record)
+                model_calls.extend(attempts)
         return Response(
             response_id=content_id("resp", clar.clarification_id, dialogue_state.version),
             session_id=dialogue_state.session_id,
