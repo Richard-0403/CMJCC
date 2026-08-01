@@ -43,6 +43,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+# The SAME failure classifier the manifest summary and the fallback diagnosis use, so this
+# audit and those two cannot disagree about whether a call failed.
+from jobrec.evaluation.llm_call_audit import failure_kind  # noqa: E402
+
 AUTHORITATIVE = Path("evaluation/data/scenarios.jsonl")
 CATALOG = "data/processed/jobs.jsonl"
 #: The REAL hybrid config: ``mode: hybrid`` with ``provider: remote``. Not
@@ -109,6 +113,26 @@ def _run_dirs(exp_dir: Path) -> list[Path]:
     return sorted(p.parent for p in exp_dir.rglob("dialogue_state.json"))
 
 
+def _logical_calls(run_dir: Path) -> dict[tuple, list[dict]]:
+    """One entry per LOGICAL model call in a run, keyed as the shared audit keys them.
+
+    ``retry_call`` appends one record per attempt, so a per-record view counts a rescued call
+    as a failure. The grouping key is what the pipeline treats as one request: the turn's run
+    id, the turn index and the purpose.
+    """
+    path = run_dir / "model_calls.jsonl"
+    if not path.exists():
+        return {}
+    groups: dict[tuple, list[dict]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        key = (record.get("turn_run_id"), record.get("turn_index"), record.get("purpose"))
+        groups.setdefault(key, []).append(record)
+    return groups
+
+
 def audit(exp_dir: Path, out_root: Path | None = None) -> int:
     """Report provenance for every run bundle. Returns a process exit code.
 
@@ -125,7 +149,15 @@ def audit(exp_dir: Path, out_root: Path | None = None) -> int:
     # Every place the pipeline degraded rather than failing. "0 fallback" is a release
     # criterion, and a fallback is silent by design -- the run succeeds and the artifact looks
     # normal -- so it has to be looked for rather than waited for.
+    #
+    # A fallback is an EXHAUSTED logical call, not a failed attempt. This list used to be built
+    # per model-call RECORD, so a call that dropped once and then succeeded on retry was
+    # reported as a fallback: on a 126-run hybrid pilot with 0 failed logical calls it reported
+    # 6 fallbacks and exited non-zero, 4 of which were attempts of calls that recovered. That
+    # inverts the point of having a bounded retry. Recovered attempts are counted separately
+    # below and do not fail the audit.
     fallbacks: list[str] = []
+    recovered: list[str] = []
 
     for run_dir in _run_dirs(exp_dir):
         dialogue = _read(run_dir / "dialogue_state.json") or {}
@@ -145,31 +177,36 @@ def audit(exp_dir: Path, out_root: Path | None = None) -> int:
         # for what was asked for: a field's value coming from the rule extractor after the
         # model's was rejected, a whole model call failing over to rules, a retried request,
         # and lexical recall coming back empty so the whole catalogue was substituted.
+        # A field whose value came from the rule extractor after the model's was rejected. The
+        # matching ``extraction_warnings`` entry describes the SAME event, so it is not counted
+        # again -- it used to be, which reported one substituted field as two fallbacks.
+        substituted_fields = set()
         for position, turn in enumerate(candidate_turns):
             for pref in (turn.get("extraction_snapshot") or {}).get("preferences", []):
                 source = (pref.get("metadata") or {}).get("extraction_source") or ""
                 if "fallback" in source:
+                    substituted_fields.add(str(pref.get("field_name")))
                     fallbacks.append(f"{label} turn {position}: {pref.get('field_name')} "
                                      f"extraction_source={source}")
         for warning in warnings:
-            if "fallback" in warning or "unrecoverable" in warning:
+            if ("fallback" in warning or "unrecoverable" in warning) and not any(
+                    field and field in warning for field in substituted_fields):
                 fallbacks.append(f"{label}: {warning}")
         retrieval = _read(run_dir / "retrieval_results.json") or {}
         if retrieval.get("expanded") or retrieval.get("expansion_reason"):
             fallbacks.append(f"{label}: retrieval expanded "
                              f"({retrieval.get('expansion_reason')})")
-        for line in (run_dir / "model_calls.jsonl").read_text(
-                encoding="utf-8").splitlines() if (run_dir / "model_calls.jsonl").exists() \
-                else []:
-            if not line.strip():
-                continue
-            call = json.loads(line)
-            meta = call.get("response_metadata") or {}
-            if meta.get("fell_back") or call.get("parsed_ok") is False:
-                fallbacks.append(f"{label}: model call {call.get('purpose')} fell back")
-            if meta.get("retry_reason"):
-                fallbacks.append(f"{label}: model call {call.get('purpose')} retried "
-                                 f"({meta.get('retry_reason')})")
+        # Model calls, grouped into LOGICAL calls by the same key the shared audit uses, so a
+        # retried-and-recovered call is reported as recovered rather than as a fallback.
+        for (_run_key, _turn, purpose), attempts in _logical_calls(run_dir).items():
+            kinds = [failure_kind(record, record.get("response_metadata") or {})
+                     for record in attempts]
+            if all(kind is not None for kind in kinds):
+                fallbacks.append(f"{label}: model call {purpose} exhausted "
+                                 f"{len(attempts)} attempt(s): {kinds[-1]}")
+            elif any(kind is not None for kind in kinds):
+                recovered.append(f"{label}: model call {purpose} recovered after "
+                                 f"{sum(1 for k in kinds if k is not None)} failed attempt(s)")
 
         # (1) extraction_method per turn position, read from each turn's own snapshot.
         for position, turn in enumerate(candidate_turns):
@@ -240,6 +277,17 @@ def audit(exp_dir: Path, out_root: Path | None = None) -> int:
     for entry in fallbacks:
         print(f"  - {entry}")
 
+    # Reported, and deliberately NOT a failure: a call that dropped and then succeeded got what
+    # it asked for. Counted separately so "the endpoint is healthy" and "the retry policy is
+    # doing work" stay distinguishable -- 0 fallbacks with 35 recoveries is a flaky endpoint
+    # that the policy is covering, which is a different statement from 0 of either.
+    print(f"\nrecovered after retry: {len(recovered)}"
+          + ("" if recovered else " (none)"))
+    for entry in recovered[:10]:
+        print(f"  - {entry}")
+    if len(recovered) > 10:
+        print(f"  ... and {len(recovered) - 10} more")
+
     print("\nper-run final state:")
     for row in rows:
         print(f"  {row['run']}: turns={row['turns']} hard={row['hard']} "
@@ -259,6 +307,7 @@ def audit(exp_dir: Path, out_root: Path | None = None) -> int:
     report_path.write_text(
         json.dumps({"experiment_dir": str(exp_dir),
                     "runs": rows, "legacy_runs": legacy_runs, "fallbacks": fallbacks,
+                    "recovered_after_retry": recovered,
                     "method_by_position": {str(k): dict(v)
                                            for k, v in method_by_position.items()},
                     "problems": problems}, indent=2, sort_keys=True),
