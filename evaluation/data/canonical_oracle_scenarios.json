@@ -1,6 +1,6 @@
 {
   "canonical_oracle_version": "4.0.0",
-  "inputs_fingerprint": "355eefff07f26cba7d8499781ab0dfc3908be4d3e5357a25341625f9bd30faf6",
+  "inputs_fingerprint": "7664b931eb90429eaa2e4ce85082dc813757a5a28d9159497b7c65d5d7817fbe",
   "provenance": {
     "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
     "catalog_path": "data/processed/jobs.jsonl",
@@ -55,7 +55,7 @@
     "repeats": 1,
     "scenario_count": 42,
     "scenarios_path": "evaluation/data/scenarios.jsonl",
-    "scenarios_sha256": "775f5975d8ecac8d0879871c0d0046955a633a42f0c4f851a1c772a3797d1af4",
+    "scenarios_sha256": "571bcec9f2c4c2f80dddbad649661b349842298574a0e13c98e97c23c4ba9dbb",
     "scenarios_without_reference": [],
     "system_derived_scenario_count": 0,
     "system_derived_scenarios": [],
@@ -74,7 +74,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.035911Z",
+        "generated_at": "2026-07-31T19:16:36.161232Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -176,7 +176,7 @@
         ],
         "context_id": "ctx-b230eed1c4cbb0aa",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036089Z"
+        "normalized_at": "2026-07-31T19:16:36.161411Z"
       }
     },
     "SC-A-02": {
@@ -190,7 +190,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.036310Z",
+        "generated_at": "2026-07-31T19:16:36.161633Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -278,7 +278,7 @@
         ],
         "context_id": "ctx-51fea36443eb105c",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036397Z"
+        "normalized_at": "2026-07-31T19:16:36.161718Z"
       }
     },
     "SC-A-03": {
@@ -292,7 +292,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.036470Z",
+        "generated_at": "2026-07-31T19:16:36.161795Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -396,7 +396,7 @@
         ],
         "context_id": "ctx-aa8cbb1048a62d84",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036548Z"
+        "normalized_at": "2026-07-31T19:16:36.161887Z"
       }
     },
     "SC-A-04": {
@@ -410,7 +410,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.036617Z",
+        "generated_at": "2026-07-31T19:16:36.161957Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -513,7 +513,7 @@
         ],
         "context_id": "ctx-fe126f3cead420ae",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036692Z"
+        "normalized_at": "2026-07-31T19:16:36.162031Z"
       }
     },
     "SC-A-05": {
@@ -527,7 +527,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.036757Z",
+        "generated_at": "2026-07-31T19:16:36.162097Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -615,7 +615,7 @@
         ],
         "context_id": "ctx-97d3aa8baa40781d",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036820Z"
+        "normalized_at": "2026-07-31T19:16:36.162160Z"
       }
     },
     "SC-A-06": {
@@ -629,7 +629,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.036877Z",
+        "generated_at": "2026-07-31T19:16:36.162218Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -731,7 +731,7 @@
         ],
         "context_id": "ctx-1079f5c21a3acc7b",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.036950Z"
+        "normalized_at": "2026-07-31T19:16:36.162288Z"
       }
     },
     "SC-B-01": {
@@ -745,7 +745,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037013Z",
+        "generated_at": "2026-07-31T19:16:36.162349Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Kuala Lumpur"
@@ -845,7 +845,7 @@
         ],
         "context_id": "ctx-3767f4f21a0012de",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037083Z"
+        "normalized_at": "2026-07-31T19:16:36.162420Z"
       }
     },
     "SC-B-02": {
@@ -859,7 +859,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037151Z",
+        "generated_at": "2026-07-31T19:16:36.162490Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Penang"
@@ -934,7 +934,7 @@
         ],
         "context_id": "ctx-036d80ecae6b5134",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037205Z"
+        "normalized_at": "2026-07-31T19:16:36.162545Z"
       }
     },
     "SC-B-03": {
@@ -948,7 +948,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037257Z",
+        "generated_at": "2026-07-31T19:16:36.162597Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Kuala Lumpur"
@@ -1023,7 +1023,7 @@
         ],
         "context_id": "ctx-9679da3145ec3191",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037308Z"
+        "normalized_at": "2026-07-31T19:16:36.162647Z"
       }
     },
     "SC-B-04": {
@@ -1037,7 +1037,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037359Z",
+        "generated_at": "2026-07-31T19:16:36.162699Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -1138,7 +1138,7 @@
         ],
         "context_id": "ctx-a5db7e258a562e01",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037430Z"
+        "normalized_at": "2026-07-31T19:16:36.162772Z"
       }
     },
     "SC-B-05": {
@@ -1152,7 +1152,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037490Z",
+        "generated_at": "2026-07-31T19:16:36.162833Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Penang"
@@ -1227,7 +1227,7 @@
         ],
         "context_id": "ctx-3d7985bf8d3a4689",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037541Z"
+        "normalized_at": "2026-07-31T19:16:36.162884Z"
       }
     },
     "SC-C-01": {
@@ -1241,7 +1241,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037591Z",
+        "generated_at": "2026-07-31T19:16:36.162935Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -1343,7 +1343,7 @@
         ],
         "context_id": "ctx-e47797547acfe106",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037677Z"
+        "normalized_at": "2026-07-31T19:16:36.163015Z"
       }
     },
     "SC-C-02": {
@@ -1357,7 +1357,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037740Z",
+        "generated_at": "2026-07-31T19:16:36.163078Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -1461,7 +1461,7 @@
         ],
         "context_id": "ctx-afe2898791225165",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037812Z"
+        "normalized_at": "2026-07-31T19:16:36.163150Z"
       }
     },
     "SC-C-03": {
@@ -1475,7 +1475,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037874Z",
+        "generated_at": "2026-07-31T19:16:36.163213Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -1562,7 +1562,7 @@
         ],
         "context_id": "ctx-54f13fac53ad9ec9",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.037936Z"
+        "normalized_at": "2026-07-31T19:16:36.163275Z"
       }
     },
     "SC-C-04": {
@@ -1576,7 +1576,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.037993Z",
+        "generated_at": "2026-07-31T19:16:36.163331Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -1663,7 +1663,7 @@
         ],
         "context_id": "ctx-1271563520b1506d",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038059Z"
+        "normalized_at": "2026-07-31T19:16:36.163396Z"
       }
     },
     "SC-C-05": {
@@ -1677,7 +1677,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.038115Z",
+        "generated_at": "2026-07-31T19:16:36.163609Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -1781,7 +1781,7 @@
         ],
         "context_id": "ctx-6c8cb3813dfb705d",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038186Z"
+        "normalized_at": "2026-07-31T19:16:36.163773Z"
       }
     },
     "SC-D-01": {
@@ -1795,7 +1795,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.038249Z",
+        "generated_at": "2026-07-31T19:16:36.163910Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -1882,7 +1882,7 @@
         ],
         "context_id": "ctx-194e730480f96c46",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038310Z"
+        "normalized_at": "2026-07-31T19:16:36.164032Z"
       }
     },
     "SC-D-02": {
@@ -1896,7 +1896,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.038366Z",
+        "generated_at": "2026-07-31T19:16:36.164140Z",
         "hard_constraint_fields": [
           "salary_min",
           "work_modes"
@@ -2000,7 +2000,7 @@
         ],
         "context_id": "ctx-235a4f245deb6740",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038536Z"
+        "normalized_at": "2026-07-31T19:16:36.164281Z"
       }
     },
     "SC-D-03": {
@@ -2014,7 +2014,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.038715Z",
+        "generated_at": "2026-07-31T19:16:36.164375Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2103,7 +2103,7 @@
         ],
         "context_id": "ctx-124b4fcbe30a6bca",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038798Z"
+        "normalized_at": "2026-07-31T19:16:36.164475Z"
       }
     },
     "SC-D-04": {
@@ -2117,7 +2117,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.038870Z",
+        "generated_at": "2026-07-31T19:16:36.164574Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2221,7 +2221,7 @@
         ],
         "context_id": "ctx-81420bbca2005dfa",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.038952Z"
+        "normalized_at": "2026-07-31T19:16:36.164710Z"
       }
     },
     "SC-D-05": {
@@ -2235,7 +2235,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039018Z",
+        "generated_at": "2026-07-31T19:16:36.164835Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2323,7 +2323,7 @@
         ],
         "context_id": "ctx-46164aac0e408035",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039083Z"
+        "normalized_at": "2026-07-31T19:16:36.164975Z"
       }
     },
     "SC-D-06": {
@@ -2337,7 +2337,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040873Z",
+        "generated_at": "2026-07-31T19:16:36.167126Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2439,7 +2439,7 @@
         ],
         "context_id": "ctx-da1020f8e7fed080",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040942Z"
+        "normalized_at": "2026-07-31T19:16:36.167266Z"
       }
     },
     "SC-D-07": {
@@ -2453,7 +2453,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041011Z",
+        "generated_at": "2026-07-31T19:16:36.167342Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2541,7 +2541,7 @@
         ],
         "context_id": "ctx-87f701b140784b19",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041074Z"
+        "normalized_at": "2026-07-31T19:16:36.167410Z"
       }
     },
     "SC-D-08": {
@@ -2555,7 +2555,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041131Z",
+        "generated_at": "2026-07-31T19:16:36.167472Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2659,7 +2659,7 @@
         ],
         "context_id": "ctx-f2ea87d77ac1ca5c",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041201Z"
+        "normalized_at": "2026-07-31T19:16:36.167545Z"
       }
     },
     "SC-D-09": {
@@ -2673,7 +2673,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041309Z",
+        "generated_at": "2026-07-31T19:16:36.167608Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2776,7 +2776,7 @@
         ],
         "context_id": "ctx-13a014d0dd77f3c5",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041384Z"
+        "normalized_at": "2026-07-31T19:16:36.167684Z"
       }
     },
     "SC-D-10": {
@@ -2790,7 +2790,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041448Z",
+        "generated_at": "2026-07-31T19:16:36.167747Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -2893,7 +2893,7 @@
         ],
         "context_id": "ctx-2c8fb55a25ce2783",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041520Z"
+        "normalized_at": "2026-07-31T19:16:36.167818Z"
       }
     },
     "SC-D-11": {
@@ -2907,7 +2907,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041581Z",
+        "generated_at": "2026-07-31T19:16:36.167885Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -3009,7 +3009,7 @@
         ],
         "context_id": "ctx-5af9af11e1e6f30f",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041651Z"
+        "normalized_at": "2026-07-31T19:16:36.167956Z"
       }
     },
     "SC-D-12": {
@@ -3023,7 +3023,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.041710Z",
+        "generated_at": "2026-07-31T19:16:36.168019Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -3125,7 +3125,7 @@
         ],
         "context_id": "ctx-94e4d9d5ce4de8b6",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.041781Z"
+        "normalized_at": "2026-07-31T19:16:36.168089Z"
       }
     },
     "SC-E-01": {
@@ -3139,7 +3139,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039143Z",
+        "generated_at": "2026-07-31T19:16:36.165097Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min",
@@ -3241,7 +3241,7 @@
         ],
         "context_id": "ctx-041aa29339e24971",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039216Z"
+        "normalized_at": "2026-07-31T19:16:36.165239Z"
       }
     },
     "SC-E-02": {
@@ -3255,7 +3255,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039279Z",
+        "generated_at": "2026-07-31T19:16:36.165324Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min",
@@ -3358,7 +3358,7 @@
         ],
         "context_id": "ctx-0793839051739b5b",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039351Z"
+        "normalized_at": "2026-07-31T19:16:36.165401Z"
       }
     },
     "SC-E-03": {
@@ -3372,7 +3372,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039413Z",
+        "generated_at": "2026-07-31T19:16:36.165467Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min",
@@ -3474,7 +3474,7 @@
         ],
         "context_id": "ctx-9fbde0d988c96c44",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039485Z"
+        "normalized_at": "2026-07-31T19:16:36.165541Z"
       }
     },
     "SC-E-04": {
@@ -3488,7 +3488,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039546Z",
+        "generated_at": "2026-07-31T19:16:36.165606Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min",
@@ -3591,7 +3591,7 @@
         ],
         "context_id": "ctx-3e351ada72f8da31",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039620Z"
+        "normalized_at": "2026-07-31T19:16:36.165678Z"
       }
     },
     "SC-E-05": {
@@ -3605,7 +3605,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039697Z",
+        "generated_at": "2026-07-31T19:16:36.165742Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min",
@@ -3707,7 +3707,7 @@
         ],
         "context_id": "ctx-0eab75a5d4b27020",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039770Z"
+        "normalized_at": "2026-07-31T19:16:36.165813Z"
       }
     },
     "SC-F-01": {
@@ -3721,7 +3721,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039830Z",
+        "generated_at": "2026-07-31T19:16:36.165873Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Kuala Lumpur"
@@ -3811,7 +3811,7 @@
         ],
         "context_id": "ctx-ef3ec2a6a88f2d1d",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.039894Z"
+        "normalized_at": "2026-07-31T19:16:36.165935Z"
       }
     },
     "SC-F-02": {
@@ -3825,7 +3825,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.039952Z",
+        "generated_at": "2026-07-31T19:16:36.165993Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Penang"
@@ -3916,7 +3916,7 @@
         ],
         "context_id": "ctx-b3b5c6e4ac29cb06",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040014Z"
+        "normalized_at": "2026-07-31T19:16:36.166055Z"
       }
     },
     "SC-F-03": {
@@ -3930,7 +3930,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040069Z",
+        "generated_at": "2026-07-31T19:16:36.166113Z",
         "hard_constraint_fields": [],
         "preferred_locations": [],
         "salary_currency": null,
@@ -4005,7 +4005,7 @@
         ],
         "context_id": "ctx-cb8d7e98dd9e75b4",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040121Z"
+        "normalized_at": "2026-07-31T19:16:36.166165Z"
       }
     },
     "SC-F-04": {
@@ -4019,7 +4019,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040170Z",
+        "generated_at": "2026-07-31T19:16:36.166216Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Kuala Lumpur"
@@ -4110,7 +4110,7 @@
         ],
         "context_id": "ctx-1cd6b82bbfc08599",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040245Z"
+        "normalized_at": "2026-07-31T19:16:36.166277Z"
       }
     },
     "SC-G-01": {
@@ -4124,7 +4124,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040303Z",
+        "generated_at": "2026-07-31T19:16:36.166333Z",
         "hard_constraint_fields": [
           "salary_min"
         ],
@@ -4211,7 +4211,7 @@
         ],
         "context_id": "ctx-8d413a953e1563a5",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040366Z"
+        "normalized_at": "2026-07-31T19:16:36.166395Z"
       }
     },
     "SC-G-02": {
@@ -4225,7 +4225,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040421Z",
+        "generated_at": "2026-07-31T19:16:36.166449Z",
         "hard_constraint_fields": [],
         "preferred_locations": [
           "Penang"
@@ -4300,7 +4300,7 @@
         ],
         "context_id": "ctx-3f8c36ae709b821d",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040473Z"
+        "normalized_at": "2026-07-31T19:16:36.166501Z"
       }
     },
     "SC-H-01": {
@@ -4314,7 +4314,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040523Z",
+        "generated_at": "2026-07-31T19:16:36.166552Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -4401,7 +4401,7 @@
         ],
         "context_id": "ctx-4589d9181d787f95",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040589Z"
+        "normalized_at": "2026-07-31T19:16:36.166614Z"
       }
     },
     "SC-H-02": {
@@ -4415,7 +4415,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040645Z",
+        "generated_at": "2026-07-31T19:16:36.166669Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -4502,7 +4502,7 @@
         ],
         "context_id": "ctx-ac5f4e792e9c52b1",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040706Z"
+        "normalized_at": "2026-07-31T19:16:36.166730Z"
       }
     },
     "SC-H-03": {
@@ -4516,7 +4516,7 @@
         "exclusions": {},
         "experience_level": null,
         "field_evidence_map": {},
-        "generated_at": "2026-07-31T18:22:28.040760Z",
+        "generated_at": "2026-07-31T19:16:36.166786Z",
         "hard_constraint_fields": [
           "preferred_locations",
           "salary_min"
@@ -4604,7 +4604,7 @@
         ],
         "context_id": "ctx-3e1c138e4da4233c",
         "normalization_warnings": [],
-        "normalized_at": "2026-07-31T18:22:28.040820Z"
+        "normalized_at": "2026-07-31T19:16:36.166986Z"
       }
     }
   }

@@ -313,7 +313,18 @@ def frozen_artifact_path(scenarios_path: str | Path) -> Path:
 
 
 def _file_fingerprint(path: str | Path) -> str:
-    return sha256_of_bytes(Path(path).read_bytes())
+    """Content digest of a text input, normalised to LF first.
+
+    Hashing raw bytes made the fingerprint depend on the CHECKOUT rather than on the content:
+    the same scenario file arrives with CRLF on a Windows clone and LF elsewhere, so a frozen
+    reference built on one platform was reported STALE on the other and the analysis refused
+    to run. Line endings are not part of what a scenario says, so they are normalised out.
+
+    Deliberately narrow: CR and CRLF collapse to LF and nothing else changes, so any real edit
+    -- including whitespace inside a field -- still moves the digest.
+    """
+    raw = Path(path).read_bytes()
+    return sha256_of_bytes(raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
 
 
 def inputs_fingerprint(scenarios_path: str | Path, catalog_path: str | Path) -> str:

@@ -375,7 +375,13 @@ def test_delivered_prose_is_backed_by_the_delivered_claims(grounded: ExplainedTu
         if line.strip().startswith("- ")
     ]
     assert bullets
-    assert set(bullets) == {c.text for c in job_claims}
+    # Compared against ALL delivered claims, not just the job-level ones: the per-field
+    # "You indicated ..." statements are now shown as bullets too. They used to be summarised
+    # into one compact line while their claims were scored invisibly, which is exactly the
+    # mismatch this assertion exists to prevent -- so widening it is the point, not a
+    # concession.
+    assert set(bullets) == {c.text for c in grounded.response.claims}
+    assert {c.text for c in job_claims} <= set(bullets)
 
 
 def test_fully_grounded_no_match_reasons_are_all_delivered(config) -> None:

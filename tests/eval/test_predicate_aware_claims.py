@@ -66,8 +66,12 @@ def _job(store: EvidenceStore, field: str, value, job_id: str = JOB) -> str:
     ).evidence_id
 
 
-def _stage(store: EvidenceStore, field: str, removed: int, blocked=None) -> str:
-    value = {"field": field, "filtered_count": removed}
+def _stage(store: EvidenceStore, field: str, removed: int, blocked=None,
+           evaluated: int | None = None) -> str:
+    # ``evaluated_jobs`` is the DENOMINATOR the claim names. A record without it cannot
+    # support a claim that states one, which is why the fixtures carry it.
+    value = {"field": field, "filtered_count": removed,
+             "evaluated_jobs": 18 if evaluated is None else evaluated}
     if blocked is not None:
         value["blocked_job_ids"] = list(blocked)
     return store.register_field(

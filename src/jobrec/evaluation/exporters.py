@@ -52,6 +52,11 @@ _RESPONSE_METADATA_KEYS: tuple[str, ...] = (
     "finish_reason",
     "response_id",
     "system_fingerprint",
+    # The model the SERVER says answered, which is the whole point of recording it: an alias
+    # resolves to a dated build and a gateway can route elsewhere, so ``request_params.model``
+    # (what was ASKED for) cannot establish what replied. The provider captured this and the
+    # whitelist dropped it, so no bundle could evidence which model produced its runs.
+    "response_model",
     # ``error`` carries an exception CLASS NAME only, never a message (a transport
     # error message can quote the request, and therefore the credential).
     "error",

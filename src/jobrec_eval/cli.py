@@ -327,6 +327,19 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     catalog = load_catalog(catalog_path)
     scenarios = load_scenarios(scenarios_path)
 
+    # ---- Stage 1: input gates, BEFORE a single run is spent --------------
+    #
+    # The frozen canonical oracle used to be loaded in the ANALYSIS stage, i.e. after every
+    # run had executed. A stale reference is refused, so on the official batches that meant
+    # 210 or 378 completed runs -- hours of paid calls on the hybrid arm -- and then a refusal,
+    # with the whole batch spent before the problem was visible. Checking it here costs one
+    # fingerprint comparison and moves the failure to the second before the first request.
+    #
+    # ``freeze=False`` deliberately: this gate must not create the artifact as a side effect of
+    # being checked. A stale one still raises StaleCanonicalOracleError, because silently
+    # rebuilding it would change the labels under a heading claiming they were frozen.
+    load_or_build_canonical_references(scenarios_path, catalog_path, cfg, freeze=False)
+
     # ---- Stage 2: run experiments (or reuse) ----------------------------
     runs_root = Path(out_root) / "_runs"
     if experiment_dir:

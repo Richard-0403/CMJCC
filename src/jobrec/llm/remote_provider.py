@@ -347,7 +347,18 @@ class RemoteLLMProvider:
         return raw, record
 
     def manifest(self) -> dict[str, Any]:
-        """Reproducibility metadata. Records the key's SOURCE, never its value."""
+        """Reproducibility metadata. Records the key's SOURCE, never its value.
+
+        The endpoint is reported as its cleaned identity, not as the raw ``base_url``. This
+        manifest is persisted into every run bundle via ``RunRecord.model_manifest``, and a
+        base URL is the one input that can embed a credential -- ``https://user:key@host/v1``
+        and ``?api-key=...`` are both accepted by OpenAI-compatible clients -- so publishing
+        it verbatim would put a key in an archived artifact. The same reduction is used for
+        the experiment identity, so the two agree on what "the endpoint" means.
+        """
+        from ..evaluation.experiment_identity import endpoint_identity
+
         return {"provider": self.name, "model": self.model, "mode": "hybrid",
-                "base_url": self.base_url, "api_key_env": self.api_key_env,
+                "endpoint": endpoint_identity(self.base_url),
+                "api_key_env": self.api_key_env,
                 "api_key_present": self.has_api_key}

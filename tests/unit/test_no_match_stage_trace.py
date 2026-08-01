@@ -95,7 +95,7 @@ def test_a_causal_claim_needs_a_filtering_record() -> None:
         scope=PersistenceScope.SESSION)
     effect = store.register_field(
         EvidenceSource.SYSTEM_RULE, "dec-1", "filtered_by:salary_min",
-        {"field": "salary_min", CAUSAL_EFFECT_KEY: 2},
+        {"field": "salary_min", CAUSAL_EFFECT_KEY: 2, "evaluated_jobs": 2},
         confidence=1.0, confirmation=ConfirmationStatus.CONFIRMED,
         scope=PersistenceScope.SESSION)
 

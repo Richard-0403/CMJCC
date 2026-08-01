@@ -281,10 +281,22 @@ def _check_no_match_cause(claim: ResponseClaim, resolved: list[Any]) -> bool:
         return False
     claimed_removed = _as_number(claim.claim_args.get("removed"))
     claimed_blocked = claim.claim_args.get("blocked_job_ids")
+    claimed_evaluated = _as_number(claim.claim_args.get("evaluated_jobs"))
     for record in records:
         value = record.normalized_value if isinstance(record.normalized_value, dict) else {}
         recorded_removed = _as_number(value.get(CAUSAL_EFFECT_KEY))
         if claimed_removed is not None and recorded_removed != claimed_removed:
+            continue
+        # BOTH numbers. The claim reads "N of the M jobs in scope", so an unchecked M let a
+        # true numerator carry a fabricated denominator -- and the denominator is what makes
+        # the sentence proportional rather than absolute.
+        recorded_evaluated = _as_number(value.get("evaluated_jobs"))
+        if claimed_evaluated is not None and recorded_evaluated != claimed_evaluated:
+            continue
+        if (recorded_removed is not None and recorded_evaluated is not None
+                and recorded_removed > recorded_evaluated):
+            # More removed than evaluated is arithmetically impossible; the record itself is
+            # inconsistent and cannot support anything.
             continue
         recorded_blocked = value.get("blocked_job_ids")
         if recorded_blocked is not None or claimed_blocked is not None:
@@ -496,26 +508,32 @@ class ExplanationAgent:
         claims: list[ResponseClaim] = []
         lines: list[str] = []
 
-        # 1) Need summary (candidate_preference claims).
-        summary_bits = []
-        if active.target_roles:
-            summary_bits.append(" / ".join(active.target_roles))
-        if active.preferred_locations:
-            summary_bits.append("in " + " / ".join(active.preferred_locations))
-        if active.salary_min:
-            summary_bits.append(f"salary >= {active.salary_min:.0f} {active.salary_currency or ''}".strip())
-        summary = "Based on your request" + (": " + ", ".join(summary_bits) if summary_bits else ".")
-        lines.append(summary)
+        # Which rendered line each claim produced, so a claim that fails validation can have
+        # its sentence withdrawn from the message rather than leaving an ungrounded assertion
+        # on screen. See ``_render`` for why both directions matter.
+        line_of: dict[str, str] = {}
+
+        # 1) What was understood, one visible line per field.
+        #
+        # This used to be a single compact summary ("Based on your request: data analyst, in
+        # Kuala Lumpur, salary >= 4000") while the CLAIMS were separate per-field sentences
+        # that appeared nowhere. 388 delivered candidate_preference claims were therefore
+        # graded for grounding without ever being shown, so the reported grounding rate
+        # described text the user never read.
+        lines.append("Based on your request:")
         for field in ["target_roles", "preferred_locations", "salary_min"]:
             ev = active.field_evidence_map.get(field, [])
             if ev:
-                claims.append(self._claim(
-                    "candidate_preference",
-                    f"You indicated {field.replace('_', ' ')}: "
-                    f"{getattr(active, field)}", ev,
+                text = (f"You indicated {field.replace('_', ' ')}: "
+                        f"{getattr(active, field)}")
+                claim = self._claim(
+                    "candidate_preference", text, ev,
                     predicate="candidate_preference", subject_id=active.candidate_id,
                     field_name=field, expected_value=getattr(active, field),
-                ))
+                )
+                claims.append(claim)
+                line_of[claim.claim_id] = f"  - {text}"
+                lines.append(line_of[claim.claim_id])
 
         # 2) Top-k jobs.
         top = decision.ranked_jobs[: self.config.experiment.top_k]
@@ -532,8 +550,10 @@ class ExplanationAgent:
             for feat in strong:
                 text = self._feature_text(feat.name, feat, job)
                 if text:
-                    lines.append(f"  - {text}")
-                    claims.append(self._ranking_claim(text, feat, job, active))
+                    claim = self._ranking_claim(text, feat, job, active)
+                    claims.append(claim)
+                    line_of[claim.claim_id] = f"  - {text}"
+                    lines.append(line_of[claim.claim_id])
             # skill gaps
             #
             # The wording used to be "the role requires X, which is not in your listed
@@ -552,14 +572,16 @@ class ExplanationAgent:
                           if e] + self._candidate_skills_evidence_all(active)
                 text = (f"Gap: the role requires {gap}, which is not recorded in your "
                         f"profile skills.")
-                lines.append(f"  - {text}")
-                claims.append(self._claim(
+                claim = self._claim(
                     "skill_gap", text, gap_ev, job.job_id,
                     predicate="skill_not_recorded", subject_id=active.candidate_id,
                     job_id=job.job_id, field_name="skills_have",
                     observed_value=list(active.skills_have or []),
                     claim_args={"skill": gap},
-                ))
+                )
+                claims.append(claim)
+                line_of[claim.claim_id] = f"  - {text}"
+                lines.append(line_of[claim.claim_id])
             # unknown-field transparency
             if job.salary_min_monthly_myr is None and active.salary_min is not None:
                 text = "Note: this posting does not state a salary."
@@ -568,16 +590,16 @@ class ExplanationAgent:
         # 3) Next-step nudge (non-factual, no claim needed).
         lines.append("\nYou can refine any preference (location, salary, work mode) to adjust these results.")
 
+        supported, dropped = validate_claims(claims, self.store)
         response = Response(
             response_id=content_id("resp", decision.decision_id),
             session_id=decision.session_id,
             response_type=ResponseType.RECOMMENDATION.value,
-            message="\n".join(lines),
-            claims=[],
+            # Rendered AFTER validation, so a rejected claim's sentence is not shown.
+            message=self._render(lines, line_of, dropped),
+            claims=supported,
             created_at=utcnow(),
         )
-        supported, dropped = validate_claims(claims, self.store)
-        response = response.model_copy(update={"claims": supported})
         return response, dropped
 
     # ------------------------------------------------------------- no match
@@ -595,6 +617,10 @@ class ExplanationAgent:
              # WHICH jobs, so the count can be checked against a list rather than believed.
              # The validator compares this with the claim's own list and rejects a mismatch.
              **({"blocked_job_ids": sorted(blocked_ids)} if blocked_ids else {}),
+             # The DENOMINATOR. "N of the M jobs in scope" states two numbers and only the
+             # first was checkable, so a claim naming any M at all passed -- M could be 999
+             # against a 3-job scope and the verdict stayed `supported`.
+             "evaluated_jobs": diagnosis.get("evaluated_jobs"),
              "stage_trace": diagnosis.get("stage_trace")},
             confidence=1.0, confirmation=ConfirmationStatus.CONFIRMED,
             scope=PersistenceScope.SESSION,
@@ -603,6 +629,7 @@ class ExplanationAgent:
 
     def _no_match(self, decision, active):
         claims: list[ResponseClaim] = []
+        line_of: dict[str, str] = {}
         diagnosis = getattr(decision, "no_match_diagnosis", None) or {}
         blocking = {b["field"]: b for b in diagnosis.get("blocking_constraints", [])}
         evaluated = diagnosis.get("evaluated_jobs")
@@ -625,8 +652,13 @@ class ExplanationAgent:
         # response with no reasons at all -- trading an over-broad explanation for none, which
         # is worse for the reader. So the hard fields are used as the fallback, and only the
         # descriptive claim is made: the causal form needs counts that are not available.
+        # Absent diagnosis and empty diagnosis are different facts. A diagnosis that ran and
+        # found no blocking field is a POSITIVE statement -- no requirement rejected anything --
+        # and falling back to every hard constraint there would manufacture reasons the
+        # diagnosis had just ruled out. Only a MISSING diagnosis leaves nothing to narrow by.
+        diagnosed = "blocking_constraints" in diagnosis
         reason_fields = ([f for f in active.hard_constraint_fields if f in blocking]
-                         if blocking else list(active.hard_constraint_fields))
+                         if diagnosed else list(active.hard_constraint_fields))
         for field in reason_fields:
             ev = active.field_evidence_map.get(field, [])
             if ev:
@@ -637,14 +669,16 @@ class ExplanationAgent:
                 # adjudicated all 156 of these unsupported. Restated as what the evidence
                 # does show: this requirement was applied as a hard filter. The causal
                 # form needs a per-stage record of what each filter removed, which is P0-5.
-                claims.append(self._claim(
-                    "no_match_reason",
-                    f"Your stated requirement on {field.replace('_', ' ')} was applied as a "
-                    f"hard filter.",
-                    ev,
+                reason_text = (f"Your stated requirement on {field.replace('_', ' ')} was "
+                               f"applied as a hard filter.")
+                reason = self._claim(
+                    "no_match_reason", reason_text, ev,
                     predicate="constraint_applied", subject_id=active.candidate_id,
                     field_name=field, expected_value=getattr(active, field, None),
-                ))
+                )
+                claims.append(reason)
+                line_of[reason.claim_id] = f"  - {reason_text}"
+                lines.append(line_of[reason.claim_id])
                 # The CAUSAL claim, only when the diagnosis recorded how many jobs this
                 # field actually removed. It cites the filtering record alongside the
                 # candidate's statement, so "this requirement is why" rests on a count
@@ -656,7 +690,7 @@ class ExplanationAgent:
                     effect_ev = self._filtering_evidence(decision, field, removed,
                                                          blocked_ids)
                     if effect_ev:
-                        claims.append(self._claim(
+                        cause = self._claim(
                             "no_match_cause",
                             # "did not meet", not "removed". These per-field sets OVERLAP --
                             # a job usually fails several conditions at once -- so the counts
@@ -671,7 +705,10 @@ class ExplanationAgent:
                             claim_args={"removed": removed, "evaluated_jobs": evaluated,
                                         **({"blocked_job_ids": sorted(blocked_ids)}
                                            if blocked_ids else {})},
-                        ))
+                        )
+                        claims.append(cause)
+                        line_of[cause.claim_id] = f"  - {cause.text}"
+                        lines.append(line_of[cause.claim_id])
         # Only suggest relaxing something that EXISTS. The line was unconditional, so a
         # candidate whose every stated preference was hard was told to relax a soft or
         # unconfirmed one they had never expressed -- advice that cannot be acted on.
@@ -689,17 +726,39 @@ class ExplanationAgent:
         # catalogue with the role scope lifted, which is a behaviour change, not wording.
         # The scoped opening line above is what keeps the response from overclaiming
         # meanwhile: it says nothing in the searched set qualifies, and nothing more.
+        supported, dropped = validate_claims(claims, self.store)
         response = Response(
             response_id=content_id("resp", decision.decision_id),
             session_id=decision.session_id,
             response_type=ResponseType.NO_MATCH.value,
-            message="\n".join(lines),
-            claims=[],
+            message=self._render(lines, line_of, dropped),
+            claims=supported,
             created_at=utcnow(),
         )
-        supported, dropped = validate_claims(claims, self.store)
-        response = response.model_copy(update={"claims": supported})
         return response, dropped
+
+    @staticmethod
+    def _render(lines: list[str], line_of: dict[str, str], dropped: list[ResponseClaim]) -> str:
+        """The message, with every dropped claim's sentence withdrawn.
+
+        Grounding is reported over the claims, so the claims and the message have to describe
+        the same text in both directions:
+
+        * every DELIVERED claim's sentence is visible -- otherwise the metric grades
+          explanations the user never read. 460 of 3578 delivered claims were in that state:
+          388 candidate_preference, 36 no_match_reason and 36 no_match_cause, all built and
+          scored while the message showed something else or nothing.
+        * every factual sentence is backed by a delivered claim -- otherwise the response
+          asserts something the validator rejected, which is the worse direction. Dropping a
+          claim used to leave its sentence on screen, so a rejected assertion was still shown
+          and simply stopped being counted.
+
+        Withdrawing the line is the honest resolution: the claim failed validation, so the
+        system has no grounds to say it. Lines with no claim behind them (the lead-in, the job
+        headers, the closing nudge) are structural or non-factual and pass through.
+        """
+        withdrawn = {line_of[c.claim_id] for c in dropped if c.claim_id in line_of}
+        return "\n".join(line for line in lines if line not in withdrawn)
 
     # --------------------------------------------------------------- claims
     def _claim(self, claim_type: str, text: str, evidence_ids: list[str],
