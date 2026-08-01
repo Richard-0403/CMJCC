@@ -718,6 +718,11 @@ def _orchestrator(
     config = AppConfig()
     config.llm.mode = mode
     config.llm.max_retries = max_retries
+    # No waiting between retries. These tests assert the LADDER's order and its call counts,
+    # not its timing, and spending the real backoff schedule here would trade nine seconds of
+    # wall clock for no extra coverage. The schedule itself is asserted in
+    # ``tests/unit/test_retry_policy.py``.
+    config.llm.retry_backoff_seconds = []
     return ConversationOrchestrator(
         config, [], "snapshot-test", "catalog-hash-test", provider=provider
     )

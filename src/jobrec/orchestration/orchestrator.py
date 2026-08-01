@@ -457,7 +457,13 @@ class ConversationOrchestrator:
 
         # ---- model call (bounded retry on transient LLM errors) --------------
         try:
-            pref_set = retry_call(once, self.config.llm.max_retries)
+            # No waiting when replaying. Backoff exists to let a transient remote condition
+            # pass, and a RECORDING has none: the same missing entry will be missing again in
+            # twenty seconds, so the delay buys nothing and it is paid on every retry of every
+            # replayed turn. Left in place it made one property test take 706 seconds.
+            backoff = (() if mode == RunMode.REPLAY
+                       else tuple(self.config.llm.retry_backoff_seconds))
+            pref_set = retry_call(once, self.config.llm.max_retries, backoff=backoff)
         except LLMError:
             # Explicit fallback to the deterministic rule extractor (no fabrication).
             logger.warning("extraction: model call failed; falling back to rule extractor")

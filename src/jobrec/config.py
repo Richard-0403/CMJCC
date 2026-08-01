@@ -94,6 +94,16 @@ class LLMConfig(BaseModel):
     response_temperature: float = 0.2
     timeout_seconds: int = 30
     max_retries: int = 2
+    #: Seconds to wait before each retry, in order; the last value repeats if retries outrun
+    #: it. Declared here rather than hard-coded so an experiment's retry POLICY is part of its
+    #: resolved config, and therefore part of ``config_hash`` and the experiment id -- two
+    #: batches that tried different numbers of times are not the same experiment.
+    #:
+    #: Fixed and unjittered on purpose: a randomised schedule would make two runs of one batch
+    #: differ in how hard they tried. An empty list disables waiting, which is what the retry
+    #: ladder's own tests use so they do not spend the schedule in wall-clock time.
+    retry_backoff_seconds: list[float] = Field(
+        default_factory=lambda: [2.0, 5.0, 10.0, 20.0])
     save_raw_responses: bool = True
 
 

@@ -277,6 +277,15 @@ class ExperimentRunner:
             "catalog_hash": snapshot["catalog_hash"],
             "scenarios_hash": snapshot["scenarios_hash"],
             "prompt_hash": prompt_hash(),
+            # The retry POLICY, stated rather than left to be inferred from the code version.
+            # A batch's fallback rate is only interpretable next to how hard it tried, and
+            # these values are in the resolved config, so they already move config_hash and
+            # therefore the experiment id.
+            "retry_policy": {
+                "max_retries": self.config.llm.max_retries,
+                "backoff_seconds": list(self.config.llm.retry_backoff_seconds),
+                "timeout_seconds": self.config.llm.timeout_seconds,
+            },
             # The run inputs that are neither source nor resolved config, recorded as the
             # exact dict the experiment id was derived from, so the id can be re-derived
             # from this manifest offline instead of being taken on trust. Carries the LLM
