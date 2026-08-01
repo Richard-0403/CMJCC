@@ -109,8 +109,15 @@ def _run_dirs(exp_dir: Path) -> list[Path]:
     return sorted(p.parent for p in exp_dir.rglob("dialogue_state.json"))
 
 
-def audit(exp_dir: Path) -> int:
-    """Report provenance for every run bundle. Returns a process exit code."""
+def audit(exp_dir: Path, out_root: Path | None = None) -> int:
+    """Report provenance for every run bundle. Returns a process exit code.
+
+    ``out_root`` is where the JSON report goes, and it defaults to beside the experiment rather
+    than inside it. The report used to be written INTO ``exp_dir``, after the runner had already
+    written ``checksums.json`` -- so auditing an experiment added an unrecorded file to it and
+    ``jobrec_eval.cli verify`` then failed on the batch with "present on disk but not recorded".
+    An audit must not modify the artifact it audits.
+    """
     problems: list[str] = []
     method_by_position: dict[int, Counter] = {}
     legacy_runs: list[str] = []
@@ -246,12 +253,17 @@ def audit(exp_dir: Path) -> int:
     else:
         print("\nevidence integrity: no duplicated ids, no turn_id drift.")
 
-    (exp_dir / "p0_2_audit.json").write_text(
-        json.dumps({"runs": rows, "legacy_runs": legacy_runs, "fallbacks": fallbacks,
+    destination = (out_root if out_root is not None else exp_dir.parent)
+    destination.mkdir(parents=True, exist_ok=True)
+    report_path = destination / f"p0_2_audit.{exp_dir.name}.json"
+    report_path.write_text(
+        json.dumps({"experiment_dir": str(exp_dir),
+                    "runs": rows, "legacy_runs": legacy_runs, "fallbacks": fallbacks,
                     "method_by_position": {str(k): dict(v)
                                            for k, v in method_by_position.items()},
                     "problems": problems}, indent=2, sort_keys=True),
         encoding="utf-8")
+    print(f"\naudit report: {report_path}")
     return 1 if (problems or legacy_runs or fallbacks) else 0
 
 
@@ -298,7 +310,7 @@ def main() -> int:
 
     status = 0
     if args.audit:
-        status |= audit(exp_dir)
+        status |= audit(exp_dir, out_root)
     if args.diff:
         status |= diff_arms(exp_dir, out_root)
     if not (args.run or args.audit or args.diff):
