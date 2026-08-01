@@ -11,6 +11,7 @@ import csv
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -145,7 +146,8 @@ class ExperimentRunner:
         self.scenarios = load_scenarios(scenarios_path)
         self.out_dir = Path(out_dir)
 
-    def run(self, variants: list[str], allow_overwrite: bool = False) -> dict[str, Any]:
+    def run(self, variants: list[str], allow_overwrite: bool = False, *,
+            concurrency: int = 1) -> dict[str, Any]:
         """Run every variant x scenario x repeat and write the experiment bundle.
 
         The experiment id is content-addressed over the experiment inputs AND the code
@@ -155,6 +157,20 @@ class ExperimentRunner:
         which is how an intentional idempotent re-run is expressed; without it such a
         write raises
         :class:`~jobrec.evaluation.experiment_identity.ExperimentOverwriteError`.
+
+        Args:
+            concurrency: How many runs execute at once. 1 (the default) keeps the batch
+                strictly sequential. Runs are independent -- each builds its own config copy,
+                service and repository -- so a higher value changes only the wall clock and the
+                order runs FINISH in, never the order they are written in.
+
+                It does change measured LATENCY: ``component_latency`` and the reported latency
+                percentiles are wall-clock, so concurrent runs contend and inflate them. The
+                value is therefore recorded in the experiment manifest, and a batch whose
+                latency figures are being reported should say which value produced them.
+                ``concurrency`` is NOT part of the experiment id: it cannot change what a run
+                produces, only how long it took, and making it part of the id would fork the
+                artifact for a scheduling choice.
         """
         # Input gate, before a single run is spent (R33.1).
         assert_clarification_answers_declared(self.scenarios)
@@ -188,40 +204,72 @@ class ExperimentRunner:
         repeat = self.config.experiment.repeat_count
 
         crashed: list[dict] = []
-        for variant in variants:
-            for scenario in self.scenarios:
-                for run_index in range(repeat):
-                    try:
-                        row, failure = self._run_one(variant, scenario, run_index, exp_dir)
-                    except Exception as exc:  # noqa: BLE001 - see the note below
-                        # One run must not destroy the batch. An unhandled exception used
-                        # to abort this loop, so neither runs_index.csv, nor failures.csv,
-                        # nor the manifest, nor checksums were ever written: a single
-                        # malformed model reply hundreds of calls into a multi-hour hybrid
-                        # experiment discarded every completed run with it.
-                        #
-                        # The crash is recorded, never swallowed: it lands in
-                        # failures.csv, it is counted in the manifest as
-                        # ``crashed_run_count``, and the run contributes NO bundle -- so
-                        # the analysis's run count is visibly short of
-                        # variants x scenarios x repeats. Only the exception class is
-                        # recorded; a message can quote the request.
-                        logger.error(
-                            "run crashed and was skipped: variant=%s scenario=%s repeat=%s "
-                            "error=%s", variant, scenario["scenario_id"], run_index,
-                            type(exc).__name__,
-                        )
-                        crash = {
-                            "run_id": "", "variant": variant,
-                            "scenario_id": scenario["scenario_id"],
-                            "failure_code": f"runner_exception:{type(exc).__name__}",
-                        }
-                        failures.append(crash)
-                        crashed.append({**crash, "repeat_index": run_index})
-                        continue
-                    index_rows.append(row)
-                    if failure:
-                        failures.append(failure)
+        # The batch in its canonical order. Materialised first so the artifacts are written in
+        # this order whatever order the runs FINISH in -- runs_index.csv, failures.csv and the
+        # manifest's run_manifests must not depend on scheduling, or two runs of one batch would
+        # differ in their artifacts while being identical run by run.
+        plan = [(variant, scenario, run_index)
+                for variant in variants
+                for scenario in self.scenarios
+                for run_index in range(repeat)]
+
+        def execute(job: tuple[str, dict, int]) -> tuple[dict | None, dict | None, dict | None]:
+            """One run, with its crash contained. Returns (row, failure, crash)."""
+            variant, scenario, run_index = job
+            try:
+                row, failure = self._run_one(variant, scenario, run_index, exp_dir)
+            except Exception as exc:  # noqa: BLE001 - see the note below
+                # One run must not destroy the batch. An unhandled exception used
+                # to abort this loop, so neither runs_index.csv, nor failures.csv,
+                # nor the manifest, nor checksums were ever written: a single
+                # malformed model reply hundreds of calls into a multi-hour hybrid
+                # experiment discarded every completed run with it.
+                #
+                # The crash is recorded, never swallowed: it lands in
+                # failures.csv, it is counted in the manifest as
+                # ``crashed_run_count``, and the run contributes NO bundle -- so
+                # the analysis's run count is visibly short of
+                # variants x scenarios x repeats. Only the exception class is
+                # recorded; a message can quote the request.
+                logger.error(
+                    "run crashed and was skipped: variant=%s scenario=%s repeat=%s "
+                    "error=%s", variant, scenario["scenario_id"], run_index,
+                    type(exc).__name__,
+                )
+                crash = {
+                    "run_id": "", "variant": variant,
+                    "scenario_id": scenario["scenario_id"],
+                    "failure_code": f"runner_exception:{type(exc).__name__}",
+                }
+                return None, None, {**crash, "repeat_index": run_index}
+            return row, failure, None
+
+        workers = max(1, int(concurrency))
+        if workers == 1:
+            outcomes = [execute(job) for job in plan]
+        else:
+            # Threads, not processes: a run spends nearly all of its time waiting on the
+            # remote endpoint, and the GIL is released across a socket read. Each run already
+            # builds its OWN deep-copied config, its own AppService and its own in-memory
+            # repository, and the remote provider opens a fresh httpx.Client per request, so
+            # nothing mutable is shared between them.
+            #
+            # ``map`` is used for its ORDERED results: the outcomes come back in plan order
+            # regardless of completion order, which is what keeps the artifacts identical to a
+            # sequential batch.
+            with ThreadPoolExecutor(max_workers=workers,
+                                    thread_name_prefix="cmjcc-run") as pool:
+                outcomes = list(pool.map(execute, plan))
+
+        for row, failure, crash in outcomes:
+            if crash is not None:
+                failures.append({k: v for k, v in crash.items() if k != "repeat_index"})
+                crashed.append(crash)
+                continue
+            if row is not None:
+                index_rows.append(row)
+            if failure:
+                failures.append(failure)
 
         # R33.2 -- provenance gate. A run that recovered a prior turn's preferences by
         # re-parsing its text substituted the RULE extractor's reading for whatever
@@ -287,6 +335,12 @@ class ExperimentRunner:
                 "backoff_seconds": list(self.config.llm.retry_backoff_seconds),
                 "timeout_seconds": self.config.llm.timeout_seconds,
             },
+            # How many runs executed at once. Recorded because every latency figure in this
+            # batch is wall-clock and therefore contended at any value above 1 -- the number is
+            # needed to read them. It is deliberately NOT in the experiment id: scheduling
+            # cannot change what a run produces, and forking the artifact over it would make an
+            # idempotent re-run at a different speed look like a different experiment.
+            "concurrency": workers,
             # What the policy actually ACHIEVED on this batch, beside the policy itself. A
             # fallback rate that lives only in a separate audit script is a number nobody
             # re-derives, and a run whose model calls silently degraded would look identical to

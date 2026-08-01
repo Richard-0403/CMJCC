@@ -28,6 +28,13 @@ def main() -> None:
                               "declares, because the repeat is what the per-scenario variance "
                               "is estimated from. The override is recorded in the run's "
                               "resolved_config.yaml either way."))
+    parser.add_argument("--concurrency", type=int, default=1,
+                        help=("how many runs execute at once (default 1, strictly "
+                              "sequential). Runs are independent, so this changes only the "
+                              "wall clock -- but LATENCY is wall-clock too, so any value "
+                              "above 1 contends and inflates the reported latency "
+                              "percentiles. The value used is recorded in the experiment "
+                              "manifest."))
     parser.add_argument("--allow-overwrite", action="store_true",
                         help=("reuse/overwrite an experiment directory that already holds a "
                               "complete experiment (without it, the run refuses instead of "
@@ -40,9 +47,12 @@ def main() -> None:
             parser.error("--repeats must be at least 1")
         cfg.experiment.repeat_count = args.repeats
     runner = ExperimentRunner(cfg, args.catalog, args.scenarios, out_dir=args.out_dir)
-    manifest = runner.run(args.variants.split(","), allow_overwrite=args.allow_overwrite)
+    if args.concurrency < 1:
+        parser.error("--concurrency must be at least 1")
+    manifest = runner.run(args.variants.split(","), allow_overwrite=args.allow_overwrite,
+                          concurrency=args.concurrency)
     print(f"experiment_id={manifest['experiment_id']} runs={manifest['run_count']} "
-          f"repeats={cfg.experiment.repeat_count}")
+          f"repeats={cfg.experiment.repeat_count} concurrency={manifest['concurrency']}")
     print(f"artifacts -> {manifest['experiment_dir']}")
 
 
