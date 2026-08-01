@@ -76,6 +76,11 @@ from .annotation import (
     load_adjudicated_relevance_labels,
     relevance_agreement,
 )
+from .annotation_linkage import (
+    claim_occurrences,
+    relevance_coverage,
+    write_coverage_report,
+)
 from .casestudies import error_taxonomy, extract_cases, render_cases_md
 from .data_quality import (
     DATA_QUALITY_REPORT_FILENAME,
@@ -500,7 +505,50 @@ def run_pipeline(config_path: str, scenarios_path: str, catalog_path: str,
     export_relevance_template(tables["recommendations"], labels, ann_dir / "relevance_template.csv")
     export_claim_template(tables["claims"], ann_dir / "claim_template.csv")
     rel_agree = relevance_agreement(human_labels_path, labels)
-    clm_agree = claim_agreement(scen_dir / HUMAN_CLAIMS_FILENAME)
+
+    # Annotation linkage, on the OFFICIAL path rather than merely available.
+    #
+    # ``claim_agreement`` on its own reads a CSV and reports kappa with no connection to the
+    # runs being analysed, so labels from an earlier batch produced a confident-looking figure
+    # for runs they had never seen. Passing this experiment's occurrences makes the linkage a
+    # precondition: zero overlap raises instead of publishing a number.
+    #
+    # ``min_coverage=0.0`` keeps the CURRENT behaviour for a partially annotated batch -- the
+    # fractions are recorded rather than enforced -- because the pre-registered requirement is
+    # a study decision, not a default this code may invent. Zero overlap still fails, since
+    # that is not a low coverage but an absence of measurement.
+    occurrences = claim_occurrences(experiment_id, [
+        {"run_id": b.run_id, "scenario_id": b.scenario_id, "variant": b.variant,
+         "repeat_index": b.run_index, "claims": b.claims,
+         "dropped_claims": b.dropped_claims,
+         "evidence_by_id": {i.get("evidence_id"): i for i in b.evidence_items}}
+        for b in bundles
+    ])
+    _write_csv(pd.DataFrame(occurrences), out / "normalized" / "claim_occurrences.csv")
+    clm_agree = claim_agreement(scen_dir / HUMAN_CLAIMS_FILENAME,
+                                occurrences=occurrences, experiment_id=experiment_id,
+                                min_coverage=0.0)
+
+    # Which returned pairs a human relevance label set covers. An unlabelled returned pair is
+    # UNKNOWN, not irrelevant, so this is reported as a delta to annotate rather than folded
+    # into the metric as a zero.
+    returned_pairs = {
+        (str(row["scenario_id"]), str(row["job_id"]))
+        for _i, row in tables["recommendations"].iterrows()
+    }
+    labelled_pairs: set[tuple[str, str]] = set()
+    if human is not None:
+        labelled_pairs = {(str(r["scenario_id"]), str(r["job_id"]))
+                          for _i, r in human.labels.iterrows()}
+    coverage = relevance_coverage(returned_pairs, labelled_pairs)
+    write_coverage_report(out / "manifests" / "annotation_coverage.json", {
+        "experiment_id": experiment_id,
+        "claim_linkage": (clm_agree or {}).get("linkage"),
+        "relevance_coverage": coverage.as_dict(),
+        # Stated so a reader knows the human ranking figures, if present, were computed over
+        # the reused pairs only and not over an implied zero for the rest.
+        "human_relevance_labels_present": human is not None,
+    })
 
     # ---- Stage 6: plots -------------------------------------------------
     plot_all(sv, latpct, out / "plots")
