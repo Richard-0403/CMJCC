@@ -11,6 +11,9 @@ name, so nothing is lost by making ``attempts`` mean what it says.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from jobrec.llm.provider import LLMError
 from jobrec.orchestration.orchestrator import _failed_call_record
 
@@ -40,13 +43,11 @@ def test_four_failures_sum_to_four_http_attempts_not_ten():
         "the index sum is the number the old code reported as attempts")
 
 
-def test_the_diagnosis_reports_four_attempts_for_four_failures(tmp_path):
-    """End to end through the report that feeds the endpoint decision."""
+def _four_failed_attempts(root, *, fallback_field: str | None = None):
+    """One logical call that failed four times, laid out as an experiment directory."""
     import json
 
-    from scripts.diagnose_llm_fallbacks import diagnose
-
-    run_dir = tmp_path / "full" / "SC-X-01" / "0"
+    run_dir = root / "full" / "SC-X-01" / "0"
     run_dir.mkdir(parents=True)
     with (run_dir / "model_calls.jsonl").open("w", encoding="utf-8") as fh:
         for index in (1, 2, 3, 4):
@@ -57,14 +58,102 @@ def test_the_diagnosis_reports_four_attempts_for_four_failures(tmp_path):
                 "turn_run_id": "run-1", "turn_index": 0,
                 "response_metadata": dict(record.metadata),
             }) + "\n")
+    snapshot = None
+    if fallback_field is not None:
+        snapshot = {"preferences": [{
+            "field_name": fallback_field,
+            "metadata": {"extraction_source": "rule_fallback"}}]}
     (run_dir / "dialogue_state.json").write_text(
         json.dumps({"turns": [{"speaker": "candidate", "turn_id": "t0",
-                               "extraction_snapshot": None}]}), encoding="utf-8")
+                               "extraction_snapshot": snapshot}]}), encoding="utf-8")
+    return run_dir
 
-    counts = diagnose(tmp_path)["counts"]
+
+def test_the_diagnosis_reports_four_attempts_for_four_failures(tmp_path):
+    """End to end through the report that feeds the endpoint decision."""
+    from jobrec.evaluation.llm_call_audit import audit_llm_calls
+
+    _four_failed_attempts(tmp_path)
+
+    counts = audit_llm_calls(tmp_path)["counts"]
     assert counts["http_attempts"] == 4, counts
     # Four records, one logical call (same run, turn and purpose), which never succeeded.
     assert counts["call_records"] == 4
     assert counts["logical_calls"] == 1
     assert counts["failed_logical_calls"] == 1
     assert counts["retry_attempts"] == 3
+
+
+def test_the_manifest_summary_is_the_same_numbers_the_audit_script_prints(tmp_path):
+    """One implementation, so a manifest's fallback rate cannot drift from the audit's.
+
+    The rate is what a pre-registered threshold is checked against. Two definitions of "logical
+    call" -- one in the runner, one in a script -- would let a batch pass in its own manifest
+    and fail in the audit, with no way to tell which number the thesis quoted.
+    """
+    from jobrec.evaluation.llm_call_audit import (
+        MANIFEST_SUMMARY_KEYS,
+        audit_llm_calls,
+        manifest_summary,
+    )
+
+    _four_failed_attempts(tmp_path, fallback_field="salary_min")
+    report = audit_llm_calls(tmp_path)
+    summary = manifest_summary(tmp_path)
+
+    for key in MANIFEST_SUMMARY_KEYS:
+        assert summary[key] == report[key], key
+    assert summary["rates"]["final_fallback_call_rate"] == 1.0
+    assert summary["counts"]["http_attempts"] == 4
+    # The distribution travels with it, because "1% of calls" is acceptable only when the
+    # failures are spread; the same 1% concentrated on one field is a broken field.
+    assert summary["fallback_distribution"]["by_field"] == {"salary_min": 1}
+    # The per-occurrence list does NOT, so a batch with thousands stays readable by hand.
+    assert "fallback_occurrences" not in summary
+
+
+def test_a_batch_with_no_model_calls_gets_no_summary_rather_than_zeros(tmp_path):
+    """A deterministic run has no denominator; 0% fallback would be a fabricated measurement."""
+    from jobrec.evaluation.llm_call_audit import manifest_summary
+
+    run_dir = tmp_path / "full" / "SC-X-01" / "0"
+    run_dir.mkdir(parents=True)
+    (run_dir / "dialogue_state.json").write_text(
+        json.dumps({"turns": [{"speaker": "candidate", "turn_id": "t0"}]}), encoding="utf-8")
+
+    assert manifest_summary(tmp_path) == {}
+
+
+def test_the_runner_puts_the_summary_in_the_experiment_manifest(tmp_path):
+    """On the OFFICIAL path, beside the retry policy it is meant to be read against.
+
+    A fallback rate that lives only in a separate audit script is a number nobody re-derives,
+    and a batch whose model calls silently degraded would look identical to a clean one in its
+    own manifest. Deterministic here, so the assertion is that the key EXISTS and is empty
+    rather than zero-filled: a run with no model calls has no denominator, and a stated 0%
+    would be a measurement that was never made.
+    """
+    from jobrec.config import load_config
+    from jobrec.evaluation.experiment_identity import EXPERIMENT_MANIFEST_FILENAME
+    from jobrec.evaluation.experiment_runner import ExperimentRunner
+
+    scenarios = [json.loads(line) for line
+                 in open("evaluation/data/scenarios_subset.jsonl", encoding="utf-8")
+                 if line.strip()][:1]
+    path = tmp_path / "s.jsonl"
+    path.write_text(json.dumps(scenarios[0], default=str) + "\n", encoding="utf-8")
+
+    config = load_config("configs/experiment_full.yaml", base_dir="configs")
+    config.experiment.repeat_count = 1
+    runner = ExperimentRunner(config, "data/processed/jobs.jsonl", str(path),
+                              out_dir=str(tmp_path / "out"))
+    manifest = runner.run(["full"])
+
+    written = json.loads(
+        (Path(manifest["experiment_dir"]) / EXPERIMENT_MANIFEST_FILENAME).read_text(
+            encoding="utf-8"))
+    assert "llm_call_summary" in written, "the manifest states a policy but not its outcome"
+    assert written["llm_call_summary"] == {}
+    # The policy it is read against is still there.
+    assert set(written["retry_policy"]) == {"max_retries", "backoff_seconds",
+                                            "timeout_seconds"}

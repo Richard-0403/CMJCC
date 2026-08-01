@@ -46,6 +46,7 @@ from .exporters import (
     trace_record,
     write_run_bundle,
 )
+from .llm_call_audit import manifest_summary
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..orchestration.orchestrator import TurnResult
@@ -286,6 +287,13 @@ class ExperimentRunner:
                 "backoff_seconds": list(self.config.llm.retry_backoff_seconds),
                 "timeout_seconds": self.config.llm.timeout_seconds,
             },
+            # What the policy actually ACHIEVED on this batch, beside the policy itself. A
+            # fallback rate that lives only in a separate audit script is a number nobody
+            # re-derives, and a run whose model calls silently degraded would look identical to
+            # a clean one in its own manifest. Empty for a deterministic batch, which has no
+            # model calls to summarise -- writing zeros would claim a measured 0% where there
+            # was no denominator.
+            "llm_call_summary": manifest_summary(exp_dir),
             # The run inputs that are neither source nor resolved config, recorded as the
             # exact dict the experiment id was derived from, so the id can be re-derived
             # from this manifest offline instead of being taken on trust. Carries the LLM
