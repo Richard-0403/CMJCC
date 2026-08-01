@@ -33,6 +33,9 @@ artifacts/ci-smoke/
 # archive, not in git (the smoke tree alone is 268 files of run bundles).
 artifacts/hybrid_smoke/
 artifacts/p0_2_smoke/
+artifacts/pilot_deterministic/
+artifacts/pilot_hybrid/
+artifacts/*.txt
 artifacts/*.log
 
 # OS

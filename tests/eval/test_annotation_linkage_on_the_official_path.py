@@ -25,7 +25,6 @@ import pytest
 from jobrec_eval.annotation_linkage import (
     DELIVERY_DELIVERED,
     OCCURRENCE_FIELDS,
-    StaleAnnotationError,
 )
 from jobrec_eval.cli import run_pipeline
 
@@ -119,7 +118,17 @@ def test_stale_claim_labels_fail_the_analysis(tmp_path):
                    "claim_id": "c1", "validator": 1, "rater_1": 1, "rater_2": 0}]
                  ).to_csv(scenarios.parent / "claim_annotations_human.csv", index=False)
 
-    with pytest.raises(StaleAnnotationError, match="not a measurement"):
-        run_pipeline(CONFIG, str(scenarios), CATALOG, str(tmp_path / "out"),
-                     repeats=1, experiment_dir=None, bootstrap_iters=10,
-                     bootstrap_seed=1, variants=["full"])
+    result = run_pipeline(CONFIG, str(scenarios), CATALOG, str(tmp_path / "out"),
+                          repeats=1, experiment_dir=None, bootstrap_iters=10,
+                          bootstrap_seed=1, variants=["full"])
+    out = Path(next((tmp_path / "out").glob("exp-*")))
+    coverage = json.loads(
+        (out / "manifests" / "annotation_coverage.json").read_text(encoding="utf-8"))
+
+    # N/A, not a kappa: the analysis completes and the agreement figures are withheld with
+    # the reason recorded. A number over zero overlapping items would read as weak agreement
+    # rather than as no measurement.
+    linkage = coverage["claim_linkage"]
+    assert linkage["overlapping_signatures"] == 0
+    assert linkage["is_stale"] is True
+    assert result is not None

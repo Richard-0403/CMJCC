@@ -257,6 +257,15 @@ def test_claim_agreement_refuses_stale_labels(tmp_path):
 
     # Without linkage it still reports, which is the legacy behaviour this guard fixes.
     assert claim_agreement(csv) is not None
+    # strict=True raises; the default reports N/A with the reason and NO kappa.
     with pytest.raises(StaleAnnotationError):
         claim_agreement(csv, occurrences=occurrences, experiment_id="exp-new",
-                        min_coverage=0.8)
+                        min_coverage=0.8, strict=True)
+
+    reported = claim_agreement(csv, occurrences=occurrences, experiment_id="exp-new",
+                               min_coverage=0.8)
+    assert reported["cohens_kappa"] is None
+    assert reported["validator_vs_human_kappa"] is None
+    assert reported["raw_agreement"] is None
+    assert "not a measurement" in reported["unusable_reason"]
+    assert reported["linkage"]["overlapping_signatures"] == 0

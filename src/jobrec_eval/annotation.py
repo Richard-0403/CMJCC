@@ -260,6 +260,7 @@ def claim_agreement(
     occurrences: list[dict] | None = None,
     experiment_id: str | None = None,
     min_coverage: float = 0.0,
+    strict: bool = False,
 ) -> dict | None:
     """Cohen's kappa between two claim raters and validator-vs-ADJUDICATED-human agreement.
 
@@ -280,12 +281,31 @@ def claim_agreement(
     # never seen. Agreement over zero overlapping items is not a low score; it is not a
     # measurement, so it raises rather than being published.
     linkage = None
+    unusable_reason = None
     if occurrences is not None:
-        from .annotation_linkage import link_claim_labels, require_linked
+        from .annotation_linkage import (
+            MissingHumanLabelsError,
+            StaleAnnotationError,
+            link_claim_labels,
+            require_linked,
+        )
 
         report = link_claim_labels(experiment_id or "", occurrences, h.to_dict("records"))
-        require_linked(report, min_coverage=min_coverage)
         linkage = report.as_dict()
+        try:
+            require_linked(report, min_coverage=min_coverage)
+        except (StaleAnnotationError, MissingHumanLabelsError) as exc:
+            if strict:
+                raise
+            # N/A rather than a crash. The labels cannot be reported against this experiment,
+            # and the rest of the analysis is still valid, so the agreement figures are
+            # withheld and the REASON is recorded. Returning None for the kappas is the point:
+            # a number computed over zero overlapping items would look like weak agreement
+            # instead of like no measurement.
+            return {"n_items": int(len(h)), "cohens_kappa": None,
+                    "validator_vs_human_kappa": None, "raw_agreement": None,
+                    "human_label_path": str(path), "linkage": linkage,
+                    "unusable_reason": str(exc)}
     r1 = h["rater_1"].astype(int).tolist()
     r2 = h["rater_2"].astype(int).tolist()
     gold = _gold_labels(r1, r2, _adjudicated_values(h))
@@ -304,6 +324,7 @@ def claim_agreement(
     # Recorded even when it passed, so a reader can see WHICH fraction of the batch the figure
     # covers rather than assuming all of it.
     out["linkage"] = linkage
+    out["unusable_reason"] = unusable_reason
     return out
 
 
