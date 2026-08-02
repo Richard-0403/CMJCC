@@ -585,12 +585,177 @@ def package(workload_dirs: list[Path], out_dir: Path, write: bool) -> int:
     return 0
 
 
+#: The column the ADJUDICATOR fills.
+FINAL_COLUMN = "final_label_YOUR_VERDICT"
+
+ADJUDICATION_COLUMNS = [
+    "item_key", "kind", FINAL_COLUMN, "reason",
+    "rater_1_said", "rater_2_said", "valid_labels",
+    "scenario_id", "job_id",
+    "claim_text", "predicate", "field", "expected_value", "observed_value",
+    "delivery_status", "has_unresolvable_evidence", "evidence", "referenced_jobs",
+    "candidate_profile", "conversation", "job_summary",
+]
+
+_ADJUDICATION_README = """# 裁定说明 / Adjudication guide
+
+两位标注者判断不一致的条目集中在这里。请在 `final_label_YOUR_VERDICT` 填最终分值，
+并在 `reason` 简述依据。**裁定人不能是 RATER-A 或 RATER-B 中的任何一位。**
+
+`rater_1_said` / `rater_2_said` 是两人各自的判断，这是裁定的输入。表里**不含**自动校验器的
+判定和 oracle 分数 —— 那会让裁定被机器答案锚定，而人工标注存在的意义正是提供独立对照。
+
+## 取值
+
+- `kind = claim` -> 填 `0` 或 `1`（证据是否支撑这句话）
+- `kind = relevance` -> 填 `0` / `1` / `2` / `3`（0 不相关，1 弱匹配，2 部分匹配，3 强匹配）
+
+裁定结果**不必**是两人中的一个。如果你认为两人都错了，填你认为正确的值。
+
+## 为什么必须全部填完
+
+未裁定的分歧在计算时会被**丢弃**，不会被折中平均。丢弃会让 relevance 覆盖率掉到 100% 以下，
+而覆盖率不足 100% 时人工排名指标（NDCG@5 / P@5 / mean graded relevance）按预注册规则
+一律输出 N/A。所以这 20 个 relevance 分歧是硬阻塞项。
+
+claim 的分歧不阻塞 rater 间 κ（那个已经算出来了），但会影响 validator-vs-human 的对比样本。
+
+## 判断依据
+
+同目录的 `GLOSSARY.md`、`scenarios_reference.csv`、`jobs_reference.csv` 与标注阶段完全一致。
+`claim` 行请只依据 `evidence` 列列出的证据；`relevance` 行请按 `conversation` 的轮次顺序阅读,
+后面的轮次可能修正前面的偏好。
+"""
+
+
+def _job_summary(job: dict) -> str:
+    if not job or job.get("missing_from_catalog"):
+        return _render(job.get("job_id") if job else None)
+    return (f"{job.get('title')} @ {job.get('company')}"
+            f" | {_render(job.get('location'))}"
+            f" | work_mode={job.get('work_mode')}"
+            f" | salary={_render(job.get('salary'))}"
+            f" | required={_render(job.get('required_skills'))}"
+            f" | min_years={job.get('min_years_experience')}"
+            f" | level={job.get('experience_level')}")
+
+
+def export_adjudication(annotation_dir: Path, out_dir: Path, write: bool) -> int:
+    """One row per unadjudicated disagreement, with both raters' answers and the context.
+
+    Shows ``rater_1_said`` / ``rater_2_said`` -- which the blind annotation files must never do,
+    and which adjudication cannot work without. Still hides the validator verdict and the oracle
+    grade: an adjudicator anchored on the machine's answer is not an independent check, and an
+    independent check is the only reason human labels exist here.
+    """
+    with open_store(annotation_dir, create=False) as store:
+        meta = store.meta()
+        pending = store.disagreements(unadjudicated_only=True)
+        rows: list[dict[str, str]] = []
+        for d in pending:
+            # The payload through a rater-facing read, so the analysis side stays unreachable.
+            item = store.rater_item(d.slot_1_rater, d.item_key)
+            p = item.payload
+            scenario = p.get("scenario") or {}
+            rows.append({
+                "item_key": d.item_key,
+                "kind": d.kind,
+                FINAL_COLUMN: "",
+                "reason": "",
+                "rater_1_said": str(d.slot_1_label),
+                "rater_2_said": str(d.slot_2_label),
+                "valid_labels": "/".join(str(v) for v in LABEL_RANGES[d.kind]),
+                "scenario_id": _render(d.scenario_id or scenario.get("scenario_id")),
+                "job_id": _render(d.job_id or p.get("claim_job_id")),
+                "claim_text": _render(p.get("claim_text")),
+                "predicate": _render(p.get("predicate")),
+                "field": _render(p.get("claim_field")),
+                "expected_value": _render(p.get("expected_value")),
+                "observed_value": _render(p.get("observed_value")),
+                "delivery_status": _render(p.get("delivery_status")),
+                "has_unresolvable_evidence": _render(p.get("has_unresolvable_evidence")),
+                "evidence": _evidence_text(p.get("evidence") or []),
+                "referenced_jobs": _jobs_text(p.get("referenced_jobs") or []),
+                "candidate_profile": _render(scenario.get("candidate_profile")),
+                "conversation": _conversation_text(scenario),
+                "job_summary": _job_summary(p.get("job") or {}),
+            })
+
+    _assert_blind(rows, "adjudication worksheet")
+    rows.sort(key=lambda r: (r["kind"], r["scenario_id"], r["job_id"], r["item_key"]))
+    _write_csv(rows, ADJUDICATION_COLUMNS, out_dir / "adjudication.csv", write)
+    if write:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "ADJUDICATION_README.md").write_text(
+            _ADJUDICATION_README, encoding="utf-8", newline="\n")
+        _write_reference(annotation_dir, out_dir, meta, write)
+
+    by_kind: dict[str, int] = {}
+    for r in rows:
+        by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
+    print(f"experiment {meta.get('experiment_id')}  ->  {out_dir}")
+    print(f"  adjudication.csv: {len(rows)} 行待裁定 {by_kind}")
+    if not write:
+        print("\n(dry run; pass --write to create it)")
+    return 0
+
+
+def import_adjudication(annotation_dir: Path, worksheet_dir: Path, adjudicator: str,
+                        write: bool) -> int:
+    """Record the filled verdicts through the store's own adjudication path."""
+    path = worksheet_dir / "adjudication.csv"
+    if not path.exists():
+        raise SystemExit(f"no adjudication.csv in {worksheet_dir}")
+    with open_store(annotation_dir, create=False) as store:
+        applied = skipped = 0
+        problems: list[str] = []
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            for line_no, row in enumerate(csv.DictReader(handle), start=2):
+                raw = (row.get(FINAL_COLUMN) or "").strip()
+                if not raw:
+                    skipped += 1
+                    continue
+                valid = LABEL_RANGES.get(row.get("kind", ""), ())
+                try:
+                    label = int(float(raw))
+                except ValueError:
+                    problems.append(f"{path.name}:{line_no} {raw!r} 不是数字")
+                    continue
+                if label not in valid:
+                    problems.append(
+                        f"{path.name}:{line_no} {label} 不在 {valid} 内")
+                    continue
+                if not write:
+                    applied += 1
+                    continue
+                try:
+                    store.record_adjudication(row["item_key"], adjudicator, label,
+                                              row.get("reason") or "")
+                    applied += 1
+                except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                    problems.append(f"{path.name}:{line_no} {type(exc).__name__}: {exc}")
+        print(f"裁定{'已记录' if write else '可记录'}: {applied} | 空白跳过: {skipped}")
+        if problems:
+            print(f"\n{len(problems)} 个问题（这些行未写入）：")
+            for p in problems[:20]:
+                print(f"  - {p}")
+        if not write:
+            print("\n(dry run; pass --write to apply)")
+        return 1 if problems else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--annotation-dir", default=None,
                         help="directory holding the annotation SQLite store")
     parser.add_argument("--package", nargs="+", default=None,
                         help="workload directories to assemble into per-rater packages")
+    parser.add_argument("--adjudication", action="store_true",
+                        help="export the unadjudicated disagreements as a worksheet")
+    parser.add_argument("--import-adjudication", default=None,
+                        help="read a filled adjudication.csv back into the store")
+    parser.add_argument("--adjudicator", default=None,
+                        help="who adjudicated (recorded with every verdict)")
     parser.add_argument("--out-dir", default=None, help="where the workload files go")
     parser.add_argument("--delta", default=None,
                         help="relevance_delta_annotation.csv; restricts the relevance "
@@ -607,6 +772,15 @@ def main() -> int:
     if not args.annotation_dir:
         parser.error("--annotation-dir is required")
     annotation_dir = Path(args.annotation_dir)
+    if args.import_adjudication:
+        if not args.adjudicator:
+            parser.error("--adjudicator is required with --import-adjudication")
+        return import_adjudication(annotation_dir, Path(args.import_adjudication),
+                                   args.adjudicator, args.write)
+    if args.adjudication:
+        if not args.out_dir:
+            parser.error("--out-dir is required with --adjudication")
+        return export_adjudication(annotation_dir, Path(args.out_dir), args.write)
     if args.import_dir:
         return import_labels(annotation_dir, Path(args.import_dir), args.write)
     if not args.out_dir:
