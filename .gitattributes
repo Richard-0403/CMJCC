@@ -11,6 +11,10 @@
 
 final_release/**             text eol=lf
 final_release/**/*.png       binary
+# Release v2 (the 588-run main experiment) carries its own checksums.json over the bytes on
+# disk, for the same reason and with the same consequence if unpinned.
+final_release_v2/**          text eol=lf
+final_release_v2/**/*.png    binary
 
 # Same reasoning for the human-annotation evidence package: it carries its own
 # checksums.json over the bytes on disk, and 9 of its 19 recorded files are copied out of a

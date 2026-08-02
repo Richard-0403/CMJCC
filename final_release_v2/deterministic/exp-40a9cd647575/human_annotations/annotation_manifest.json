@@ -1,0 +1,59 @@
+{
+  "adjudication_rule": "adjudicated column carries a recorded verdict only; empty means either concordant raters (their shared label is the gold) or an unadjudicated disagreement (excluded from the gold, never averaged)",
+  "annotation_effort": {
+    "annotations": 1432,
+    "median_duration_ms": null,
+    "per_rater": {
+      "RATER-A": 0,
+      "RATER-B": 0
+    },
+    "timed_annotations": 0,
+    "total_duration_ms": 0
+  },
+  "annotation_ui_version": "1.0.0",
+  "assignment_counts": {
+    "RATER-A": 1061,
+    "RATER-B": 1061
+  },
+  "assignment_seed": "2026",
+  "catalog_path": "data\\processed\\jobs.jsonl",
+  "counts": {
+    "adjudicated_disagreements": 12,
+    "claim_ids_exported": 416,
+    "claim_items": 694,
+    "claim_items_exported": 694,
+    "claim_rows_by_delivery_status": {
+      "delivered": 3578
+    },
+    "claim_rows_exported": 3578,
+    "disagreements": 12,
+    "incomplete_claim_items": 0,
+    "incomplete_relevance_items": 345,
+    "relevance_items": 367,
+    "relevance_items_exported": 22,
+    "unadjudicated_disagreements": 0
+  },
+  "experiment_dir": "artifacts\\main_deterministic\\runs\\exp-40a9cd647575",
+  "experiment_id": "exp-40a9cd647575",
+  "export_id": "67a7893a2575",
+  "exported_at": "2026-08-02T10:26:13.598598+00:00",
+  "files": {
+    "claim_annotations_human.csv": {
+      "rows": 3578,
+      "sha256": "1c67f0be560df64d874cffcc9b4824b4607ef9c2425da0e3bb51710fb506aca1"
+    },
+    "human_annotations.jsonl": {
+      "path": "artifacts\\annotation_official\\deterministic\\release\\human_annotations.jsonl"
+    },
+    "relevance_labels_human.csv": {
+      "rows": 22,
+      "sha256": "3f4ef3661e38ef0e6d6f739157e5824ae7a453554c434c4b90ad01521a68ed30"
+    }
+  },
+  "rater_pool": [
+    "RATER-A",
+    "RATER-B"
+  ],
+  "scenarios_path": "evaluation\\data\\scenarios.jsonl",
+  "schema_version": "2"
+}

@@ -1,0 +1,252 @@
+{
+  "code_identity_matches_across_the_pair": true,
+  "excluded_from_this_release": {
+    "annotation_sqlite_store": "the working store; human_annotations.jsonl is its archival form and is included",
+    "normalized_tables": "regenerable from the run bundles",
+    "run_bundles": "~290 MB across the pair; git is the wrong transport"
+  },
+  "experiments": {
+    "deterministic": {
+      "canonical_oracle": {
+        "derivation": "declared",
+        "inputs_fingerprint": "7664b931eb90429eaa2e4ce85082dc813757a5a28d9159497b7c65d5d7817fbe",
+        "reference_fingerprint": "be950e066a514acb38f22c0646065c08331788b557b0543a1bb089b8837dfdb0",
+        "version": "4.0.0"
+      },
+      "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+      "code_version": "0.2.0",
+      "commit_hash": "40ded11a822266cae12d02599998914bd2abf421",
+      "concurrency": 1,
+      "config": "configs/experiment_full.yaml",
+      "config_hash": "eedf1321588dd6d578ea036135f92279c2fb08bb9667981705085ba1f9cd0190",
+      "crashed_run_count": 0,
+      "created_at": "2026-08-01T20:04:25.765107+00:00",
+      "execution_fingerprint": "94007b25ca48a1486b167743c3b63dba8365df41ad7cd711e4169db8da89dd07",
+      "expected_run_count": 210,
+      "experiment_id": "exp-40a9cd647575",
+      "git_dirty": false,
+      "llm_call_summary": null,
+      "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+      "repeats": 1,
+      "retry_policy": {
+        "backoff_seconds": [
+          2.0,
+          5.0,
+          10.0,
+          20.0
+        ],
+        "max_retries": 2,
+        "timeout_seconds": 30
+      },
+      "run_count": 210,
+      "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+      "source_fingerprint": "56e1d0c3eb801b83a092672277391ce5446204d2329bef4ab9695bf663997a5f",
+      "variants": [
+        "full",
+        "profile_only",
+        "one_shot",
+        "no_memory",
+        "no_context"
+      ]
+    },
+    "hybrid": {
+      "canonical_oracle": {
+        "derivation": "declared",
+        "inputs_fingerprint": "7664b931eb90429eaa2e4ce85082dc813757a5a28d9159497b7c65d5d7817fbe",
+        "reference_fingerprint": "be950e066a514acb38f22c0646065c08331788b557b0543a1bb089b8837dfdb0",
+        "version": "4.0.0"
+      },
+      "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+      "code_version": "0.2.0",
+      "commit_hash": "40ded11a822266cae12d02599998914bd2abf421",
+      "concurrency": 20,
+      "config": "configs/hybrid_vectorengine.yaml",
+      "config_hash": "1981d84bd70066759af78488b279eaf3814643f2dfdd408537cab1778ee912bc",
+      "crashed_run_count": 0,
+      "created_at": "2026-08-02T05:12:01.336394+00:00",
+      "execution_fingerprint": "94007b25ca48a1486b167743c3b63dba8365df41ad7cd711e4169db8da89dd07",
+      "expected_run_count": 378,
+      "experiment_id": "exp-2b33b808a0f8",
+      "git_dirty": false,
+      "llm_call_summary": {
+        "counts": {
+          "call_records": 885,
+          "calls_with_provenance": 620,
+          "calls_without_system_fingerprint": 885,
+          "failed_logical_calls": 6,
+          "final_fallback_preferences": 27,
+          "final_fallback_runs": 7,
+          "final_fallback_turns": 7,
+          "http_attempts": 885,
+          "logical_calls": 621,
+          "recovered_after_retry": 157,
+          "retry_attempts": 264,
+          "total_candidate_turns": 549,
+          "total_runs": 378
+        },
+        "failure_kinds": {
+          "transport_error": 265
+        },
+        "fallback_distribution": {
+          "by_field": {
+            "preferred_locations": 5,
+            "salary_currency": 6,
+            "salary_min": 6,
+            "target_roles": 3,
+            "work_modes": 7
+          },
+          "by_scenario": {
+            "SC-B-01": 8,
+            "SC-C-02": 5,
+            "SC-D-02": 3,
+            "SC-E-02": 10,
+            "SC-F-02": 1
+          },
+          "by_turn_index": {
+            "0": 24,
+            "1": 3
+          }
+        },
+        "note": "logical_calls counts requests the pipeline asked for; http_attempts counts requests sent. A bounded retry is one logical call. final_fallback_* is where the substitution reached the dialogue state, which a repaired call does not.",
+        "rates": {
+          "final_fallback_call_rate": 0.009662,
+          "final_fallback_run_rate": 0.018519,
+          "final_fallback_turn_rate": 0.01275,
+          "logical_call_success_rate": 0.990338,
+          "retry_recovery_rate": 0.96319
+        },
+        "system_fingerprint_available": false
+      },
+      "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+      "repeats": 3,
+      "retry_policy": {
+        "backoff_seconds": [
+          2.0,
+          5.0,
+          10.0,
+          20.0
+        ],
+        "max_retries": 4,
+        "timeout_seconds": 90
+      },
+      "run_count": 378,
+      "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+      "source_fingerprint": "56e1d0c3eb801b83a092672277391ce5446204d2329bef4ab9695bf663997a5f",
+      "variants": [
+        "full",
+        "no_memory",
+        "no_context"
+      ]
+    },
+    "latency_serial_subexperiment": {
+      "canonical_oracle": {
+        "derivation": "declared",
+        "inputs_fingerprint": "7664b931eb90429eaa2e4ce85082dc813757a5a28d9159497b7c65d5d7817fbe",
+        "reference_fingerprint": "be950e066a514acb38f22c0646065c08331788b557b0543a1bb089b8837dfdb0",
+        "version": "4.0.0"
+      },
+      "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+      "code_version": "0.2.0",
+      "commit_hash": "40ded11a822266cae12d02599998914bd2abf421",
+      "concurrency": 1,
+      "config": "configs/hybrid_vectorengine.yaml",
+      "config_hash": "ac32cbe842df8a8caf3c563466320fc3e73b47b5cd15405777d327f8207f2d1b",
+      "crashed_run_count": 0,
+      "created_at": "2026-08-02T07:00:33.273566+00:00",
+      "execution_fingerprint": "94007b25ca48a1486b167743c3b63dba8365df41ad7cd711e4169db8da89dd07",
+      "expected_run_count": 42,
+      "experiment_id": "exp-e63f05ad75bb",
+      "git_dirty": false,
+      "llm_call_summary": {
+        "counts": {
+          "call_records": 97,
+          "calls_with_provenance": 65,
+          "calls_without_system_fingerprint": 97,
+          "failed_logical_calls": 1,
+          "final_fallback_preferences": 5,
+          "final_fallback_runs": 1,
+          "final_fallback_turns": 1,
+          "http_attempts": 97,
+          "logical_calls": 66,
+          "recovered_after_retry": 19,
+          "retry_attempts": 31,
+          "total_candidate_turns": 61,
+          "total_runs": 42
+        },
+        "failure_kinds": {
+          "transport_error": 32
+        },
+        "fallback_distribution": {
+          "by_field": {
+            "preferred_locations": 1,
+            "salary_currency": 1,
+            "salary_min": 1,
+            "target_roles": 1,
+            "work_modes": 1
+          },
+          "by_scenario": {
+            "SC-A-06": 5
+          },
+          "by_turn_index": {
+            "0": 5
+          }
+        },
+        "note": "logical_calls counts requests the pipeline asked for; http_attempts counts requests sent. A bounded retry is one logical call. final_fallback_* is where the substitution reached the dialogue state, which a repaired call does not.",
+        "rates": {
+          "final_fallback_call_rate": 0.015152,
+          "final_fallback_run_rate": 0.02381,
+          "final_fallback_turn_rate": 0.016393,
+          "logical_call_success_rate": 0.984848,
+          "retry_recovery_rate": 0.95
+        },
+        "system_fingerprint_available": false
+      },
+      "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+      "repeats": 1,
+      "retry_policy": {
+        "backoff_seconds": [
+          2.0,
+          5.0,
+          10.0,
+          20.0
+        ],
+        "max_retries": 4,
+        "timeout_seconds": 90
+      },
+      "run_count": 42,
+      "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+      "source_fingerprint": "56e1d0c3eb801b83a092672277391ce5446204d2329bef4ab9695bf663997a5f",
+      "variants": [
+        "full"
+      ]
+    }
+  },
+  "human_annotation": {
+    "adjudication_rule": "Concordant raters are their own gold. A disagreement contributes only a RECORDED verdict; an unadjudicated disagreement is dropped and counted, never averaged. All 30 disagreements were adjudicated by a third party.",
+    "claim_unit": "annotation_signature (the proposition), never claim_id",
+    "coverage_rule": "Human ranking metrics and claim kappa are withheld below 100% coverage of the PRE-REGISTERED annotation universe. An unlabelled returned pair is UNKNOWN, not irrelevant; scoring it 0 would bias every human figure downward by exactly the amount of missing annotation.",
+    "relevance_labels_reused_from_v1": "A relevance judgement is about a scenario and a posting, not about the system version, so v1's labels stay valid and only the coverage delta was newly annotated: 22 pairs (deterministic) and 28 (hybrid). Claim labels were NOT reused -- they overlap the current signature universe by zero, because P0-4 and P0-5 changed claim predicates and texts.",
+    "why": "claim_id digests the rendered sentence, so one id covers several propositions whenever a sentence formats identically at different values. Keying on it merged 278 of 694 propositions on an earlier pilot."
+  },
+  "known_limitations": {
+    "annotation_effort_was_not_timed": "Labels were collected through spreadsheet files rather than the web UI, so no per-item duration was recorded: annotation_manifest.json reports timed_annotations 0 and median_duration_ms null. A claim about time per item cannot be supported from this release.",
+    "fallback_concentration_by_variant": "The Hybrid arm's 7 affected runs are not spread evenly across variants: no_context 6/126 (4.76%), full 1/126 (0.79%), no_memory 0/126. This is an EXECUTION-ORDER artifact, not a property of the variant. The run plan is variant-major, so the variants occupy distinct windows of the 30-minute batch (full at plan positions 0-169, no_memory 115-288, no_context 240-377), and the endpoint degraded monotonically across it -- failed attempts per sixth of the batch were 2, 14, 38, 53, 88, 70. All six affected no_context runs sit at positions 280-317, inside the worst window. Measured impact on the conclusions is negligible: removing the 7 runs moves no_context's ndcg_at_5 by +0.0065, task_success by -0.0107, hcsr by +0.0038 and precision_at_5 by +0.0068 -- all under 0.011, and in BOTH directions, which is noise rather than systematic degradation. The deterministic arm corroborates independently: it makes no model calls at all, so it cannot carry an endpoint confound, and it puts no_context at ndcg 0.6417 / task_success 0.1190 against Hybrid's 0.6275 / 0.1190. A future batch should interleave the plan so drift spreads across variants instead of loading onto whichever ran last.",
+    "latency_is_wall_clock_and_the_hybrid_arm_was_concurrent": "The Hybrid arm ran at concurrency 20, so its component_latency and latency percentiles are contended and must NOT be read as single-request latency. The serial sub-experiment (exp-e63f05ad75bb, concurrency 1) exists for that figure. Measured: per-successful-attempt latency is median 23.4s serial vs 22.5s at concurrency 20, i.e. the endpoint's own processing dominates and concurrency did not measurably inflate it -- but per-RUN total_latency_ms does differ, because it accumulates retries. Both manifests record the concurrency used, which is what makes either number readable.",
+    "rater_scale_range": "On the 0-3 relevance scale neither rater used 3, and rater 2 never used 0. That narrower range is why the unweighted kappa over the 50 newly annotated delta pairs is low (0.31-0.38) while the weighted kappa over the full 390/396 pairs is 0.93: the disagreements are overwhelmingly adjacent grades. All 30 disagreements had a gap of exactly 1.",
+    "validator_vs_human_kappa_is_near_zero_by_construction": "validator_vs_human_kappa is 0.0 (deterministic) and -0.014 (hybrid). This is the kappa paradox, not disagreement: the validator delivers only what it passed, so the delivered set is filtered by the very thing being measured and has almost no negative cases. The deterministic confusion matrix has two empty cells entirely (validator=supported/human=1: 681, human=0: 9; validator=unsupported: 0 of either). Raw agreement is 99.4%. The informative figures are the rates: validator false-positive 9/690 = 1.30% deterministic and 12/568 = 2.11% hybrid. The hybrid arm has negative cases only because 14 withheld (dropped) claims were sampled into the annotation frame, and both raters judged all 14 supported -- a false-negative estimate of 14/14 on a sample of 14, which is directional evidence that the validator is conservative, not a population rate."
+  },
+  "official_pair": [
+    "exp-40a9cd647575",
+    "exp-2b33b808a0f8"
+  ],
+  "release": "v2",
+  "supersedes": {
+    "pair": [
+      "exp-e748800507ef",
+      "exp-6db1e87daed5"
+    ],
+    "reason": "v1 was produced by code 0.1.0 against canonical oracle 1.0.0. This release is code 0.2.0 against canonical oracle 4.0.0, so every grade-derived number (NDCG@5, Precision@5, mean graded relevance, retrieval recall) is measured against a different ground truth and is NOT comparable with v1's. v1 is left in place because an earlier release is a record, not a mistake to erase; it must not be cited alongside these numbers as if the two were one series.",
+    "release": "v1 (final_release/)"
+  },
+  "total_runs": 588
+}

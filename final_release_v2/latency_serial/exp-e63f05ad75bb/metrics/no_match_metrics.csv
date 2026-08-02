@@ -1,0 +1,2 @@
+variant,no_match_returned,no_match_expected,true_no_match,precision,recall,f1
+full,5,5,5,1.0,1.0,1.0

@@ -1,0 +1,295 @@
+{
+  "report_version": "1.0.0",
+  "reference_date": "2026-01-01",
+  "job_count": 200,
+  "scenario_count": 42,
+  "ok": true,
+  "error_count": 0,
+  "warning_count": 2,
+  "info_count": 27,
+  "checks_run": [
+    "catalog_records",
+    "duplicate_job_ids",
+    "job_test_fixture_markers",
+    "scenario_records",
+    "duplicate_scenario_ids",
+    "scenario_hard_constraint_references",
+    "scenario_relevance_labels",
+    "no_match_scenarios_unsatisfiable"
+  ],
+  "checks_skipped": {},
+  "counts_by_violation_type": {
+    "expired_deadline": 27,
+    "no_match_scenario_constraint_satisfiable": 2
+  },
+  "findings": [
+    {
+      "identifier": "job-0001",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-01",
+      "detail": "deadline 2025-12-01 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0005",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-17",
+      "detail": "deadline 2025-12-17 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0010",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-25",
+      "detail": "deadline 2025-11-25 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0016",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-21",
+      "detail": "deadline 2025-12-21 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0027",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-02",
+      "detail": "deadline 2025-11-02 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0037",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-08",
+      "detail": "deadline 2025-11-08 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0039",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-10",
+      "detail": "deadline 2025-12-10 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0042",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-13",
+      "detail": "deadline 2025-12-13 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0055",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-09",
+      "detail": "deadline 2025-12-09 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0061",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-23",
+      "detail": "deadline 2025-12-23 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0066",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-27",
+      "detail": "deadline 2025-12-27 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0072",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-16",
+      "detail": "deadline 2025-11-16 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0073",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-01",
+      "detail": "deadline 2025-12-01 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0083",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-04",
+      "detail": "deadline 2025-12-04 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0115",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-14",
+      "detail": "deadline 2025-11-14 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0119",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-06",
+      "detail": "deadline 2025-11-06 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0127",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-16",
+      "detail": "deadline 2025-12-16 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0139",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-23",
+      "detail": "deadline 2025-12-23 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0140",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-17",
+      "detail": "deadline 2025-11-17 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0155",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-24",
+      "detail": "deadline 2025-12-24 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0157",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-13",
+      "detail": "deadline 2025-11-13 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0160",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-21",
+      "detail": "deadline 2025-12-21 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0170",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-28",
+      "detail": "deadline 2025-11-28 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0172",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-11",
+      "detail": "deadline 2025-11-11 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0177",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-16",
+      "detail": "deadline 2025-12-16 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0191",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-12-02",
+      "detail": "deadline 2025-12-02 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "job-0197",
+      "entity": "job",
+      "violation_type": "expired_deadline",
+      "severity": "info",
+      "field": "application_deadline",
+      "observed": "2025-11-22",
+      "detail": "deadline 2025-11-22 passed before the reference date 2026-01-01 (posting is flagged inactive); acknowledged deliberate test fixture (expected_ineligible_reason='expired')"
+    },
+    {
+      "identifier": "SC-E-02",
+      "entity": "scenario",
+      "violation_type": "no_match_scenario_constraint_satisfiable",
+      "severity": "warning",
+      "field": "no_match_expected",
+      "observed": [
+        "job-0021",
+        "job-0086",
+        "job-0089",
+        "job-0094"
+      ],
+      "detail": "4 catalog job(s) satisfy the scenario's hard constraints (all outside the requested role families), so the no-match outcome rests on role fit rather than joint infeasibility"
+    },
+    {
+      "identifier": "SC-E-04",
+      "entity": "scenario",
+      "violation_type": "no_match_scenario_constraint_satisfiable",
+      "severity": "warning",
+      "field": "no_match_expected",
+      "observed": [
+        "job-0012"
+      ],
+      "detail": "1 catalog job(s) satisfy the scenario's hard constraints (all outside the requested role families), so the no-match outcome rests on role fit rather than joint infeasibility"
+    }
+  ]
+}

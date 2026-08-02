@@ -1,0 +1,17 @@
+metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,subset,p_value_holm,family
+ndcg_at_5,full,no_memory,0,,,,,,,,,all,,primary
+hcsr,full,no_memory,0,,,,,,,,,all,,primary
+task_success,full,no_memory,0,,,,,,,,,all,,primary
+grounding,full,no_memory,0,,,,,,,,,all,,primary
+mean_violation_count,full,no_memory,0,,,,,,,,,all,,primary
+turn_count,full,no_memory,0,,,,,,,,,all,,primary
+ndcg_at_5,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+hcsr,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+task_success,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+grounding,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+mean_violation_count,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+turn_count,full,no_memory,0,,,,,,,,,memory_dependent,,primary
+response_turns,full,no_memory,0,,,,,,,,,all,,secondary
+clarification_efficiency,full,no_memory,0,,,,,,,,,all,,secondary
+response_turns,full,no_memory,0,,,,,,,,,memory_dependent,,secondary
+clarification_efficiency,full,no_memory,0,,,,,,,,,memory_dependent,,secondary

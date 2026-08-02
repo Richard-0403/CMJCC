@@ -1,0 +1,5 @@
+variant,constraint_field,pass,fail,unknown,applicable,compliance,unknown_rate
+full,not_expired,156,0,0,156,1.0,0.0
+full,preferred_locations,18,0,0,18,1.0,0.0
+full,salary_min,113,0,0,113,1.0,0.0
+full,work_modes,5,0,0,5,1.0,0.0

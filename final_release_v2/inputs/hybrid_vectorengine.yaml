@@ -1,0 +1,39 @@
+# Hybrid run mode against a real OpenAI-compatible endpoint (Vector Engine).
+# Requires environment variables (never commit the key):
+#   JOBREC_LLM_API_KEY=<your key>
+#   JOBREC_LLM_BASE_URL=https://api.vectorengine.ai/v1
+#   JOBREC_LLM_MODEL=gpt-5.5
+experiment:
+  variant: full
+
+memory:
+  enabled: true
+  use_prior_dialogue: true
+  persist_confirmed_updates: true
+
+context:
+  explicit_constraint_orchestration: true
+
+llm:
+  mode: hybrid
+  provider: remote
+  extraction_temperature: 0.0
+  response_temperature: 0.2
+  # Timeout and retry policy fitted to this endpoint's MEASURED behaviour, not guessed.
+  #
+  # scripts/probe_endpoint_prompt_size.py, 21 attempts per pass at prompt sizes from 1.7k to
+  # 33k characters: successful calls take 16s median, 35s p90, 52s max, and roughly 14% of
+  # attempts fail outright. The failures are not size-related (the largest prompt passed 3/3),
+  # not a structured-output problem (response_format is accepted on every call, 0 downgrades),
+  # and not a client timeout -- raising it 60s -> 240s only turned ReadTimeout into
+  # RemoteProtocolError, i.e. the server closes the connection.
+  #
+  # 90s covers the observed tail with headroom. The retries address the drops, and they need
+  # SPACING: this file previously said max_retries: 1 with no backoff, so a logical call got two
+  # attempts milliseconds apart, both inside the same burst of dropped connections. That is why
+  # 15.4% of logical calls ended in a fallback -- essentially the single-attempt failure rate,
+  # because the second attempt was not an independent trial.
+  timeout_seconds: 90
+  max_retries: 4
+  retry_backoff_seconds: [2.0, 5.0, 10.0, 20.0]
+  save_raw_responses: true

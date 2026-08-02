@@ -1,0 +1,2 @@
+variant,runs,retrieval_runs,mean_initial_pool_size,mean_pool_size,mean_retrieval_score,full_catalog_fallbacks,fallback_rate,median_retrieval_latency_ms,mean_retrieval_latency_ms,scored_runs,recall_at_pool,relevant_job_coverage,retrieval_errors,retrieval_error_rate,ranking_errors,ranking_error_rate
+full,42,42,198.42857142857142,50.0,0.7081677642857144,0,0.0,6.324,6.893761904761905,38,0.5617338406066011,0.9736842105263158,1,0.023809523809523808,0,0.0

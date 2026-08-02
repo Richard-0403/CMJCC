@@ -1,0 +1,136 @@
+{
+  "experiment_id": "exp-e63f05ad75bb",
+  "experiment_dir": "artifacts\\latency_serial\\runs\\exp-e63f05ad75bb",
+  "variants": [
+    "full"
+  ],
+  "scenario_count": 42,
+  "repeat_count": 1,
+  "run_count": 42,
+  "expected_run_count": 42,
+  "crashed_run_count": 0,
+  "crashed_runs": [],
+  "config_hash": "ac32cbe842df8a8caf3c563466320fc3e73b47b5cd15405777d327f8207f2d1b",
+  "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+  "scenarios_hash": "5f08208ff840aa48d2d2f0954c2c0c318a598b966f17c666a3cc6c1568f4d428",
+  "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+  "retry_policy": {
+    "max_retries": 4,
+    "backoff_seconds": [
+      2.0,
+      5.0,
+      10.0,
+      20.0
+    ],
+    "timeout_seconds": 90
+  },
+  "concurrency": 1,
+  "llm_call_summary": {
+    "counts": {
+      "logical_calls": 66,
+      "call_records": 97,
+      "http_attempts": 97,
+      "retry_attempts": 31,
+      "calls_with_provenance": 65,
+      "calls_without_system_fingerprint": 97,
+      "recovered_after_retry": 19,
+      "failed_logical_calls": 1,
+      "total_runs": 42,
+      "total_candidate_turns": 61,
+      "final_fallback_preferences": 5,
+      "final_fallback_turns": 1,
+      "final_fallback_runs": 1
+    },
+    "rates": {
+      "logical_call_success_rate": 0.984848,
+      "retry_recovery_rate": 0.95,
+      "final_fallback_call_rate": 0.015152,
+      "final_fallback_turn_rate": 0.016393,
+      "final_fallback_run_rate": 0.02381
+    },
+    "failure_kinds": {
+      "transport_error": 32
+    },
+    "fallback_distribution": {
+      "by_field": {
+        "target_roles": 1,
+        "salary_min": 1,
+        "salary_currency": 1,
+        "work_modes": 1,
+        "preferred_locations": 1
+      },
+      "by_scenario": {
+        "SC-A-06": 5
+      },
+      "by_turn_index": {
+        "0": 5
+      }
+    },
+    "system_fingerprint_available": false,
+    "note": "logical_calls counts requests the pipeline asked for; http_attempts counts requests sent. A bounded retry is one logical call. final_fallback_* is where the substitution reached the dialogue state, which a repaired call does not."
+  },
+  "runtime_identity": {
+    "catalog_hash": "145dfa05454052bca72f756a748b0a29dadcf7c06ecc379ed12e79f260834509",
+    "prompt_hash": "0f43ee91651d5f8a79e78cfcfb37b3c84654fd3be5afc0f9da6521d2ab24c735",
+    "llm_mode": "hybrid",
+    "llm_provider": "remote",
+    "llm_model": "gpt-5.5",
+    "llm_endpoint": "https://api.vectorengine.ai/v1"
+  },
+  "created_at": "2026-08-02T07:00:33.273566+00:00",
+  "code_version": "0.2.0",
+  "commit_hash": "40ded11a822266cae12d02599998914bd2abf421",
+  "git_dirty": false,
+  "source_fingerprint": "56e1d0c3eb801b83a092672277391ce5446204d2329bef4ab9695bf663997a5f",
+  "execution_fingerprint": "94007b25ca48a1486b167743c3b63dba8365df41ad7cd711e4169db8da89dd07",
+  "analysis_fingerprint": "fe9ab8641360e2c9877f4af495f662d666bcf66d5793825a71d3a9f8ad582136",
+  "artifacts": {
+    "resolved_config": "resolved_config.yaml",
+    "catalog": "catalog.jsonl",
+    "scenarios": "scenarios.jsonl"
+  },
+  "run_manifests": [
+    "full\\SC-A-01\\0\\run_manifest.json",
+    "full\\SC-A-02\\0\\run_manifest.json",
+    "full\\SC-A-03\\0\\run_manifest.json",
+    "full\\SC-A-04\\0\\run_manifest.json",
+    "full\\SC-A-05\\0\\run_manifest.json",
+    "full\\SC-A-06\\0\\run_manifest.json",
+    "full\\SC-B-01\\0\\run_manifest.json",
+    "full\\SC-B-02\\0\\run_manifest.json",
+    "full\\SC-B-03\\0\\run_manifest.json",
+    "full\\SC-B-04\\0\\run_manifest.json",
+    "full\\SC-B-05\\0\\run_manifest.json",
+    "full\\SC-C-01\\0\\run_manifest.json",
+    "full\\SC-C-02\\0\\run_manifest.json",
+    "full\\SC-C-03\\0\\run_manifest.json",
+    "full\\SC-C-04\\0\\run_manifest.json",
+    "full\\SC-C-05\\0\\run_manifest.json",
+    "full\\SC-D-01\\0\\run_manifest.json",
+    "full\\SC-D-02\\0\\run_manifest.json",
+    "full\\SC-D-03\\0\\run_manifest.json",
+    "full\\SC-D-04\\0\\run_manifest.json",
+    "full\\SC-D-05\\0\\run_manifest.json",
+    "full\\SC-E-01\\0\\run_manifest.json",
+    "full\\SC-E-02\\0\\run_manifest.json",
+    "full\\SC-E-03\\0\\run_manifest.json",
+    "full\\SC-E-04\\0\\run_manifest.json",
+    "full\\SC-E-05\\0\\run_manifest.json",
+    "full\\SC-F-01\\0\\run_manifest.json",
+    "full\\SC-F-02\\0\\run_manifest.json",
+    "full\\SC-F-03\\0\\run_manifest.json",
+    "full\\SC-F-04\\0\\run_manifest.json",
+    "full\\SC-G-01\\0\\run_manifest.json",
+    "full\\SC-G-02\\0\\run_manifest.json",
+    "full\\SC-H-01\\0\\run_manifest.json",
+    "full\\SC-H-02\\0\\run_manifest.json",
+    "full\\SC-H-03\\0\\run_manifest.json",
+    "full\\SC-D-06\\0\\run_manifest.json",
+    "full\\SC-D-07\\0\\run_manifest.json",
+    "full\\SC-D-08\\0\\run_manifest.json",
+    "full\\SC-D-09\\0\\run_manifest.json",
+    "full\\SC-D-10\\0\\run_manifest.json",
+    "full\\SC-D-11\\0\\run_manifest.json",
+    "full\\SC-D-12\\0\\run_manifest.json"
+  ]
+}

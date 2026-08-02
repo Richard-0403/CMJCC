@@ -1,5 +1,13 @@
 # CMJCC — Agent-Oriented Conversational Job Recommendation
 
+> **Results:** the citable numbers are in [`final_release_v2/`](final_release_v2/) and
+> summarised in [`THESIS_OFFICIAL_RESULTS.md`](THESIS_OFFICIAL_RESULTS.md) — the 588-run main
+> experiment (210 deterministic + 378 hybrid) at code 0.2.0 against canonical oracle 4.0.0.
+>
+> `final_release/` is the earlier **v1** release (code 0.1.0, oracle 1.0.0). It is kept as a
+> record and is **superseded**: its grade-derived numbers are measured against a different
+> ground truth and must not be cited alongside v2's.
+
 A research prototype for **constraint-aware conversational job recommendation**
 built around the **Candidate-Memory and Job-Context Connector (CMJCC)**.
 

@@ -1,0 +1,6 @@
+error_category,count,percentage,most_affected_variant
+missing_constraint_enforcement (ablation),108,67.1,no_context
+other,24,14.9,no_memory
+stale_or_missing_memory (ablation),21,13.0,no_memory
+no_match_misclassification,5,3.1,no_memory
+no_context_other,3,1.9,no_context

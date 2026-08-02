@@ -1,0 +1,10 @@
+scope,variant,scenario_type,runs,fields,rule_fields,llm_fields,rule_share,llm_share,normalized_fields,repaired_fields,rule_fallback_fields,unresolved_fields,hybrid_runs,hybrid_fields,schema_failure_rate,fallback_rate
+variant,full,(all),42,141,5,136,0.03546099290780142,0.9645390070921985,132,4,5,0,42,141,0.06382978723404255,0.03546099290780142
+variant_scenario_type,full,ambiguous_role,2,6,0,6,0.0,1.0,6,0,0,0,2,6,0.0,0.0
+variant_scenario_type,full,clarification,5,5,0,5,0.0,1.0,5,0,0,0,5,5,0.0,0.0
+variant_scenario_type,full,complete,6,29,5,24,0.1724137931034483,0.8275862068965517,24,0,5,0,6,29,0.1724137931034483,0.1724137931034483
+variant_scenario_type,full,multiple_hard,5,25,0,25,0.0,1.0,25,0,0,0,5,25,0.0,0.0
+variant_scenario_type,full,no_match,3,12,0,12,0.0,1.0,12,0,0,0,3,12,0.0,0.0
+variant_scenario_type,full,preference_change,12,33,0,33,0.0,1.0,32,1,0,0,12,33,0.030303030303030304,0.0
+variant_scenario_type,full,profile_dialogue_conflict,5,20,0,20,0.0,1.0,20,0,0,0,5,20,0.0,0.0
+variant_scenario_type,full,soft_tradeoff,4,11,0,11,0.0,1.0,8,3,0,0,4,11,0.2727272727272727,0.0

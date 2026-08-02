@@ -1,0 +1,245 @@
+{
+  "claim_annotation_universe": {
+    "counts": {
+      "delivered_signatures": 332,
+      "dropped_population_signatures": 79,
+      "dropped_sampled_signatures": 15,
+      "strata": 3,
+      "universe_signatures": 347
+    },
+    "created_at": "2026-08-02T07:13:32.307585+00:00",
+    "dropped_per_stratum": 5,
+    "experiment_id": "exp-e63f05ad75bb",
+    "sampling_rule": "every delivered signature is included; withheld signatures are grouped by claim_type+predicate+support_status and up to 5 are drawn per stratum with a per-stratum seeded RNG, so adding a stratum cannot reshuffle the draw of any other",
+    "sampling_seed": 20260801,
+    "strata": [
+      {
+        "population": 7,
+        "sampled": 5,
+        "stratum": {
+          "claim_type": "candidate_preference",
+          "predicate": "candidate_preference",
+          "support_status": "unsupported"
+        }
+      },
+      {
+        "population": 19,
+        "sampled": 5,
+        "stratum": {
+          "claim_type": "ranking_reason",
+          "predicate": "ranking_match",
+          "support_status": "unsupported"
+        }
+      },
+      {
+        "population": 53,
+        "sampled": 5,
+        "stratum": {
+          "claim_type": "ranking_reason",
+          "predicate": "salary_meets_min",
+          "support_status": "unsupported"
+        }
+      }
+    ],
+    "strata_fields": [
+      "claim_type",
+      "predicate",
+      "support_status"
+    ]
+  },
+  "claim_annotation_universe_manifest": "manifests/annotation_universe.json",
+  "claim_label_filter": null,
+  "claim_linkage": {
+    "coverage": 0.0,
+    "coverage_denominator": "pre_registered_universe",
+    "current_signatures": 347,
+    "excluded_label_rows": {
+      "no_signature": 11197
+    },
+    "experiment_id": "exp-e63f05ad75bb",
+    "is_stale": true,
+    "label_experiment_ids": [],
+    "labelled_signatures": 0,
+    "missing_signatures": 347,
+    "obsolete_signatures": 0,
+    "out_of_universe_signatures": 64,
+    "overlapping_signatures": 0,
+    "universe_signatures": 347
+  },
+  "experiment_id": "exp-e63f05ad75bb",
+  "human_metrics_withheld_reason": "human relevance coverage 87.2% is below the required 100.0%: 20 of 156 returned pair(s) are unlabelled. They are UNKNOWN, not irrelevant -- scoring them 0 would bias every human-scored ranking metric downward by that amount.",
+  "human_relevance_labels_present": true,
+  "human_relevance_min_coverage": 1.0,
+  "relevance_coverage": {
+    "coverage": 0.8717948717948718,
+    "delta_pairs_requiring_annotation": 20,
+    "delta_sample": [
+      [
+        "SC-A-01",
+        "job-0049"
+      ],
+      [
+        "SC-A-01",
+        "job-0153"
+      ],
+      [
+        "SC-A-02",
+        "job-0101"
+      ],
+      [
+        "SC-A-02",
+        "job-0142"
+      ],
+      [
+        "SC-B-04",
+        "job-0095"
+      ],
+      [
+        "SC-B-04",
+        "job-0117"
+      ],
+      [
+        "SC-B-04",
+        "job-0161"
+      ],
+      [
+        "SC-B-04",
+        "job-0185"
+      ],
+      [
+        "SC-C-01",
+        "job-0012"
+      ],
+      [
+        "SC-C-02",
+        "job-0095"
+      ],
+      [
+        "SC-C-02",
+        "job-0133"
+      ],
+      [
+        "SC-C-03",
+        "job-0153"
+      ],
+      [
+        "SC-D-01",
+        "job-0033"
+      ],
+      [
+        "SC-D-01",
+        "job-0049"
+      ],
+      [
+        "SC-D-01",
+        "job-0153"
+      ],
+      [
+        "SC-D-03",
+        "job-0173"
+      ],
+      [
+        "SC-D-04",
+        "job-0128"
+      ],
+      [
+        "SC-D-06",
+        "job-0049"
+      ],
+      [
+        "SC-D-06",
+        "job-0153"
+      ],
+      [
+        "SC-D-11",
+        "job-0187"
+      ]
+    ],
+    "obsolete_extra_labels": 232,
+    "obsolete_sample": [
+      [
+        "SC-A-01",
+        "job-0088"
+      ],
+      [
+        "SC-A-01",
+        "job-0128"
+      ],
+      [
+        "SC-A-01",
+        "job-0136"
+      ],
+      [
+        "SC-A-01",
+        "job-0196"
+      ],
+      [
+        "SC-A-02",
+        "job-0046"
+      ],
+      [
+        "SC-A-02",
+        "job-0136"
+      ],
+      [
+        "SC-A-02",
+        "job-0172"
+      ],
+      [
+        "SC-A-02",
+        "job-0175"
+      ],
+      [
+        "SC-A-02",
+        "job-0196"
+      ],
+      [
+        "SC-A-03",
+        "job-0014"
+      ],
+      [
+        "SC-A-03",
+        "job-0088"
+      ],
+      [
+        "SC-A-03",
+        "job-0124"
+      ],
+      [
+        "SC-A-03",
+        "job-0128"
+      ],
+      [
+        "SC-A-03",
+        "job-0157"
+      ],
+      [
+        "SC-A-04",
+        "job-0037"
+      ],
+      [
+        "SC-A-04",
+        "job-0038"
+      ],
+      [
+        "SC-A-04",
+        "job-0040"
+      ],
+      [
+        "SC-A-04",
+        "job-0043"
+      ],
+      [
+        "SC-A-04",
+        "job-0146"
+      ],
+      [
+        "SC-A-05",
+        "job-0066"
+      ]
+    ],
+    "returned_pairs": 156,
+    "reused_overlapping_labels": 136
+  },
+  "relevance_delta_annotation_csv": "annotation\\relevance_delta_annotation.csv"
+}

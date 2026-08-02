@@ -1,0 +1,2 @@
+variant,runs,clarifications,expected_clarification,useful,asked_clarifications,necessary_asked,unnecessary_asked,answered,repeated,precision,recall,necessary_recall,useful_rate,unnecessary_rate,repeated_question_rate,answered_rate
+full,42,5,7,5,5,5,0,5,0,1.0,0.7142857142857143,0.7142857142857143,1.0,0.0,0.0,1.0

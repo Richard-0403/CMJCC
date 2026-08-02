@@ -1,0 +1,2 @@
+variant,runs,necessary_asked,necessary_missed,unnecessary_asked,asked_unresolved,efficiency_score,median_efficiency_score,tier_resolved,tier_abandoned,tier_skipped,response_turns_n,median_response_turns,q1_response_turns,q3_response_turns,iqr_response_turns
+full,42,5,2,0,0,-47620.5,-1.0,40,0,2,42,1.0,1.0,2.0,1.0

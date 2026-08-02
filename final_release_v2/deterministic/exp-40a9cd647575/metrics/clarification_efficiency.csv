@@ -1,0 +1,6 @@
+variant,runs,necessary_asked,necessary_missed,unnecessary_asked,asked_unresolved,efficiency_score,median_efficiency_score,tier_resolved,tier_abandoned,tier_skipped,response_turns_n,median_response_turns,q1_response_turns,q3_response_turns,iqr_response_turns
+full,42,7,0,0,0,-1.5,-1.0,42,0,0,42,1.0,1.0,2.0,1.0
+no_context,42,7,0,0,0,-1.5,-1.0,42,0,0,42,1.0,1.0,2.0,1.0
+no_memory,42,7,0,9,9,-216.0,-1.0,33,9,0,42,1.0,1.0,2.0,1.0
+one_shot,42,7,0,9,16,-382.5,-1.0,26,16,0,42,1.0,1.0,2.0,1.0
+profile_only,42,7,0,7,14,-335.0,-1.0,28,14,0,42,1.0,1.0,2.0,1.0

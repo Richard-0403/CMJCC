@@ -1,0 +1,17 @@
+metric,base,other,n_pairs,base_mean,other_mean,delta,ci_low,ci_high,p_value,effect_size,effect_type,estimand,subset,p_value_holm,scenario_count,total_run_count,repeats_per_scenario,valid_pairs,base_repeat_mean,other_repeat_mean,repeat_mean_delta,mcnemar,discordant_pairs,family
+ndcg_at_5,full,no_memory,28,0.9617358589357783,0.901750658303981,0.05998520063179719,0.005094911065107796,0.12451162132048575,0.043114446783075355,0.3668979911080605,cohens_dz,scenario_mean_over_repeats,all,0.21557223391537678,,,,,,,,,,primary
+hcsr,full,no_memory,28,1.0,0.942857142857143,0.05714285714285715,0.007142857142857141,0.12142857142857143,0.06559969214707187,0.3745126703594156,cohens_dz,scenario_mean_over_repeats,all,0.2623987685882875,,,,,,,,,,primary
+task_success,full,no_memory,42,1.0,0.6904761904761905,0.30952380952380953,0.16666666666666666,0.4523809523809524,0.000244140625,1.0,rank_biserial,scenario_binary_majority_vote,all,0.00146484375,42.0,84.0,1.0,42.0,1.0,0.6904761904761905,0.30952380952380953,"{'full_only': 13, 'other_only': 0, 'n_discordant': 13, 'p_value': 0.000244140625}",13.0,primary
+grounding,full,no_memory,33,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_memory,28,0.0,0.05714285714285715,-0.05714285714285715,-0.12142857142857143,-0.0071428571428571435,0.06559969214707187,-0.3745126703594156,cohens_dz,scenario_mean_over_repeats,all,0.2623987685882875,,,,,,,,,,primary
+turn_count,full,no_memory,42,1.5,1.5,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,primary
+ndcg_at_5,full,no_memory,7,0.9600424939386171,0.7986018192560855,0.16144067468253157,0.00675764793650497,0.385028155951202,0.25,0.620405874960658,cohens_dz,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+hcsr,full,no_memory,7,1.0,0.8571428571428571,0.14285714285714285,0.0,0.31428571428571433,0.5,0.5698028822981898,cohens_dz,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+task_success,full,no_memory,16,1.0,0.3125,0.6875,0.4375,0.875,0.0009765625,1.0,rank_biserial,scenario_binary_majority_vote,memory_dependent,0.005859375,16.0,32.0,1.0,16.0,1.0,0.3125,0.6875,"{'full_only': 11, 'other_only': 0, 'n_discordant': 11, 'p_value': 0.0009765625}",11.0,primary
+grounding,full,no_memory,7,1.0,1.0,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+mean_violation_count,full,no_memory,7,0.0,0.14285714285714285,-0.14285714285714285,-0.31428571428571433,0.0,0.5,-0.5698028822981898,cohens_dz,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+turn_count,full,no_memory,16,1.875,1.875,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,primary
+response_turns,full,no_memory,42,1.5,1.5,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,all,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_memory,42,-1.5,-216.0,214.5,95.33333333333333,333.6666666666667,0.0026997960632601866,0.5159784552030892,cohens_dz,scenario_mean_over_repeats,all,0.005399592126520373,,,,,,,,,,secondary
+response_turns,full,no_memory,16,1.875,1.875,0.0,0.0,0.0,1.0,0.0,rank_biserial,scenario_mean_over_repeats,memory_dependent,1.0,,,,,,,,,,secondary
+clarification_efficiency,full,no_memory,16,-1.875,-564.9375,563.0625,312.8125,813.3125,0.0026997960632601866,1.0978875820670997,cohens_dz,scenario_mean_over_repeats,memory_dependent,0.005399592126520373,,,,,,,,,,secondary

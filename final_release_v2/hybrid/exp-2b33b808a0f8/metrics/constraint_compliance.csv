@@ -1,0 +1,13 @@
+variant,constraint_field,pass,fail,unknown,applicable,compliance,unknown_rate
+full,not_expired,503,0,0,503,1.0,0.0
+full,preferred_locations,66,0,0,66,1.0,0.0
+full,salary_min,368,0,0,368,1.0,0.0
+full,work_modes,27,0,0,27,1.0,0.0
+no_context,not_expired,529,101,0,630,0.8396825396825397,0.0
+no_context,preferred_locations,111,69,0,180,0.6166666666666667,0.0
+no_context,salary_min,341,78,76,495,0.6888888888888889,0.15353535353535352
+no_context,work_modes,45,15,30,90,0.5,0.3333333333333333
+no_memory,not_expired,391,0,0,391,1.0,0.0
+no_memory,preferred_locations,51,0,0,51,1.0,0.0
+no_memory,salary_min,242,12,2,256,0.9453125,0.0078125
+no_memory,work_modes,18,3,6,27,0.6666666666666666,0.2222222222222222
