@@ -221,6 +221,20 @@ _RUBRIC = """# 标注说明 / Annotation guide
 请只填写 `label_YOUR_ANSWER` 一列（以及可选的 `notes` / `flags`）。**不要改动 `item_key`**，
 回填时要靠它定位。留空的行不会被导入，所以可以分批做完再交。
 
+## 本目录的文件
+
+| 文件 | 用途 |
+|---|---|
+| `claim_RATER-*.csv` | **要填**：判断证据是否支撑该命题（0/1） |
+| `relevance_RATER-*.csv` | **要填**：判断岗位与需求的匹配度（0–3） |
+| `GLOSSARY.md` | 所有 id 和枚举取值的中文解释 —— **先看这个** |
+| `scenarios_reference.csv` | `scenario_id` 查表：候选人档案、逐轮对话 |
+| `jobs_reference.csv` | `job_id` 查表：岗位全部字段 |
+| `workload.json` | 溯源记录，不用管 |
+
+`claim_*.csv` 里没有内嵌场景对话，因为同一个命题可能出现在多个场景中（`scenario_ids` 列会列出
+全部）。需要了解候选人说了什么时，用该列的 id 去 `scenarios_reference.csv` 查。
+
 ## claim_*.csv —— 判断"引用的证据是否支撑这句话"（0 / 1）
 
 每一行是一个**命题**，不是一句话。同一句话在不同数值下是不同的行，请分别判断。
@@ -255,6 +269,155 @@ _RUBRIC = """# 标注说明 / Annotation guide
 """
 
 
+SCENARIO_COLUMNS = ["scenario_id", "scenario_type", "difficulty", "memory_dependency",
+                    "context_dependency", "candidate_profile", "conversation",
+                    "acceptable_clarification_slots"]
+
+JOB_COLUMNS = ["job_id", "title", "company", "city", "region", "country", "work_mode",
+               "employment_type", "salary_min", "salary_max", "salary_currency",
+               "salary_period", "required_skills", "preferred_skills",
+               "min_years_experience", "experience_level", "application_deadline",
+               "is_active", "responsibilities", "description"]
+
+_GLOSSARY = """# 字段与取值对照表 / Glossary
+
+标注文件里出现的每一种 id 和枚举值的含义。**判断时只依据 `evidence` 列列出的证据**，
+本表用于查对照，不是新增的判断依据。
+
+## id 怎么查
+
+| id | 在哪查 | 说明 |
+|---|---|---|
+| `scenario_id`（如 `SC-D-10`） | `scenarios_reference.csv` | 候选人档案、逐轮对话、场景类型 |
+| `job_id`（如 `job-0110`） | `jobs_reference.csv` | 岗位的全部字段 |
+| `item_key`（如 `clm::sig-d9b1...`） | 不用查 | 回填时的定位键，**请勿修改** |
+| `queue_position` | 不用查 | 你的队列顺序，两位标注者刻意不同 |
+
+`claim_*.csv` 的 `referenced_jobs` 列已经内嵌了该命题涉及岗位的主要字段，通常不必再查
+`jobs_reference.csv`；需要看岗位描述全文时才查。
+
+`scenario_ids` 列可能有多个值，表示同一个命题在多个场景中出现过（588 行里有 263 行如此）。
+这是正常的：命题是按内容去重的，不是按场景。
+
+## claim_type —— 这句话属于哪一类
+
+| 取值 | 含义 |
+|---|---|
+| `ranking_reason` | 推荐理由：解释为什么这个岗位排进了结果 |
+| `skill_gap` | 技能差距：指出候选人缺少或未记录某项技能 |
+| `candidate_preference` | 复述候选人自己表达过的偏好 |
+| `no_match_reason` | 无匹配结果时给出的原因 |
+| `no_match_cause` | 无匹配的具体成因（哪条约束导致） |
+
+## predicate —— 这句话断言的关系
+
+| 取值 | 含义 | 判断时核对什么 |
+|---|---|---|
+| `ranking_match` | 某字段与候选人偏好一致 | `expected_value`（偏好）与 `observed_value`（岗位实际值）是否真的一致 |
+| `salary_meets_min` | 薪资达到候选人下限 | 岗位薪资是否 ≥ `expected_value` |
+| `experience_in_range` | 经验年限落在岗位要求内 | 候选人年限与岗位 `min_years_experience` |
+| `skill_covered` | 候选人具备该技能 | 技能是否真在候选人档案/对话中 |
+| `skill_not_recorded` | 候选人未记录该技能 | 该技能是否**确实**没有出现在证据里 |
+| `candidate_preference` | 候选人确实表达过该偏好 | 对话或档案里是否真有 |
+| `constraint_applied` | 某条硬约束被应用了 | 证据是否显示该约束生效 |
+| `no_match_cause` | 该约束是无匹配的成因 | 证据是否支持这个归因 |
+
+## field —— 命题针对的字段
+
+| 取值 | 含义 |
+|---|---|
+| `target_roles` | 目标岗位/职位方向 |
+| `preferred_locations` | 期望工作地点 |
+| `work_modes` | 工作模式（remote / hybrid / onsite） |
+| `salary_min` | 薪资下限 |
+| `skills_have` | 候选人已具备的技能 |
+| `years_experience` | 工作年限 |
+
+## evidence 列的 source —— 这条证据来自哪里
+
+| 取值 | 含义 |
+|---|---|
+| `profile` | 候选人档案（对话之前就已知的信息） |
+| `dialogue` | 候选人在对话中说的话 |
+| `job_posting` | 岗位公告的字段 |
+| `system_rule` | 系统内部规则（不是候选人或岗位提供的事实） |
+
+`source=system_rule` 值得留意：规则本身不能证明关于候选人或岗位的事实陈述。
+
+## 特殊情况
+
+- **`job_id` 与 `referenced_jobs` 都为空**（deterministic / hybrid 各约 60 行）：
+  这类命题不针对具体岗位，通常是 `no_match_reason` / `no_match_cause`，即"为什么没有结果"。
+  按证据判断该归因是否成立即可。
+- **`has_unresolvable_evidence = yes`**：有引用指向不存在的证据。
+  指向空处的引用不能支撑任何结论，这类通常判 `0`。
+- **`delivery_status = dropped`**（仅 hybrid，14 行）：系统生成后被自动校验器撤回，用户没有看到。
+  请判断它**本来是否应该**被支撑（用于估计校验器的漏判率），而不是判断用户看到了什么。
+"""
+
+
+def _write_reference(annotation_dir: Path, out_dir: Path, meta: dict,
+                     write: bool) -> list[str]:
+    """The lookup tables the workload's ids point at, plus the glossary.
+
+    The claim rows name a ``scenario_id`` and a ``job_id`` but cannot carry the scenario inline:
+    263 of the 588 hybrid signatures occur in MORE than one scenario, because a proposition is
+    deduplicated by content rather than by where it appeared. A row-level scenario column would
+    therefore be empty or ambiguous for nearly half the file, so the scenarios are shipped as a
+    table the rater looks up instead.
+    """
+    from jobrec.catalog import load_catalog
+    from jobrec_eval.scenarios import load_scenarios
+
+    scenarios_path = meta.get("scenarios_path") or "evaluation/data/scenarios.jsonl"
+    catalog_path = meta.get("catalog_path") or "data/processed/jobs.jsonl"
+
+    scen_rows = []
+    for sid, s in sorted(load_scenarios(scenarios_path).items()):
+        scen_rows.append({
+            "scenario_id": sid,
+            "scenario_type": _render(s.scenario_type),
+            "difficulty": _render(getattr(s, "difficulty", None)),
+            "memory_dependency": _render(getattr(s, "memory_dependency", None)),
+            "context_dependency": _render(getattr(s, "context_dependency", None)),
+            "candidate_profile": _render(dict(s.profile)),
+            "conversation": "\n".join(
+                f"turn {i}: {t}" for i, t in enumerate(s.turns)),
+            "acceptable_clarification_slots": _render(list(s.acceptable_slots)),
+        })
+
+    job_rows = []
+    for job in load_catalog(catalog_path):
+        job_rows.append({
+            "job_id": job.job_id, "title": _render(job.title),
+            "company": _render(job.company), "city": _render(job.city),
+            "region": _render(job.region), "country": _render(job.country),
+            "work_mode": _render(job.work_mode),
+            "employment_type": _render(job.employment_type),
+            "salary_min": _render(job.salary_min), "salary_max": _render(job.salary_max),
+            "salary_currency": _render(job.salary_currency),
+            "salary_period": _render(job.salary_period),
+            "required_skills": _render(list(job.required_skills)),
+            "preferred_skills": _render(list(job.preferred_skills)),
+            "min_years_experience": _render(job.min_years_experience),
+            "experience_level": _render(job.experience_level),
+            "application_deadline": _render(
+                job.application_deadline.isoformat() if job.application_deadline else None),
+            "is_active": _render(bool(job.is_active)),
+            "responsibilities": _render(list(job.responsibilities)),
+            "description": _render(job.description),
+        })
+
+    _write_csv(scen_rows, SCENARIO_COLUMNS, out_dir / "scenarios_reference.csv", write)
+    _write_csv(job_rows, JOB_COLUMNS, out_dir / "jobs_reference.csv", write)
+    if write:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "GLOSSARY.md").write_text(_GLOSSARY, encoding="utf-8", newline="\n")
+    return [f"  scenarios_reference.csv: {len(scen_rows)} 个场景",
+            f"  jobs_reference.csv: {len(job_rows)} 个岗位",
+            "  GLOSSARY.md: claim_type / predicate / field / evidence source 对照表"]
+
+
 def export(annotation_dir: Path, out_dir: Path, delta_path: Path | None,
            write: bool) -> int:
     delta: set[tuple[str, str]] | None = None
@@ -286,6 +449,8 @@ def export(annotation_dir: Path, out_dir: Path, delta_path: Path | None,
             total += n_c + n_r
             summary.append(f"  {rater}: claim {n_c} 行, relevance {n_r} 行"
                            + ("" if delta is None else " (仅覆盖缺口)"))
+
+    summary += _write_reference(annotation_dir, out_dir, meta, write)
 
     if write:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -367,10 +532,65 @@ def import_labels(annotation_dir: Path, workload_dir: Path, write: bool) -> int:
         return 1 if problems else 0
 
 
+#: Files every rater needs a copy of: the guide, the glossary and the two lookup tables.
+_SHARED = ("README.md", "GLOSSARY.md", "scenarios_reference.csv", "jobs_reference.csv")
+
+
+def package(workload_dirs: list[Path], out_dir: Path, write: bool) -> int:
+    """One self-contained folder and zip PER RATER, across every arm.
+
+    Structural rater isolation. The workload directory holds both raters' files, so sending it
+    whole would let each rater read the other's queue -- and two label sets that saw each other
+    are not independent, which is a precondition of Cohen's kappa, not a nicety. Each package
+    therefore carries that rater's files only.
+    """
+    import shutil
+
+    raters: dict[str, list[tuple[Path, str]]] = {}
+    for wd in workload_dirs:
+        arm = wd.name
+        for path in sorted(wd.glob("*_RATER-*.csv")):
+            rater = path.stem.split("_", 1)[1]
+            raters.setdefault(rater, []).append((path, f"{arm}/{path.name}"))
+        for shared in _SHARED:
+            src = wd / shared
+            if src.exists():
+                for rater in raters:
+                    raters[rater].append((src, f"{arm}/{shared}"))
+
+    lines = []
+    for rater, files in sorted(raters.items()):
+        target = out_dir / rater
+        if write:
+            if target.exists():
+                shutil.rmtree(target)
+            for src, rel in files:
+                dst = target / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+            archive = shutil.make_archive(str(out_dir / rater), "zip", root_dir=target)
+            size = Path(archive).stat().st_size / 1024
+            lines.append(f"  {rater}: {len(files)} 个文件 -> {rater}.zip ({size:,.0f} KB)")
+        else:
+            lines.append(f"  {rater}: {len(files)} 个文件")
+        # No package may contain another rater's file.
+        foreign = [rel for _s, rel in files if "RATER-" in rel and rater not in rel]
+        if foreign:
+            raise SystemExit(f"{rater} 的包里混入了别人的文件: {foreign}")
+
+    print(f"每位标注者一个包 -> {out_dir}")
+    print("\n".join(lines))
+    if not write:
+        print("\n(dry run; pass --write to create them)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--annotation-dir", required=True,
+    parser.add_argument("--annotation-dir", default=None,
                         help="directory holding the annotation SQLite store")
+    parser.add_argument("--package", nargs="+", default=None,
+                        help="workload directories to assemble into per-rater packages")
     parser.add_argument("--out-dir", default=None, help="where the workload files go")
     parser.add_argument("--delta", default=None,
                         help="relevance_delta_annotation.csv; restricts the relevance "
@@ -380,6 +600,12 @@ def main() -> int:
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
 
+    if args.package:
+        if not args.out_dir:
+            parser.error("--out-dir is required with --package")
+        return package([Path(p) for p in args.package], Path(args.out_dir), args.write)
+    if not args.annotation_dir:
+        parser.error("--annotation-dir is required")
     annotation_dir = Path(args.annotation_dir)
     if args.import_dir:
         return import_labels(annotation_dir, Path(args.import_dir), args.write)
