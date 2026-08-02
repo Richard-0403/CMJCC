@@ -22,20 +22,11 @@ import json
 from pathlib import Path
 
 import pytest
+from scripts.build_annotation_workload import LABEL_COLUMN, export, import_labels
 
 from jobrec_eval.annotation_ui.assignment import assign_two_raters
 from jobrec_eval.annotation_ui.loader import build_items
-from jobrec_eval.annotation_ui.store import (
-    BLINDED_FIELD_NAMES,
-    KIND_CLAIM,
-    open_store,
-)
-
-from scripts.build_annotation_workload import (  # noqa: E402
-    LABEL_COLUMN,
-    export,
-    import_labels,
-)
+from jobrec_eval.annotation_ui.store import BLINDED_FIELD_NAMES, open_store
 
 RATERS = ("SYNTHETIC-R1", "SYNTHETIC-R2")
 
